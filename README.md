@@ -340,14 +340,14 @@ If the folder exists it will play the contents with full animation.
 
 ---
 
-## 11. (Optional) 🏠 Home Assistant Integration
+## 12. (Optional) 🏠 Home Assistant Integration
 
-Billy B-Assistant can send smart home commands to your **Home Assistant** instance using its [Conversation API](https://developers.home-assistant.io/docs/api/rest/#post-apiconversationprocess). This lets you say things like:
+Billy B-Assistant can send smart home commands to your **Home Assistant** instance using its [Conversation API](https://developers.home-assistant.io/docs/api/rest/#post-apiconversationprocess). 
+This lets you say things to Billy like:
 
 - “Turn off the lights in the living room.”
 - “Set the toilet light to red.”
-- “Welke lampen staan aan in de keuken?”
-- “Zet de thermostaat op 20 graden.”
+- “Which lights are on in the kitchen?”
 
 Billy will forward your command to Home Assistant and speak back the response.
 
@@ -367,7 +367,7 @@ Billy will forward your command to Home Assistant and speak back the response.
    ```env
    HA_URL=http://homeassistant.local:8123
    HA_TOKEN=your_long_lived_token
-   HA_LANG=nl 
+   HA_LANG=en
 
 ### How It Works
 
