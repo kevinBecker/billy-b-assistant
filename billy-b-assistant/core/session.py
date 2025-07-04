@@ -50,6 +50,18 @@ TOOLS = [
             },
             "required": ["song"]
         }
+    },
+    {
+        "name": "smart_home_command",
+        "type": "function",
+        "description": "Send a natural language prompt to the Home Assistant conversation API and read back the response.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "prompt": {"type": "string", "description": "The command to send to Home Assistant"}
+            },
+            "required": ["prompt"]
+        }
     }
 ]
 
@@ -61,6 +73,7 @@ class BillySession:
         self.committed = False
         self.first_text = True
         self.full_response_text = ""
+        self.last_rms = 0.0
         self.last_mic_activity = [time.time()]
         self.session_active = asyncio.Event()
         self.user_spoke_after_assistant = False
@@ -112,6 +125,7 @@ class BillySession:
             return
         samples = indata[:, 0]
         rms = np.sqrt(np.mean(np.square(samples.astype(np.float32))))
+        self.last_rms = rms
         if rms > SILENCE_THRESHOLD:
             self.last_mic_activity[0] = time.time()
             self.user_spoke_after_assistant = True
@@ -236,6 +250,51 @@ class BillySession:
                     await audio.play_song(song_name)
                     return
 
+            elif data.get("name") == "smart_home_command":
+                args = json.loads(data["arguments"])
+                prompt = args.get("prompt")
+
+                if prompt:
+                    print(f"\n🏠 Sending to Home Assistant Conversation API: {prompt} ")
+                    from core.ha import send_conversation_prompt
+                    ha_response = await send_conversation_prompt(prompt)
+
+                    ha_response = await send_conversation_prompt(prompt)
+
+                    # Try to extract plain speech text
+                    speech_text = None
+                    if isinstance(ha_response, dict):
+                        speech_text = (
+                            ha_response.get("speech", {})
+                            .get("plain", {})
+                            .get("speech")
+                        )
+
+                    if speech_text:
+                        print(f"🔍 HA debug: {ha_response.get('data')}")
+                        print(f"\n📣 HA says: {speech_text}")
+                        await self.ws.send(json.dumps({
+                            "type": "conversation.item.create",
+                            "item": {
+                                "type": "message",
+                                "role": "user",
+                                "content": [{"type": "input_text", "text": speech_text}]
+                            }
+                        }))
+                        await self.ws.send(json.dumps({"type": "response.create"}))
+                    else:
+                        print(f"⚠️ Failed to parse HA response: {ha_response}")
+                        await self.ws.send(json.dumps({
+                            "type": "conversation.item.create",
+                            "item": {
+                                "type": "message",
+                                "role": "user",
+                                "content": [{"type": "input_text", "text": "Home Assistant didn't understand the request."}]
+                            }
+                        }))
+                        await self.ws.send(json.dumps({"type": "response.create"}))
+
+
         if data["type"] == "response.done":
             print("\n✿ Assistant response complete.")
 
@@ -266,7 +325,11 @@ class BillySession:
                 bar_len = 20
                 filled = int(bar_len * progress)
                 bar = '█' * filled + '-' * (bar_len - filled)
-                print(f"\r👂 {MIC_TIMEOUT_SECONDS}s timeout: [{bar}] {elapsed:.1f}s", end='', flush=True)
+                print(
+                    f"\r👂 {MIC_TIMEOUT_SECONDS}s timeout: [{bar}] {elapsed:.1f}s "
+                    f"| RMS: {self.last_rms:.4f} / Threshold: {SILENCE_THRESHOLD:.4f}",
+                    end='', flush=True
+                )
 
                 if now - last_tail_move > 1.0:
                     move_tail_async(duration=0.2)

@@ -340,6 +340,61 @@ If the folder exists it will play the contents with full animation.
 
 ---
 
+## 11. (Optional) 🏠 Home Assistant Integration
+
+Billy B-Assistant can send smart home commands to your **Home Assistant** instance using its [Conversation API](https://developers.home-assistant.io/docs/api/rest/#post-apiconversationprocess). This lets you say things like:
+
+- “Turn off the lights in the living room.”
+- “Set the toilet light to red.”
+- “Welke lampen staan aan in de keuken?”
+- “Zet de thermostaat op 20 graden.”
+
+Billy will forward your command to Home Assistant and speak back the response.
+
+### Requirements
+
+- Home Assistant must be accessible from your Raspberry Pi
+- A valid **Long-Lived Access Token** is required
+- The conversation API must be enabled (it is by default)
+
+### Setup
+
+1. **Generate a Long-Lived Access Token**  
+   In Home Assistant, go to **Profile → Long-Lived Access Tokens → Create Token**  
+   Name it something like `billy-assistant` and copy the token.
+
+2. **Add these values to your `.env`**:
+   ```env
+   HA_URL=http://homeassistant.local:8123
+   HA_TOKEN=your_long_lived_token
+   HA_LANG=nl 
+
+### How It Works
+
+When Billy detects that a prompt is related to smart home control, it automatically triggers a function call
+to Home Assistant’s `/api/conversation/process` endpoint and returns the reply out loud.
+
+Behind the scenes:
+
+- The full user request is forwarded as-is
+- HA processes it as a natural language query
+- Billy extracts the response (`speech.plain.speech`), interprets it and speaks his response out loud
+
+### Language Support
+
+You can specify `HA_LANG` in the `.env` to match your spoken language (e.g., `nl` for Dutch or `en` for English).  
+Mismatched language settings may cause parsing errors or incorrect target resolution.
+
+### Tips
+
+- Use clear and specific commands for best results
+- Make sure the target rooms/devices are defined in HA
+- Alias your entities in Home Assistant for better voice matching
+
+## Known Issues
+
+- Restarting the mic input stream after interruption sometimes doesn't work.
+
 ## Future Ideas
 
 Here are some ideas that I have for features in upcoming releases:
