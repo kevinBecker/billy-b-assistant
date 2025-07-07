@@ -43,7 +43,7 @@ def stop_mqtt():
     if mqtt_client:
         mqtt_client.loop_stop()
         mqtt_client.disconnect()
-        print("🔌 MQTT disconnected.")
+        print("\n🔌 MQTT disconnected.")
 
 def mqtt_publish(topic, payload, retain=True, retry=True):
     global mqtt_client, mqtt_connected
@@ -55,17 +55,17 @@ def mqtt_publish(topic, payload, retain=True, retry=True):
                 mqtt_client.reconnect()
                 mqtt_connected = True
             except Exception as e:
-                print(f"❌ MQTT reconnect failed: {e}")
+                print(f"\n❌ MQTT reconnect failed: {e}")
                 return
         else:
-            print(f"⚠️ MQTT not connected. Skipping publish {topic}={payload}")
+            print(f"\n⚠️ MQTT not connected. Skipping publish {topic}={payload}")
             return
 
     try:
         mqtt_client.publish(topic, payload, retain=retain)
         print(f"📡 MQTT publish: {topic} = {payload} (retain={retain})")
     except Exception as e:
-        print(f"❌ MQTT publish failed: {e}")
+        print(f"\n❌ MQTT publish failed: {e}")
 
 def mqtt_send_discovery():
     """Send MQTT discovery messages for Home Assistant."""
@@ -103,14 +103,14 @@ def mqtt_send_discovery():
     mqtt_client.publish("homeassistant/button/billy/shutdown/config", json.dumps(payload_button), retain=True)
 
 def on_message(client, userdata, msg):
-    print(f"📩 MQTT message received: {msg.topic} = {msg.payload.decode()}")
+    print(f" \n📩 MQTT message received: {msg.topic} = {msg.payload.decode()}")
     if msg.topic == "billy/command":
         command = msg.payload.decode().strip().lower()
         if command == "shutdown":
-            print("🛑 Shutdown command received over MQTT. Shutting down...")
+            print("\n🛑 Shutdown command received over MQTT. Shutting down...")
             try:
                 stop_all_motors()
             except Exception as e:
-                print(f"⚠️ Error stopping motors: {e}")
+                print(f"\n⚠️ Error stopping motors: {e}")
             stop_mqtt()
             subprocess.Popen(["sudo", "shutdown", "now"])

@@ -46,14 +46,15 @@ def on_button():
         if session_instance:
             try:
                 print("🛑 Stopping active session...")
-                asyncio.run_coroutine_threadsafe(
+                future = asyncio.run_coroutine_threadsafe(
                     session_instance.stop_session(),
                     session_instance.loop
                 )
+                future.result()  # Wait until it's fully stopped
                 print("✅ Session stopped.")
             except Exception as e:
                 print(f"⚠️ Error stopping session: {e}")
-        is_active = False
+        is_active = False  # ✅ Ensure this is always set after stopping
         return
 
     is_active = True
@@ -69,9 +70,9 @@ def on_button():
             clip = core.audio.play_random_wake_up_clip()
             if clip:
                 print(f"🐟 Enqueuing wake-up clip: {clip} ")
-                core.audio.playback_queue.join()
 
             session_instance = BillySession(interrupt_event=interrupt_event)
+            session_instance.last_activity[0] = time.time()
             asyncio.run(session_instance.start())
         finally:
             move_head("off")

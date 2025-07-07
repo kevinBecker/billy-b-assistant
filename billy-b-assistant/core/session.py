@@ -3,13 +3,10 @@ import json
 import base64
 import websockets.legacy.client
 import numpy as np
-from scipy.signal import resample
-import sounddevice as sd
 import time
-import os
 import re
 import core.audio as audio
-import core.button
+from core.mic import MicManager
 from core.mqtt import mqtt_publish
 from core.config import (
     OPENAI_API_KEY,
@@ -22,9 +19,8 @@ from core.config import (
     SILENCE_THRESHOLD,
     update_persona_ini,
     PERSONALITY,
-    BACKSTORY
 )
-from core.movements import move_tail_async, move_head, stop_all_motors
+from core.movements import move_tail_async, stop_all_motors
 
 TOOLS = [
     {
@@ -74,23 +70,23 @@ class BillySession:
         self.first_text = True
         self.full_response_text = ""
         self.last_rms = 0.0
-        self.last_mic_activity = [time.time()]
+        self.last_activity = [time.time()]
         self.session_active = asyncio.Event()
         self.user_spoke_after_assistant = False
         self.allow_mic_input = True
         self.interrupt_event = interrupt_event or asyncio.Event()
-        self.mic_stream = None
+        self.mic = MicManager()
+
 
     async def start(self):
         self.loop = asyncio.get_running_loop()
         print("\n⏱️ Session starting...")
-        mqtt_publish("billy/status", "listening")
 
         self.audio_buffer.clear()
         self.committed = False
         self.first_text = True
         self.full_response_text = ""
-        self.last_mic_activity[0] = time.time()
+        self.last_activity[0] = time.time()
         self.session_active.set()
         self.user_spoke_after_assistant = False
 
@@ -127,7 +123,7 @@ class BillySession:
         rms = np.sqrt(np.mean(np.square(samples.astype(np.float32))))
         self.last_rms = rms
         if rms > SILENCE_THRESHOLD:
-            self.last_mic_activity[0] = time.time()
+            self.last_activity[0] = time.time()
             self.user_spoke_after_assistant = True
 
         audio.send_mic_audio(self.ws, samples, self.loop)
@@ -141,15 +137,7 @@ class BillySession:
         asyncio.create_task(self.mic_timeout_checker())
 
         try:
-            self.mic_stream = sd.InputStream(
-                samplerate=audio.MIC_RATE,
-                device=audio.MIC_DEVICE_INDEX,
-                channels=audio.MIC_CHANNELS,
-                dtype='int16',
-                blocksize=audio.CHUNK_SIZE,
-                callback=self.mic_callback
-            )
-            self.mic_stream.start()
+            self.mic.start(self.mic_callback)
 
             async for message in self.ws:
                 if not self.session_active.is_set():
@@ -165,15 +153,16 @@ class BillySession:
             self.session_active.clear()
 
         finally:
-            if self.mic_stream:
-                try:
-                    self.mic_stream.stop()
-                    self.mic_stream.close()
-                except Exception as e:
-                    print(f"⚠️ Error closing mic stream: {e}")
-                self.mic_stream = None
-            print("🎙️ Mic stream closed.")
-            await self.post_response_handling()
+            try:
+                self.mic.stop()
+                print("🎙️ Mic stream closed.")
+            except Exception as e:
+                print(f"⚠️ Error while stopping mic: {e}")
+
+            try:
+                await self.post_response_handling()
+            except Exception as e:
+                print(f"⚠️ Error in post_response_handling: {e}")
 
     async def handle_message(self, data):
         if not TEXT_ONLY_MODE and data["type"] in ("response.audio", "response.audio.delta"):
@@ -184,7 +173,7 @@ class BillySession:
             if audio_b64:
                 audio_chunk = base64.b64decode(audio_b64)
                 self.audio_buffer.extend(audio_chunk)
-                self.last_mic_activity[0] = time.time()
+                self.last_activity[0] = time.time()
                 audio.playback_queue.put(audio_chunk)
 
                 if self.interrupt_event.is_set():
@@ -203,8 +192,8 @@ class BillySession:
         if data["type"] in ("response.audio_transcript.delta", "response.text.delta") and "delta" in data:
             self.allow_mic_input = False
             if self.first_text:
-                print("\n🐟 Billy: ", end='', flush=True)
                 mqtt_publish("billy/state", "speaking")
+                print("\n🐟 Billy: ", end='', flush=True)
                 self.first_text = False
             print(data["delta"], end='', flush=True)
             self.full_response_text += data["delta"]
@@ -227,7 +216,7 @@ class BillySession:
 
                     self.user_spoke_after_assistant = True
                     self.full_response_text = ""
-                    self.last_mic_activity[0] = time.time()
+                    self.last_activity[0] = time.time()
 
                     confirmation_text = " ".join([f"Okay, {trait} is now set to {val}%." for trait, val in changes])
                     await self.ws.send(json.dumps({
@@ -272,13 +261,15 @@ class BillySession:
 
                     if speech_text:
                         print(f"🔍 HA debug: {ha_response.get('data')}")
-                        print(f"\n📣 HA says: {speech_text}")
+                        ha_message = f"Home Assistant says: {speech_text}"
+                        print(f"\n📣 {ha_message}")
+
                         await self.ws.send(json.dumps({
                             "type": "conversation.item.create",
                             "item": {
                                 "type": "message",
                                 "role": "user",
-                                "content": [{"type": "input_text", "text": speech_text}]
+                                "content": [{"type": "input_text", "text": ha_message}]
                             }
                         }))
                         await self.ws.send(json.dumps({"type": "response.create"}))
@@ -309,6 +300,8 @@ class BillySession:
 
                 self.allow_mic_input = True
                 self.audio_buffer.clear()
+                audio.playback_done_event.set()
+                self.last_activity[0] = time.time()
 
     async def mic_timeout_checker(self):
         print("🛡️ Mic timeout checker active")
@@ -316,7 +309,7 @@ class BillySession:
 
         while self.session_active.is_set():
             now = time.time()
-            idle_seconds = now - max(self.last_mic_activity[0], audio.last_played_time)
+            idle_seconds = now - max(self.last_activity[0], audio.last_played_time)
             timeout_offset = 2
 
             if idle_seconds - timeout_offset > 0.5:
@@ -344,14 +337,15 @@ class BillySession:
             await asyncio.sleep(0.5)
 
     async def post_response_handling(self):
-        print(f"🧠 Full response: {self.full_response_text.strip()} ")
-
-        core.button.is_active = False
+        print(f"\n🧠 Full response: {self.full_response_text.strip()} ")
 
         if not self.session_active.is_set():
             print("🚪 Session inactive after timeout or interruption. Not restarting.")
             mqtt_publish("billy/state", "idle")
             stop_all_motors()
+            if self.ws:
+                await self.ws.close()
+                self.ws = None
             print("🕐 Waiting for button press...")
             return
 
@@ -363,24 +357,23 @@ class BillySession:
             mqtt_publish("billy/state", "idle")
             stop_all_motors()
             await self.ws.close()
-            print("🕐 Waiting for button press...")
 
     async def stop_session(self):
-        print("🛑 Stopping session for song playback...")
+        print("🛑 Stopping session...")
         self.session_active.clear()
-
-        if self.mic_stream:
-            try:
-                self.mic_stream.stop()
-                self.mic_stream.close()
-                await asyncio.sleep(0.2)
-            except Exception as e:
-                print(f"⚠️ Error closing mic stream: {e}")
-            self.mic_stream = None
+        self.mic.stop()
 
         if self.ws:
-            await self.ws.close()
+            try:
+                await self.ws.close()
+                await self.ws.wait_closed()
+            except Exception as e:
+                print(f"⚠️ Error closing websocket: {e}")
             self.ws = None
 
         stop_all_motors()
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.2)
+
+    async def request_stop(self):
+        print("🛑 Stop requested via external signal.")
+        self.session_active.clear()
