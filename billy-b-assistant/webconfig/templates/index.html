@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Billy B-Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        /* Scrollbar styling for WebKit browsers */
+        ::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background-color: #4b5563; /* Tailwind gray-600 */
+            border-radius: 5px;
+            border: 2px solid #1a1a1a;
+        }
+    </style>
+</head>
+<body class="bg-black text-white font-sans">
+
+<div id="notification"
+     class="hidden fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-600 text-white font-semibold py-2 px-4 rounded shadow-lg z-50 transition-opacity duration-300"></div>
+
+<!-- 🐟 Billy Header with Controls & Log Buttons -->
+<header class="p-6 pb-0 space-y-2 max-w-6xl mx-auto">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-10">
+        <h2 class="text-2xl font-bold flex-shrink-0">🐟 Billy B-Assistant
+            <span id="service-status" class="text-sm font-normal text-gray-400">(Loading...)</span>
+        </h2>
+        <div id="service-controls" class="flex gap-2 grow">
+            <!-- Service buttons inserted via JS -->
+        </div>
+        <div class="w-full md:w-auto flex flex-col md:flex-row md:items-center justify-between gap-2">
+            <div class="flex gap-2 ml-auto">
+                <button id="toggle-log-btn"
+                        class="bg-gray-700 hover:bg-gray-600 text-white text-sm py-1 px-3 rounded">
+                    Hide Log
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Panel -->
+    <section id="log-panel" class="relative">
+        <!-- Normal Log View -->
+        <div id="log-container"
+             class="relative bg-black px-4 rounded max-h-96 overflow-y-scroll text-sm transition-all duration-300">
+
+            <!-- Fullscreen Button (top right) -->
+            <button id="enter-fullscreen-btn"
+                    class="sticky top-2 left-full bg-gray-800 hover:bg-gray-700 text-white px-3 py-1 rounded z-10 shadow flex items-center justify-center">
+                <span class="material-icons">fullscreen</span>
+            </button>
+
+            <pre id="log-output"
+                 class="text-green-300 whitespace-pre-wrap break-words overflow-x-hidden max-w-full">Loading logs…</pre>
+
+            <!-- Scroll-to-bottom Button (bottom right) -->
+            <button id="scroll-bottom-btn"
+                    title="Auto-scroll"
+                    class="sticky bottom-2 left-full ml-auto bg-gray-800 hover:bg-gray-700 text-white px-3 py-1 rounded z-10 shadow flex items-center justify-center">
+                <span class="material-icons">arrow_downward</span>
+            </button>
+        </div>
+
+        <!-- Fullscreen Log View -->
+        <div id="log-overlay" class="hidden fixed inset-0 z-50 bg-black overflow-y-auto">
+            <!-- Minimize Button in top-right -->
+            <button id="exit-fullscreen-btn"
+                    class="sticky top-2 left-full mr-6 bg-gray-800 hover:bg-gray-700 text-white px-3 py-1 rounded z-50 shadow flex items-center justify-center">
+                <span class="material-icons">fullscreen_exit</span>
+            </button>
+
+            <div id="fullscreen-log-container" class="overflow-y-auto p-6 bg-black rounded">
+                <!-- log-output will be moved here -->
+            </div>
+
+            <!-- Scroll-to-bottom Button (bottom right for fullscreen) -->
+            <button id="scroll-bottom-btn-fullscreen"
+                    title="Auto-scroll"
+                    class="fixed bottom-4 right-6 ml-auto bg-gray-800 hover:bg-gray-700 text-white px-3 py-1 rounded z-40 shadow flex items-center justify-center">
+                <span class="material-icons">arrow_downward</span>
+            </button>
+        </div>
+    </section>
+
+</header>
+
+<!-- Section 2–4 in responsive grid layout -->
+<main id="main-content" class="p-6 max-w-6xl mx-auto">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Settings Form -->
+        <section>
+            <form id="config-form" class="space-y-6">
+
+                <!-- OpenAI Settings -->
+                <div class="bg-gray-900 border border-gray-700 p-6 rounded-lg shadow-sm">
+                    <h3 class="text-lg font-bold mb-4 text-slate-200">OpenAI Settings</h3>
+
+                    <div class="mb-4">
+                        <label class="block font-semibold text-sm text-slate-300">OpenAI API Key
+                            <span class="text-xs text-gray-500 font-normal ml-1">(OPENAI_API_KEY)</span>
+                        </label>
+                        <input class="w-full p-3 mt-1 bg-gray-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                               name="OPENAI_API_KEY" value="{{ config.get('OPENAI_API_KEY', '') }}">
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-sm text-slate-300">Voice Model
+                            <span class="text-xs text-gray-500 font-normal ml-1">(VOICE)</span>
+                        </label>
+                        <input class="w-full p-3 mt-1 bg-gray-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                               name="VOICE" value="{{ config.get('VOICE', '') }}">
+                    </div>
+                </div>
+
+                <!-- Audio -->
+                <div class="bg-gray-900 border border-gray-700 p-6 rounded-lg shadow-sm">
+                    <h3 class="text-lg font-bold mb-4 text-slate-200">Audio Settings</h3>
+
+                    <div class="mb-4">
+                        <label class="block font-semibold text-sm text-slate-300">Mic Timeout (seconds)
+                            <span class="text-xs text-gray-500 font-normal ml-1">(MIC_TIMEOUT_SECONDS)</span>
+                        </label>
+                        <input type="number"
+                               class="w-full p-3 mt-1 bg-gray-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                               name="MIC_TIMEOUT_SECONDS" value="{{ config.get('MIC_TIMEOUT_SECONDS', '6') }}">
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-sm text-slate-300">Silence Threshold
+                            <span class="text-xs text-gray-500 font-normal ml-1">(SILENCE_THRESHOLD)</span>
+                        </label>
+                        <input type="number" step="0.01"
+                               class="w-full p-3 mt-1 bg-gray-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                               name="SILENCE_THRESHOLD" value="{{ config.get('SILENCE_THRESHOLD', '0.01') }}">
+                    </div>
+                </div>
+
+                <!-- MQTT Settings -->
+                <div class="bg-gray-900 border border-gray-700 p-6 rounded-lg shadow-sm">
+                    <h3 class="text-lg font-bold mb-4 text-slate-200">MQTT Settings</h3>
+
+                    {% for field in [
+                    ("MQTT_HOST", "MQTT Host"),
+                    ("MQTT_USERNAME", "MQTT Username"),
+                    ("MQTT_PASSWORD", "MQTT Password", "password")
+                    ] %}
+                    <div class="mb-4">
+                        <label class="block font-semibold text-sm text-slate-300">{{ field[1] }}
+                            <span class="text-xs text-gray-500 font-normal ml-1">({{ field[0] }})</span>
+                        </label>
+                        <input type="{{ field[2] if field|length > 2 else 'text' }}"
+                               class="w-full p-3 mt-1 bg-gray-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                               name="{{ field[0] }}" value="{{ config.get(field[0], '') }}">
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <!-- Home Assistant -->
+                <div class="bg-gray-900 border border-gray-700 p-6 rounded-lg shadow-sm">
+                    <h3 class="text-lg font-bold mb-4 text-slate-200">Home Assistant</h3>
+
+                    {% for field in [
+                    ("HA_URL", "Home Assistant URL"),
+                    ("HA_TOKEN", "Home Assistant Token", "password")
+                    ] %}
+                    <div class="mb-4">
+                        <label class="block font-semibold text-sm text-slate-300">{{ field[1] }}
+                            <span class="text-xs text-gray-500 font-normal ml-1">({{ field[0] }})</span>
+                        </label>
+                        <input type="{{ field[2] if field|length > 2 else 'text' }}"
+                               class="w-full p-3 mt-1 bg-gray-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                               name="{{ field[0] }}" value="{{ config.get(field[0], '') }}">
+                    </div>
+                    {% endfor %}
+
+                    <div>
+                        <label class="block font-semibold text-sm text-slate-300 mb-1">Language
+                            <span class="text-xs text-gray-500 font-normal ml-1">(HA_LANG)</span>
+                        </label>
+                        {% set ha_languages = [
+                        ('en', 'English'), ('nl', 'Dutch'), ('it', 'Italian'), ('fr', 'French'),
+                        ('de', 'German'), ('es', 'Spanish'), ('pt', 'Portuguese'), ('hi', 'Hindi'),
+                        ('ja', 'Japanese'), ('zh', 'Chinese'), ('ko', 'Korean'), ('ru', 'Russian'),
+                        ('pl', 'Polish'), ('cs', 'Czech'), ('tr', 'Turkish'), ('ro', 'Romanian'),
+                        ('uk', 'Ukrainian'), ('vi', 'Vietnamese'), ('ar', 'Arabic'), ('id', 'Indonesian')
+                        ] %}
+                        <select name="HA_LANG"
+                                class="w-full p-3 mt-1 bg-gray-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            {% for code, label in ha_languages %}
+                            <option value="{{ code }}" {% if config.get('HA_LANG') == code %}selected{% endif %}>
+                            {{ label }} ({{ code }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="sticky bottom-0 z-10 bg-black/50 backdrop-blur-[2px] shadow-[0_-4px_10px_rgba(0,0,0,0.5)] py-4 px-6">
+                    <div class="flex justify-center md:justify-start">
+                        <button type="submit"
+                                class="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-6 rounded shadow">
+                            Save Settings
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </section>
+
+        <!-- Persona Column (consistent with Settings) -->
+        <section class="space-y-6">
+
+            <!-- Persona Traits -->
+            <div class="bg-gray-900 border border-gray-700 p-6 rounded-lg shadow-sm">
+                <h3 class="text-lg font-bold mb-4 text-slate-200">Persona Traits</h3>
+                <div id="personality-sliders" class="space-y-4">
+                    <!-- JS will populate this -->
+                </div>
+            </div>
+
+            <!-- Backstory & Instructions -->
+            <div class="bg-gray-900 border border-gray-700 p-6 rounded-lg shadow-sm">
+                <h3 class="text-lg font-bold mb-4 text-slate-200">Backstory & Instructions</h3>
+                <form id="persona-form" class="space-y-6">
+
+                    <!-- Backstory Fields -->
+                    <div>
+                        <label class="block font-semibold text-sm text-slate-300 mb-1">Backstory</label>
+                        <div id="backstory-fields" class="space-y-2"></div>
+                        <button type="button" onclick="addBackstoryField()" class="text-sm text-green-400 mt-2">+ Add
+                            Field
+                        </button>
+                    </div>
+
+                    <!-- Meta Instructions -->
+                    <div>
+                        <label class="block font-semibold text-sm text-slate-300 mb-1">Additional Instructions</label>
+                        <textarea name="META" id="meta-text" rows="16"
+                                  class="w-full p-3 mt-1 bg-gray-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                  spellcheck="false"></textarea>
+                    </div>
+                </form>
+            </div>
+
+            <div class="sticky bottom-0 z-10 bg-black/50 backdrop-blur-[2px] shadow-[0_-4px_10px_rgba(0,0,0,0.5)] py-4 px-6">
+                <div class="flex justify-center md:justify-end">
+                    <button form="persona-form" type="submit"
+                            class="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-2 px-6 rounded shadow">
+                        Save Persona
+                    </button>
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+<script src="{{ url_for('static', filename='js/config.js') }}"></script>
+</body>
+</html>

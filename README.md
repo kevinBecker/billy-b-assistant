@@ -175,7 +175,10 @@ SILENCE_THRESHOLD=900
 ## 8. Systemd Service (for auto-boot)
 
 To run Billy as a background service at boot, create `/etc/systemd/system/billy.service`:
-(Assuming 'billy' is the raspberry pi username)
+
+```bash
+sudo nano /etc/systemd/system/billy.service
+```
 
 ```ini
 [Unit]
@@ -192,6 +195,8 @@ Environment=PYTHONUNBUFFERED=1
 [Install]
 WantedBy=multi-user.target
 ```
+
+\* Assuming 'billy' is the raspberry pi username
 
 Then run: 
 ```
@@ -213,7 +218,73 @@ Billy should now boot automatically into standby mode. Press the physical button
 
 ---
 
-## 10. (Optional) Configure `persona.ini`
+## 11. (Optional) 🌐 Web Configuration Interface
+
+Billy includes a lightweight web interface for editing settings, debugging logs, and managing the assistant service without touching the terminal.
+
+### Features
+
+- Edit `.env` configuration values (e.g., API keys, MQTT)
+- View and edit `persona.ini` (traits, backstory, instructions)
+- Control the Billy system service (start, stop, restart)
+- View live logs from the assistant process
+
+### How to Use
+
+1. Run the web server manually (from the project root):
+
+   ```bash
+   python3 webconfig/server.py
+   ```
+
+2. Enter the your pi's hostname + .local in your browser:
+
+   ```
+   http://billy.local
+   ```
+
+   (Replace `billy` if you have set a custom Pi's hostname)
+
+---
+
+### Run the Web UI as a Systemd Service
+
+If you want the web interface to always be available:
+
+1. Create the service file:
+
+   ```bash
+   sudo nano /etc/systemd/system/billy-webconfig.service
+   ```
+
+2. Paste the following:
+
+   ```ini
+   [Unit]
+   Description=Billy Web Configuration Server
+   After=network.target
+
+   [Service]
+   WorkingDirectory=/home/billy/billy-b-assistant
+   ExecStart=/usr/bin/python3 /home/billy/billy-b-assistant/webconfig/server.py
+   Restart=on-failure
+   User=billy
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+
+3. Enable and start:
+
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable billy-webconfig
+   sudo systemctl start billy-webconfig
+   ```
+
+4. Visit `http://billy.local` anytime to reconfigure Billy!
+
+## 11. (Optional) Configure `persona.ini`
 
 The `persona.ini` file controls Billy's **personality**, **backstory**, and **additional instructions**. You can edit this file manually, or change the personality trait values during a voice session using commands like:
 
@@ -273,7 +344,7 @@ You can tweak this to reflect a different vibe: poetic, mystical, overly formal,
 
 ---
 
-## 11. (Optional) Wake-up Sounds and Custom Songs
+## 12. (Optional) Wake-up Sounds and Custom Songs
 
 ### Wake-up Sounds
 
@@ -340,7 +411,7 @@ If the folder exists it will play the contents with full animation.
 
 ---
 
-## 12. (Optional) 🏠 Home Assistant Integration
+## 13. (Optional) 🏠 Home Assistant Integration
 
 Billy B-Assistant can send smart home commands to your **Home Assistant** instance using its [Conversation API](https://developers.home-assistant.io/docs/api/rest/#post-apiconversationprocess). 
 This lets you say things to Billy like:
