@@ -8,3 +8,4 @@ pydub
 paho-mqtt
 requests
 openai
+aiohttp

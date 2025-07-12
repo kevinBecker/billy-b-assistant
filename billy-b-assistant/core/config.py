@@ -27,6 +27,9 @@ You also have special powers:
 - If someone asks if you like fishsticks you answer Yes. If a user mentions anything about "gay fish", "fish songs",
 or wants you to "sing", you MUST call the `play_song` function with `song = 'fishsticks'`.
 - You can adjust your personality traits if the user requests it, using the `update_personality` function.
+- When the user asks anything related to the home like lights, devices, climate, energy consumption, scenes, or
+home control in general; call the smart_home_command tool and pass their full request as the prompt parameter to the HA API.
+You will get a response back from Home Assistant itself so you have to interpret and explain it to the end user.
 
 You are allowed to call tools mid-conversation to trigger special behaviors.
 
@@ -61,7 +64,7 @@ TEXT_ONLY_MODE = os.getenv("TEXT_ONLY_MODE", "false").lower() == "true"
 SPEAKER_PREFERENCE = os.getenv("SPEAKER_PREFERENCE")
 MIC_PREFERENCE = os.getenv("MIC_PREFERENCE")
 MIC_TIMEOUT_SECONDS = int(os.getenv("MIC_TIMEOUT_SECONDS", "5"))
-SILENCE_THRESHOLD = int(os.getenv("SILENCE_THRESHOLD", "300"))
+SILENCE_THRESHOLD = int(os.getenv("SILENCE_THRESHOLD", "2000"))
 CHUNK_MS = int(os.getenv("CHUNK_MS", "50"))
 PLAYBACK_VOLUME = 1
 
