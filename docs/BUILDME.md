@@ -69,8 +69,8 @@ bottom left corner of the board. The 1-4 positions are counted from left to righ
 | Motor A (3)                 | Yellow         | Orange           |
 | Motor A (4)                 | Red            | Black            |
 
-![Motor to Driver](./docs/images/motor_driver.jpeg)
-![JST connector](./docs/images/jst_connector.jpeg)
+![Motor to Driver](./images/motor_driver.jpeg)
+![JST connector](./images/jst_connector.jpeg)
 
 
 ### From Motor Driver to Raspberry Pi (GPIO Pinout)
