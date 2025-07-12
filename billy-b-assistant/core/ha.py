@@ -1,12 +1,19 @@
 import aiohttp
 import os
 
-HA_URL = os.getenv("HA_URL", "http://localhost:8123")
+HA_URL = os.getenv("HA_URL")
 HA_TOKEN = os.getenv("HA_TOKEN")
-HA_LANG = os.getenv("HA_LANG", "en")  # Default to English if not set
+HA_LANG = os.getenv("HA_LANG", "en")
 
-async def send_conversation_prompt(prompt: str) -> str:
-    url = f"{HA_URL}/api/conversation/process"
+def ha_available():
+    return bool(HA_URL and HA_TOKEN)
+
+async def send_conversation_prompt(prompt: str) -> str | None:
+    if not ha_available():
+        print("⚠️ Home Assistant not configured.")
+        return None
+
+    url = f"{HA_URL.rstrip('/')}/api/conversation/process"
     headers = {
         "Authorization": f"Bearer {HA_TOKEN}",
         "Content-Type": "application/json"
@@ -17,11 +24,15 @@ async def send_conversation_prompt(prompt: str) -> str:
         "language": HA_LANG
     }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, headers=headers, json=payload) as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                return data.get("response", "")
-            else:
-                print(f"⚠️ HA API error: {resp.status}")
-                return None
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data.get("response", "")
+                else:
+                    print(f"⚠️ HA API returned HTTP {resp.status}")
+                    return None
+    except Exception as e:
+        print(f"❌ Error reaching Home Assistant API: {e}")
+        return None
