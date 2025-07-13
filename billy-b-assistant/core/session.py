@@ -72,6 +72,7 @@ TOOLS = [
 class BillySession:
     def __init__(self, interrupt_event=None):
         self.ws = None
+        self.ws_lock: asyncio.Lock = asyncio.Lock()
         self.loop = None
         self.audio_buffer = bytearray()
         self.committed = False
@@ -391,9 +392,10 @@ class BillySession:
             print("🚪 Session inactive after timeout or interruption. Not restarting.")
             mqtt_publish("billy/state", "idle")
             stop_all_motors()
-            if self.ws:
-                await self.ws.close()
-                self.ws = None
+            async with self.ws_lock:
+                if self.ws:
+                    await self.ws.close()
+                    self.ws = None
             return
 
         if (
@@ -413,13 +415,14 @@ class BillySession:
         self.session_active.clear()
         self.mic.stop()
 
-        if self.ws:
-            try:
-                await self.ws.close()
-                await self.ws.wait_closed()
-            except Exception as e:
-                print(f"⚠️ Error closing websocket: {e}")
-            self.ws = None
+        async with self.ws_lock:
+            if self.ws:
+                try:
+                    await self.ws.close()
+                    await self.ws.wait_closed()
+                except Exception as e:
+                    print(f"⚠️ Error closing websocket: {e}")
+                self.ws = None
 
         stop_all_motors()
         await asyncio.sleep(0.2)
