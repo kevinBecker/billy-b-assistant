@@ -3,6 +3,7 @@ import base64
 import json
 import re
 import time
+from typing import Any
 
 import numpy as np
 import websockets.asyncio.client
@@ -312,7 +313,7 @@ class BillySession:
                         )
                         await self.ws.send(json.dumps({"type": "response.create"}))
 
-        if data["type"] == "response.done":
+        elif data["type"] == "response.done":
             print("\n✿ Assistant response complete.")
 
             if not TEXT_ONLY_MODE:
@@ -328,6 +329,13 @@ class BillySession:
                 self.audio_buffer.clear()
                 audio.playback_done_event.set()
                 self.last_activity[0] = time.time()
+
+        elif data["type"] == "error":
+            error: dict[str, Any] = data.get('error') or {}
+            print(
+                f"\n🛑 Error response (code='{error.get('code') or '<unknown>'}'): "
+                f"{error.get('message') or '<unknown>'}"
+            )
 
     async def mic_timeout_checker(self):
         print("🛡️ Mic timeout checker active")
