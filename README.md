@@ -174,7 +174,7 @@ DEBUG_MODE_INCLUDE_DELTA=false
   - higher if Billy doesn't respond (because he thinks you're still talking)
 - `DEBUG_MODE`: Print debug information such as OpenAI responses to the output stream.
 - `DEBUG_MODE_INCLUDE_DELTA`: Also print voice and speech delta data, which can get very noisy.
-
+- `ALLOW_UPDATE_PERSONALITY_INI`: If true, personality updates asked for by the user will be written and committed to the personality file. If false, changes to personality will only affect the current running process.
 ---
 
 ## 8. Systemd Service (for auto-boot)

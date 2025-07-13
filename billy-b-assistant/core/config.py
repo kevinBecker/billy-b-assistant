@@ -95,3 +95,8 @@ MQTT_HOST = os.getenv("MQTT_HOST", "")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "0"))
 MQTT_USERNAME = os.getenv("MQTT_USERNAME", "")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
+
+# === Personality Config ===
+ALLOW_UPDATE_PERSONALITY_INI = (
+    os.getenv("ALLOW_UPDATE_PERSONALITY_INI", "true").lower() == "true"
+)

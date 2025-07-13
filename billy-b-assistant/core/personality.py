@@ -112,16 +112,20 @@ def load_traits_from_ini(path="persona.ini") -> dict:
 
 
 def update_persona_ini(trait: str, value: int, ini_path="persona.ini"):
-    """Update a single trait value in the persona.ini file."""
-    import configparser
+    """Update a single trait value in the persona.ini file. Only do this if configured
+    to do so."""
+    from .config import ALLOW_UPDATE_PERSONALITY_INI
 
-    config = configparser.ConfigParser()
-    config.read(ini_path)
+    if ALLOW_UPDATE_PERSONALITY_INI:
+        import configparser
 
-    if "PERSONALITY" not in config:
-        config["PERSONALITY"] = {}
+        config = configparser.ConfigParser()
+        config.read(ini_path)
 
-    config["PERSONALITY"][trait] = str(value)
+        if "PERSONALITY" not in config:
+            config["PERSONALITY"] = {}
 
-    with open(ini_path, "w") as f:
-        config.write(f)
+        config["PERSONALITY"][trait] = str(value)
+
+        with open(ini_path, "w") as f:
+            config.write(f)
