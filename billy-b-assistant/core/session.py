@@ -195,6 +195,11 @@ class BillySession:
                 print(f"⚠️ Error in post_response_handling: {e}")
 
     async def handle_message(self, data):
+        # If this speech segment is done, add some newlines to the full response text so
+        # it's clearer in logging.
+        if data['type'] == 'response.audio_transcript.done':
+            self.full_response_text += "\n\n"
+
         if not TEXT_ONLY_MODE and data["type"] in (
             "response.audio",
             "response.audio.delta",
