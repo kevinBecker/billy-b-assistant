@@ -273,15 +273,21 @@ def send_mic_audio(ws, samples, loop):
         .astype(np.int16)
         .tobytes()
     )
-    asyncio.run_coroutine_threadsafe(
-        ws.send(
-            json.dumps({
-                "type": "input_audio_buffer.append",
-                "audio": base64.b64encode(pcm).decode("utf-8"),
-            })
-        ),
-        loop,
-    )
+    try:
+        future = asyncio.run_coroutine_threadsafe(
+            ws.send(
+                json.dumps({
+                    "type": "input_audio_buffer.append",
+                    "audio": base64.b64encode(pcm).decode("utf-8"),
+                })
+            ),
+            loop,
+        )
+
+        # Await the result; avoid race conditions.
+        future.result()
+    except Exception as e:
+        print(f"❌ Failed to send audio chunk: {e}")
 
 
 def enqueue_wav_to_playback(filepath):
