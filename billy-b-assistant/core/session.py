@@ -5,7 +5,7 @@ import re
 import time
 
 import numpy as np
-import websockets.legacy.client
+import websockets.asyncio.client
 
 from . import audio
 from .config import (
@@ -101,7 +101,9 @@ class BillySession:
                 "Authorization": f"Bearer {OPENAI_API_KEY}",
                 "openai-beta": "realtime=v1",
             }
-            self.ws = await websockets.legacy.client.connect(uri, extra_headers=headers)
+            self.ws = await websockets.asyncio.client.connect(
+                uri, additional_headers=headers
+            )
             await self.ws.send(
                 json.dumps({
                     "type": "session.update",
