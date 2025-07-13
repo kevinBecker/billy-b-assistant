@@ -12,6 +12,7 @@ from . import audio
 from .config import (
     CHUNK_MS,
     DEBUG_MODE,
+    DEBUG_MODE_INCLUDE_DELTA,
     INSTRUCTIONS,
     MIC_TIMEOUT_SECONDS,
     OPENAI_API_KEY,
