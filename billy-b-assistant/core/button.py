@@ -1,6 +1,8 @@
 import asyncio
+import contextlib
 import threading
 import time
+from concurrent.futures import CancelledError
 
 from gpiozero import Button
 
@@ -54,13 +56,18 @@ def on_button():
         if session_instance:
             try:
                 print("🛑 Stopping active session...")
-                future = asyncio.run_coroutine_threadsafe(
-                    session_instance.stop_session(), session_instance.loop
-                )
-                future.result()  # Wait until it's fully stopped
+                # A concurrent.futures.CancelledError is expected here, because the last
+                # thing that BillySession.stop_session does is `await asyncio.sleep`,
+                # and that will raise CancelledError because it's a logical place to
+                # stop.
+                with contextlib.suppress(CancelledError):
+                    future = asyncio.run_coroutine_threadsafe(
+                        session_instance.stop_session(), session_instance.loop
+                    )
+                    future.result()  # Wait until it's fully stopped
                 print("✅ Session stopped.")
             except Exception as e:
-                print(f"⚠️ Error stopping session: {e}")
+                print(f"⚠️ Error stopping session ({type(e)}): {e}")
         is_active = False  # ✅ Ensure this is always set after stopping
         return
 
