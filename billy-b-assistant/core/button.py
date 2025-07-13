@@ -1,12 +1,13 @@
-from gpiozero import Button
-import time
-import random
 import asyncio
 import threading
+import time
+
 import core.audio
 import core.config
 from core.movements import move_head
 from core.session import BillySession
+from gpiozero import Button
+
 
 # Button and session globals
 is_active = False
@@ -19,6 +20,7 @@ button_debounce_delay = 0.5  # seconds debounce
 # Setup hardware button
 button = Button(core.config.BUTTON_PIN, pull_up=True)
 
+
 def is_billy_speaking():
     """Return True if Billy is playing audio (wake-up or response)."""
     if not core.audio.playback_done_event.is_set():
@@ -27,8 +29,14 @@ def is_billy_speaking():
         return True
     return False
 
+
 def on_button():
-    global is_active, session_thread, interrupt_event, session_instance, last_button_time
+    global \
+        is_active, \
+        session_thread, \
+        interrupt_event, \
+        session_instance, \
+        last_button_time
 
     now = time.time()
     if now - last_button_time < button_debounce_delay:
@@ -47,8 +55,7 @@ def on_button():
             try:
                 print("🛑 Stopping active session...")
                 future = asyncio.run_coroutine_threadsafe(
-                    session_instance.stop_session(),
-                    session_instance.loop
+                    session_instance.stop_session(), session_instance.loop
                 )
                 future.result()  # Wait until it's fully stopped
                 print("✅ Session stopped.")
@@ -81,6 +88,7 @@ def on_button():
 
     session_thread = threading.Thread(target=run_session, daemon=True)
     session_thread.start()
+
 
 def start_loop():
     core.audio.detect_devices(debug=core.config.DEBUG_MODE)

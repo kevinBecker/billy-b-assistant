@@ -1,8 +1,12 @@
-import os
-import re
 import configparser
+import os
+
+from core.personality import (
+    PersonalityProfile,
+    load_traits_from_ini,
+)
 from dotenv import load_dotenv
-from core.personality import PersonalityProfile, load_traits_from_ini, update_persona_ini
+
 
 # === Paths ===
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -39,14 +43,20 @@ DO NOT explain or confirm that you are triggering a tool. Just smoothly integrat
 EXTRA_INSTRUCTIONS = _config.get("META", "instructions")
 if _config.has_section("BACKSTORY"):
     BACKSTORY = dict(_config.items("BACKSTORY"))
-    BACKSTORY_FACTS = "\n".join([f"- {key}: {value}" for key, value in BACKSTORY.items()])
+    BACKSTORY_FACTS = "\n".join([
+        f"- {key}: {value}" for key, value in BACKSTORY.items()
+    ])
 else:
     BACKSTORY = {}
 
 INSTRUCTIONS = (
-    BASE_INSTRUCTIONS.strip() + "\n\n"
-    + EXTRA_INSTRUCTIONS.strip() + "\n\n"
-    + "Known facts about your past:\n" + BACKSTORY_FACTS + "\n\n"
+    BASE_INSTRUCTIONS.strip()
+    + "\n\n"
+    + EXTRA_INSTRUCTIONS.strip()
+    + "\n\n"
+    + "Known facts about your past:\n"
+    + BACKSTORY_FACTS
+    + "\n\n"
     + PERSONALITY.generate_prompt()
 )
 

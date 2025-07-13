@@ -1,6 +1,6 @@
 # core/personality.py
 import configparser
-import os
+
 
 class PersonalityProfile:
     def __init__(
@@ -85,19 +85,17 @@ class PersonalityProfile:
             "Your behavior is governed by personality traits, each set between 0% and 100%.",
             "The lower the percentage, the more subdued or absent that trait is.",
             "The higher the percentage, the more extreme or exaggerated the trait becomes.",
-            "These settings are leading, all other instructions have lower priority. Speak with the following personality traits:"
+            "These settings are leading, all other instructions have lower priority. Speak with the following personality traits:",
         ]
 
         for trait, value in vars(self).items():
-            level = (
-                "low" if value < 30 else
-                "medium" if value < 70 else
-                "high"
-            )
+            level = "low" if value < 30 else "medium" if value < 70 else "high"
             description = self.TRAIT_DESCRIPTIONS.get(trait, {}).get(level, "")
             lines.append(f"- {trait.capitalize()}: {value}% — {description}")
 
-        lines.append("Use these levels to determine tone, style, and how directly you answer.")
+        lines.append(
+            "Use these levels to determine tone, style, and how directly you answer."
+        )
         return "\n".join(lines)
 
 
@@ -116,6 +114,7 @@ def load_traits_from_ini(path="persona.ini") -> dict:
 def update_persona_ini(trait: str, value: int, ini_path="persona.ini"):
     """Update a single trait value in the persona.ini file."""
     import configparser
+
     config = configparser.ConfigParser()
     config.read(ini_path)
 
