@@ -83,6 +83,7 @@ class BillySession:
         self.allow_mic_input = True
         self.interrupt_event = interrupt_event or asyncio.Event()
         self.mic = MicManager()
+        self.mic_timeout_task: asyncio.Task | None = None
 
     async def start(self):
         self.loop = asyncio.get_running_loop()
@@ -144,7 +145,11 @@ class BillySession:
 
         print("🎙️ Mic stream active. Say something...")
         mqtt_publish("billy/state", "listening")
-        asyncio.create_task(self.mic_timeout_checker())
+
+        # Ensure we hold a reference to the mic checker task, or it may be destroyed.
+        self.mic_timeout_task: asyncio.Task = asyncio.create_task(
+            self.mic_timeout_checker()
+        )
 
         try:
             self.mic.start(self.mic_callback)
