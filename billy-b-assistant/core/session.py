@@ -385,7 +385,6 @@ class BillySession:
             if self.ws:
                 await self.ws.close()
                 self.ws = None
-            print("🕐 Waiting for button press...")
             return
 
         if (
