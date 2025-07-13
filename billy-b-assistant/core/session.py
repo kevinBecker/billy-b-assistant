@@ -387,14 +387,7 @@ class BillySession:
                     print(
                         f"\n⏱️ No mic activity for {MIC_TIMEOUT_SECONDS}s. Ending input..."
                     )
-
-                    # Don't commit mic audio unless the session is fully initialized.
-                    if self.session_initialized:
-                        await self.ws.send(
-                            json.dumps({"type": "input_audio_buffer.commit"})
-                        )
-                    self.committed = True
-                    self.session_active.clear()
+                    await self.stop_session()
                     break
 
             await asyncio.sleep(0.5)
