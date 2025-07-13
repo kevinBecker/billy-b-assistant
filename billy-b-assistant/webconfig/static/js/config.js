@@ -22,9 +22,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const elements = {
         logOutput: document.getElementById("log-output"),
         logContainer: document.getElementById("log-container"),
-        fullscreenContainer: document.getElementById("fullscreen-log-container"),
-        enterFullscreenBtn: document.getElementById("enter-fullscreen-btn"),
-        exitFullscreenBtn: document.getElementById("exit-fullscreen-btn"),
+        toggleFullscreenBtn: document.getElementById("toggle-fullscreen-btn"),
         scrollBtn: document.getElementById("scroll-bottom-btn"),
         scrollBtnFullscreen: document.getElementById("scroll-bottom-btn-fullscreen"),
         logOverlay: document.getElementById("log-overlay"),
@@ -42,23 +40,19 @@ document.addEventListener("DOMContentLoaded", () => {
         elements.toggleBtn.textContent = isHidden ? "Show Log" : "Hide Log";
     }
 
-    // Fullscreen mode
-    function enterFullscreen() {
-        elements.fullscreenContainer.appendChild(elements.logOutput);
-        elements.logOverlay.classList.remove("hidden");
-        elements.body.classList.add("overflow-hidden");
-    }
+    // Fullscreen mode using class toggle
+    function toggleFullscreenLog() {
+        const container = document.getElementById("log-container");
+        const icon = document.getElementById("fullscreen-icon");
 
-    function exitFullscreen() {
-        elements.logContainer.appendChild(elements.logOutput);
-        elements.logOverlay.classList.add("hidden");
-        elements.body.classList.remove("overflow-hidden");
+        const isFullscreen = container.classList.toggle("log-fullscreen");
+        icon.textContent = isFullscreen ? "fullscreen_exit" : "fullscreen";
     }
 
     // Auto-scroll toggle
     function toggleAutoScroll() {
         autoScrollEnabled = !autoScrollEnabled;
-        elements.scrollBtn.classList.toggle("bg-indigo-600", autoScrollEnabled);
+        elements.scrollBtn.classList.toggle("bg-cyan-500", autoScrollEnabled);
         elements.scrollBtn.classList.toggle("bg-zinc-800", !autoScrollEnabled);
         elements.scrollBtn.title = autoScrollEnabled ? "Auto-scroll ON" : "Auto-scroll OFF";
 
@@ -69,8 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Event bindings
     elements.toggleBtn.addEventListener("click", toggleLogPanel);
-    elements.enterFullscreenBtn.addEventListener("click", enterFullscreen);
-    elements.exitFullscreenBtn.addEventListener("click", exitFullscreen);
+    elements.toggleFullscreenBtn.addEventListener("click", toggleFullscreenLog);
     elements.scrollBtn.addEventListener("click", toggleAutoScroll);
 });
 
