@@ -76,3 +76,8 @@ MQTT_HOST = os.getenv("MQTT_HOST", "")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "0"))
 MQTT_USERNAME = os.getenv("MQTT_USERNAME", "")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
+
+# === Home Assistant Config ===
+HA_HOST = os.getenv("HA_HOST")
+HA_TOKEN = os.getenv("HA_TOKEN")
+HA_LANG = os.getenv("HA_LANG", "en")

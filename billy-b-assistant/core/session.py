@@ -122,6 +122,10 @@ class BillySession:
         samples = indata[:, 0]
         rms = np.sqrt(np.mean(np.square(samples.astype(np.float32))))
         self.last_rms = rms
+
+        if DEBUG_MODE:
+            print(f"\r🎙 Mic Volume: {rms:.1f}     ", end='', flush=True)
+
         if rms > SILENCE_THRESHOLD:
             self.last_activity[0] = time.time()
             self.user_spoke_after_assistant = True
@@ -287,7 +291,13 @@ class BillySession:
 
 
         if data["type"] == "response.done":
-            print("\n✿ Assistant response complete.")
+            error = data.get("status_details", {}).get("error")
+            if error:
+                error_type = error.get("type")
+                error_message = error.get("message", "Unknown error")
+                print(f"\n❌ OpenAI API Error [{error_type}]: {error_message}")
+            else:
+                print("\n✿ Assistant response complete.")
 
             if not TEXT_ONLY_MODE:
                 await asyncio.to_thread(audio.playback_queue.join)
@@ -320,7 +330,7 @@ class BillySession:
                 bar = '█' * filled + '-' * (bar_len - filled)
                 print(
                     f"\r👂 {MIC_TIMEOUT_SECONDS}s timeout: [{bar}] {elapsed:.1f}s "
-                    f"| RMS: {self.last_rms:.4f} / Threshold: {SILENCE_THRESHOLD:.4f}",
+                    f"| Mic Volume: {self.last_rms:.4f} / Threshold: {SILENCE_THRESHOLD:.4f}",
                     end='', flush=True
                 )
 

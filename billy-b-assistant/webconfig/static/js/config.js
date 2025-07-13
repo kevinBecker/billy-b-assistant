@@ -59,7 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function toggleAutoScroll() {
         autoScrollEnabled = !autoScrollEnabled;
         elements.scrollBtn.classList.toggle("bg-indigo-600", autoScrollEnabled);
-        elements.scrollBtn.classList.toggle("bg-gray-800", !autoScrollEnabled);
+        elements.scrollBtn.classList.toggle("bg-zinc-800", !autoScrollEnabled);
         elements.scrollBtn.title = autoScrollEnabled ? "Auto-scroll ON" : "Auto-scroll OFF";
 
         if (autoScrollEnabled) {
@@ -90,15 +90,15 @@ function updateServiceStatusUI(status) {
     statusEl.textContent = `(${status})`;
 
     // Reset previous color classes
-    statusEl.classList.remove("text-green-400", "text-orange-400", "text-red-500");
+    statusEl.classList.remove("text-emerald-500", "text-amber-500", "text-rose-500");
 
     // Add color based on status
     if (status === "active") {
-        statusEl.classList.add("text-green-400");
+        statusEl.classList.add("text-emerald-500");
     } else if (status === "inactive") {
-        statusEl.classList.add("text-orange-400");
+        statusEl.classList.add("text-amber-500");
     } else if (status === "failed") {
-        statusEl.classList.add("text-red-500");
+        statusEl.classList.add("text-rose-500");
     }
 
     // Clear and repopulate controls
@@ -113,10 +113,10 @@ function updateServiceStatusUI(status) {
     };
 
     if (status === "inactive" || status === "failed") {
-        controlsEl.appendChild(createButton("Start", "start", "green"));
+        controlsEl.appendChild(createButton("Start", "start", "emerald"));
     } else if (status === "active") {
-        controlsEl.appendChild(createButton("Restart", "restart", "blue"));
-        controlsEl.appendChild(createButton("Stop", "stop", "red"));
+        controlsEl.appendChild(createButton("Restart", "restart", "amber"));
+        controlsEl.appendChild(createButton("Stop", "stop", "rose"));
     } else {
         controlsEl.textContent = "Unknown status.";
     }
@@ -148,6 +148,12 @@ function handleSettingsSave() {
 
         showNotification("Settings saved");
 
+        if (res.ok) {
+            await setupDeviceControls();
+        } else {
+            alert("Failed to save settings.");
+        }
+
         if (wasActive === "active") {
             await fetch("/service/restart");
             showNotification("Settings saved – service restarted");
@@ -166,14 +172,14 @@ function addBackstoryField(key = "", value = "") {
         type: "text",
         value: key,
         placeholder: "Key",
-        className: "w-1/3 p-1 bg-gray-800 text-white rounded"
+        className: "w-1/3 p-1 bg-zinc-800 text-white rounded"
     });
 
     const valInput = Object.assign(document.createElement("input"), {
         type: "text",
         value: value,
         placeholder: "Value",
-        className: "flex-1 p-1 bg-gray-800 text-white rounded"
+        className: "flex-1 p-1 bg-zinc-800 text-white rounded"
     });
 
     const removeBtn = document.createElement("button");
@@ -206,6 +212,7 @@ function renderPersonalitySliders(personality) {
         const label = document.createElement("label");
         label.className = "w-32 font-semibold text-sm";
         label.textContent = key;
+        label.for = key;
 
         const input = Object.assign(document.createElement("input"), {
             type: "range",
@@ -217,7 +224,7 @@ function renderPersonalitySliders(personality) {
         });
 
         const output = document.createElement("span");
-        output.className = "w-10 text-sm text-gray-400 text-right";
+        output.className = "w-10 text-sm text-zinc-400 text-right";
         output.textContent = value;
 
         input.addEventListener("input", () => {
@@ -289,24 +296,46 @@ function showNotification(message, duration = 2500) {
 }
 
 // ===================== AUDIO =====================
+
+fetch("/device-info")
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById("mic-label").innerHTML = data.mic;
+        document.getElementById("speaker-label").innerHTML = data.speaker;
+    });
+
 let micCheckSource = null;
 
 document.getElementById("mic-check-btn").addEventListener("click", toggleMicCheck);
 
-function toggleMicCheck() {
+async function toggleMicCheck() {
     const btn = document.getElementById("mic-check-btn");
-    const isActive = btn.classList.contains("bg-green-600");
+    const warning = document.getElementById("mic-check-warning");
+    const isActive = btn.classList.contains("bg-emerald-600");
 
     if (isActive) {
         stopMicCheck();
-        btn.classList.remove("bg-green-600");
-        btn.classList.add("bg-gray-800");
+        btn.classList.remove("bg-emerald-600");
+        btn.classList.add("bg-zinc-800");
+        warning.classList.add("hidden");
     } else {
+        // Check if the service is running
+        const res = await fetch("/service/status");
+        const { status } = await res.json();
+
+        if (status === "active") {
+            warning.textContent = "⚠️ Please stop the Billy service with the button at the top of the page before running mic check.";
+            warning.classList.remove("hidden");
+            return; // Block mic check start
+        }
+
+        warning.classList.add("hidden");
         startMicCheck();
-        btn.classList.remove("bg-gray-800");
-        btn.classList.add("bg-green-600");
+        btn.classList.remove("bg-zinc-800");
+        btn.classList.add("bg-emerald-600");
     }
 }
+
 function stopMicCheck() {
     micCheckSource.close();
     fetch("/mic-check/stop");
@@ -357,8 +386,8 @@ function updateMicBar(percentage, thresholdPercent = 0) {
     const bar = document.getElementById("mic-level-bar");
     bar.style.width = `${percentage}%`;
 
-    bar.classList.toggle("bg-gray-500", percentage < thresholdPercent);
-    bar.classList.toggle("bg-green-500", percentage < 70);
+    bar.classList.toggle("bg-zinc-500", percentage < thresholdPercent);
+    bar.classList.toggle("bg-emerald-500", percentage < 70);
     bar.classList.toggle("bg-yellow-500", percentage >= 70 && percentage < 90);
     bar.classList.toggle("bg-red-500", percentage >= 90);
 }
@@ -371,6 +400,33 @@ function clearThresholdLine() {
     document.getElementById("threshold-line").style.left = "0%";
 }
 
+async function loadMicGain() {
+    const label = document.getElementById("mic-gain-value");
+    const slider = document.getElementById("mic-gain");
+
+    try {
+        const res = await fetch("/mic-gain");
+        const data = await res.json();
+        if (data.gain !== undefined) {
+            label.textContent = data.gain;
+            slider.value = data.gain;
+        } else {
+            label.textContent = "Unavailable";
+        }
+    } catch (err) {
+        label.textContent = "Error";
+    }
+}
+
+document.getElementById("mic-gain").addEventListener("change", async () => {
+    const value = parseInt(document.getElementById("mic-gain").value, 10);
+    await fetch("/mic-gain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ value })
+    });
+    document.getElementById("mic-gain-value").textContent = value;
+});
 
 // ===================== INITIALIZE =====================
 
@@ -381,6 +437,7 @@ document.addEventListener("DOMContentLoaded", () => {
     setInterval(fetchStatus, 10000);
 
     loadPersona();
+    loadMicGain();
     handleSettingsSave();
     handlePersonaSave();
 });

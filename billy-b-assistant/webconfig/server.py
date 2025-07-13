@@ -8,7 +8,14 @@ import json
 import numpy as np
 import sounddevice as sd
 import queue
-from dotenv import dotenv_values, set_key, find_dotenv
+import re
+from dotenv import set_key, find_dotenv
+import sys
+
+# Add parent directory to sys.path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from core import config as core_config
 
 app = Flask(__name__)
 
@@ -23,14 +30,29 @@ CONFIG_KEYS = [
     "MQTT_PORT",
     "MQTT_USERNAME",
     "MQTT_PASSWORD",
-    "HA_URL",
+    "HA_HOST",
     "HA_TOKEN",
-    "HA_LANG"
+    "HA_LANG",
+    "MIC_PREFERENCE",
+    "SPEAKER_PREFERENCE"
 ]
 
 def load_env():
-    config = dotenv_values(ENV_PATH)
-    return {key: config.get(key, "") for key in CONFIG_KEYS}
+    return {
+        "OPENAI_API_KEY": core_config.OPENAI_API_KEY,
+        "VOICE": core_config.VOICE,
+        "MIC_TIMEOUT_SECONDS": str(core_config.MIC_TIMEOUT_SECONDS),
+        "SILENCE_THRESHOLD": str(core_config.SILENCE_THRESHOLD),
+        "MQTT_HOST": core_config.MQTT_HOST,
+        "MQTT_PORT": str(core_config.MQTT_PORT),
+        "MQTT_USERNAME": core_config.MQTT_USERNAME,
+        "MQTT_PASSWORD": core_config.MQTT_PASSWORD,
+        "HA_HOST": getattr(core_config, "HA_HOST", ""),
+        "HA_TOKEN": getattr(core_config, "HA_TOKEN", ""),
+        "HA_LANG": getattr(core_config, "HA_LANG", ""),
+        "MIC_PREFERENCE": core_config.MIC_PREFERENCE,
+        "SPEAKER_PREFERENCE": core_config.SPEAKER_PREFERENCE,
+    }
 
 @app.route("/")
 def index():
@@ -38,6 +60,7 @@ def index():
 
 @app.route("/save", methods=["POST"])
 def save():
+    from dotenv import dotenv_values  # local import to avoid circular import
     data = request.json
     for key, value in data.items():
         if key in CONFIG_KEYS:
@@ -77,9 +100,7 @@ def service_status():
         )
         return jsonify({"status": output.decode("utf-8").strip()})
     except subprocess.CalledProcessError as e:
-        # Even if the service is inactive, this gives us the actual status
         return jsonify({"status": e.output.decode("utf-8").strip()})
-
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 PERSONA_PATH = os.path.join(PROJECT_ROOT, "persona.ini")
@@ -130,7 +151,7 @@ def mic_check():
                         rms = rms_queue.get(timeout=1.0)
                         payload = {
                             "rms": round(rms, 4),
-                            "threshold": round(float(load_env().get("SILENCE_THRESHOLD", 0.01)), 4)
+                            "threshold": round(float(core_config.SILENCE_THRESHOLD), 4)
                         }
                         yield f"data: {json.dumps(payload)}\n\n"
                     except queue.Empty:
@@ -147,14 +168,59 @@ def mic_check_stop():
     mic_check_running = False
     return jsonify({"status": "stopped"})
 
-@app.route("/mic-gain")
-def set_mic_gain():
-    value = request.args.get("value", "80")
+@app.route("/mic-gain", methods=["GET", "POST"])
+def mic_gain():
+    if request.method == "GET":
+        try:
+            output = subprocess.check_output(["amixer", "cget", "numid=3"], text=True)
+            match = re.search(r": values=(\d+)", output)
+            gain = int(match.group(1)) if match else None
+            return jsonify({"gain": gain})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    if request.method == "POST":
+        try:
+            data = request.get_json()
+            value = int(data.get("value", 8))  # default to midrange
+            if 0 <= value <= 16:
+                subprocess.check_call(["amixer", "cset", "numid=3", str(value)])
+                return "OK"
+            else:
+                return jsonify({"error": "Mic gain must be between 0 and 16"}), 400
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+@app.route("/device-info")
+def device_info():
     try:
-        subprocess.check_call(["amixer", "set", "Capture", f"{value}%"])
-        return "OK"
+      devices = sd.query_devices()
+
+      mic_name = "Unknown"
+      speaker_name = "Unknown"
+
+      for dev in devices:
+          # Set mic name
+          if mic_name == "Unknown" and dev["max_input_channels"] > 0:
+              if not core_config.MIC_PREFERENCE or core_config.MIC_PREFERENCE.lower() in dev["name"].lower():
+                  mic_name = dev["name"]
+
+          # Set speaker name
+          if speaker_name == "Unknown" and dev["max_output_channels"] > 0:
+              if not core_config.SPEAKER_PREFERENCE or core_config.SPEAKER_PREFERENCE.lower() in dev["name"].lower():
+                  speaker_name = dev["name"]
+
+      return jsonify({
+          "mic": mic_name,
+          "speaker": speaker_name
+      })
+
     except Exception as e:
-        return str(e), 500
+        return jsonify({
+            "mic": "Unknown",
+            "speaker": "Unknown",
+            "error": str(e)
+        }), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080, debug=True)
