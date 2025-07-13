@@ -87,6 +87,10 @@ class BillySession:
         self.mic = MicManager()
         self.mic_timeout_task: asyncio.Task | None = None
 
+        # Track whenever a session is updated after creation, and OpenAI is ready to
+        # receive voice.
+        self.session_initialized = False
+
     async def start(self):
         self.loop = asyncio.get_running_loop()
         print("\n⏱️ Session starting...")
@@ -166,6 +170,12 @@ class BillySession:
                     or not data.get('type', "").endswith('delta')
                 ):
                     print(f"\n🔁 Raw message: {data} ")
+
+                # If the session has been updated properly, flag it as so. We can't
+                # send audio until the session is fully initialized.
+                if data.get('type', "") == 'session_updated':
+                    self.session_initialized = True
+
                 await self.handle_message(data)
 
         except Exception as e:
@@ -189,7 +199,7 @@ class BillySession:
             "response.audio",
             "response.audio.delta",
         ):
-            if not self.committed:
+            if not self.committed and self.session_initialized:
                 await self.ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
                 self.committed = True
             audio_b64 = data.get("audio") or data.get("delta")
@@ -377,9 +387,13 @@ class BillySession:
                     print(
                         f"\n⏱️ No mic activity for {MIC_TIMEOUT_SECONDS}s. Ending input..."
                     )
-                    await self.ws.send(
-                        json.dumps({"type": "input_audio_buffer.commit"})
-                    )
+
+                    # Don't commit mic audio unless the session is fully initialized.
+                    if self.session_initialized:
+                        await self.ws.send(
+                            json.dumps({"type": "input_audio_buffer.commit"})
+                        )
+                    self.committed = True
                     self.session_active.clear()
                     break
 
