@@ -1,26 +1,29 @@
 import asyncio
-import json
 import base64
-import websockets.legacy.client
-import numpy as np
-import time
+import json
 import re
-import core.audio as audio
-from core.mic import MicManager
-from core.mqtt import mqtt_publish
-from core.config import (
-    OPENAI_API_KEY,
-    VOICE,
-    TEXT_ONLY_MODE,
-    DEBUG_MODE,
+import time
+
+import numpy as np
+import websockets.legacy.client
+
+from . import audio
+from .config import (
     CHUNK_MS,
+    DEBUG_MODE,
     INSTRUCTIONS,
     MIC_TIMEOUT_SECONDS,
-    SILENCE_THRESHOLD,
-    update_persona_ini,
+    OPENAI_API_KEY,
     PERSONALITY,
+    SILENCE_THRESHOLD,
+    TEXT_ONLY_MODE,
+    VOICE,
 )
-from core.movements import move_tail_async, stop_all_motors
+from .mic import MicManager
+from .movements import move_tail_async, stop_all_motors
+from .mqtt import mqtt_publish
+from .personality import update_persona_ini
+
 
 TOOLS = [
     {
@@ -32,8 +35,8 @@ TOOLS = [
             "properties": {
                 trait: {"type": "integer", "minimum": 0, "maximum": 100}
                 for trait in vars(PERSONALITY)
-            }
-        }
+            },
+        },
     },
     {
         "name": "play_song",
@@ -41,11 +44,9 @@ TOOLS = [
         "description": "Plays a special Billy song based on a given name.",
         "parameters": {
             "type": "object",
-            "properties": {
-                "song": {"type": "string"}
-            },
-            "required": ["song"]
-        }
+            "properties": {"song": {"type": "string"}},
+            "required": ["song"],
+        },
     },
     {
         "name": "smart_home_command",
@@ -54,12 +55,16 @@ TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "prompt": {"type": "string", "description": "The command to send to Home Assistant"}
+                "prompt": {
+                    "type": "string",
+                    "description": "The command to send to Home Assistant",
+                }
             },
-            "required": ["prompt"]
-        }
-    }
+            "required": ["prompt"],
+        },
+    },
 ]
+
 
 class BillySession:
     def __init__(self, interrupt_event=None):
@@ -76,7 +81,6 @@ class BillySession:
         self.allow_mic_input = True
         self.interrupt_event = interrupt_event or asyncio.Event()
         self.mic = MicManager()
-
 
     async def start(self):
         self.loop = asyncio.get_running_loop()
@@ -97,18 +101,20 @@ class BillySession:
                 "openai-beta": "realtime=v1",
             }
             self.ws = await websockets.legacy.client.connect(uri, extra_headers=headers)
-            await self.ws.send(json.dumps({
-                "type": "session.update",
-                "session": {
-                    "voice": VOICE,
-                    "modalities": ["text"] if TEXT_ONLY_MODE else ["audio", "text"],
-                    "input_audio_format": "pcm16",
-                    "output_audio_format": "pcm16",
-                    "turn_detection": {"type": "server_vad"},
-                    "instructions": INSTRUCTIONS,
-                    "tools": TOOLS
-                }
-            }))
+            await self.ws.send(
+                json.dumps({
+                    "type": "session.update",
+                    "session": {
+                        "voice": VOICE,
+                        "modalities": ["text"] if TEXT_ONLY_MODE else ["audio", "text"],
+                        "input_audio_format": "pcm16",
+                        "output_audio_format": "pcm16",
+                        "turn_detection": {"type": "server_vad"},
+                        "instructions": INSTRUCTIONS,
+                        "tools": TOOLS,
+                    },
+                })
+            )
 
         if not TEXT_ONLY_MODE:
             audio.playback_done_event.clear()
@@ -165,7 +171,10 @@ class BillySession:
                 print(f"⚠️ Error in post_response_handling: {e}")
 
     async def handle_message(self, data):
-        if not TEXT_ONLY_MODE and data["type"] in ("response.audio", "response.audio.delta"):
+        if not TEXT_ONLY_MODE and data["type"] in (
+            "response.audio",
+            "response.audio.delta",
+        ):
             if not self.committed:
                 await self.ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
                 self.committed = True
@@ -179,17 +188,20 @@ class BillySession:
                 if self.interrupt_event.is_set():
                     print("⛔ Assistant turn interrupted. Stopping response playback.")
                     while not audio.playback_queue.empty():
-                            try:
-                                audio.playback_queue.get_nowait()
-                                audio.playback_queue.task_done()
-                            except Exception:
-                                break
+                        try:
+                            audio.playback_queue.get_nowait()
+                            audio.playback_queue.task_done()
+                        except Exception:
+                            break
 
                     self.session_active.clear()
                     self.interrupt_event.clear()
                     return
 
-        if data["type"] in ("response.audio_transcript.delta", "response.text.delta") and "delta" in data:
+        if (
+            data["type"] in ("response.audio_transcript.delta", "response.text.delta")
+            and "delta" in data
+        ):
             self.allow_mic_input = False
             if self.first_text:
                 mqtt_publish("billy/state", "speaking")
@@ -218,15 +230,21 @@ class BillySession:
                     self.full_response_text = ""
                     self.last_activity[0] = time.time()
 
-                    confirmation_text = " ".join([f"Okay, {trait} is now set to {val}%." for trait, val in changes])
-                    await self.ws.send(json.dumps({
-                        "type": "conversation.item.create",
-                        "item": {
-                            "type": "message",
-                            "role": "user",
-                            "content": [{"type": "input_text", "text": confirmation_text}]
-                        }
-                    }))
+                    confirmation_text = " ".join([
+                        f"Okay, {trait} is now set to {val}%." for trait, val in changes
+                    ])
+                    await self.ws.send(
+                        json.dumps({
+                            "type": "conversation.item.create",
+                            "item": {
+                                "type": "message",
+                                "role": "user",
+                                "content": [
+                                    {"type": "input_text", "text": confirmation_text}
+                                ],
+                            },
+                        })
+                    )
                     await self.ws.send(json.dumps({"type": "response.create"}))
 
             elif data.get("name") == "play_song":
@@ -246,7 +264,6 @@ class BillySession:
                 if prompt:
                     print(f"\n🏠 Sending to Home Assistant Conversation API: {prompt} ")
                     from core.ha import send_conversation_prompt
-                    ha_response = await send_conversation_prompt(prompt)
 
                     ha_response = await send_conversation_prompt(prompt)
 
@@ -254,9 +271,7 @@ class BillySession:
                     speech_text = None
                     if isinstance(ha_response, dict):
                         speech_text = (
-                            ha_response.get("speech", {})
-                            .get("plain", {})
-                            .get("speech")
+                            ha_response.get("speech", {}).get("plain", {}).get("speech")
                         )
 
                     if speech_text:
@@ -264,27 +279,37 @@ class BillySession:
                         ha_message = f"Home Assistant says: {speech_text}"
                         print(f"\n📣 {ha_message}")
 
-                        await self.ws.send(json.dumps({
-                            "type": "conversation.item.create",
-                            "item": {
-                                "type": "message",
-                                "role": "user",
-                                "content": [{"type": "input_text", "text": ha_message}]
-                            }
-                        }))
+                        await self.ws.send(
+                            json.dumps({
+                                "type": "conversation.item.create",
+                                "item": {
+                                    "type": "message",
+                                    "role": "user",
+                                    "content": [
+                                        {"type": "input_text", "text": ha_message}
+                                    ],
+                                },
+                            })
+                        )
                         await self.ws.send(json.dumps({"type": "response.create"}))
                     else:
                         print(f"⚠️ Failed to parse HA response: {ha_response}")
-                        await self.ws.send(json.dumps({
-                            "type": "conversation.item.create",
-                            "item": {
-                                "type": "message",
-                                "role": "user",
-                                "content": [{"type": "input_text", "text": "Home Assistant didn't understand the request."}]
-                            }
-                        }))
+                        await self.ws.send(
+                            json.dumps({
+                                "type": "conversation.item.create",
+                                "item": {
+                                    "type": "message",
+                                    "role": "user",
+                                    "content": [
+                                        {
+                                            "type": "input_text",
+                                            "text": "Home Assistant didn't understand the request.",
+                                        }
+                                    ],
+                                },
+                            })
+                        )
                         await self.ws.send(json.dumps({"type": "response.create"}))
-
 
         if data["type"] == "response.done":
             print("\n✿ Assistant response complete.")
@@ -321,7 +346,8 @@ class BillySession:
                 print(
                     f"\r👂 {MIC_TIMEOUT_SECONDS}s timeout: [{bar}] {elapsed:.1f}s "
                     f"| RMS: {self.last_rms:.4f} / Threshold: {SILENCE_THRESHOLD:.4f}",
-                    end='', flush=True
+                    end='',
+                    flush=True,
                 )
 
                 if now - last_tail_move > 1.0:
@@ -329,8 +355,12 @@ class BillySession:
                     last_tail_move = now
 
                 if elapsed > MIC_TIMEOUT_SECONDS:
-                    print(f"\n⏱️ No mic activity for {MIC_TIMEOUT_SECONDS}s. Ending input...")
-                    await self.ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
+                    print(
+                        f"\n⏱️ No mic activity for {MIC_TIMEOUT_SECONDS}s. Ending input..."
+                    )
+                    await self.ws.send(
+                        json.dumps({"type": "input_audio_buffer.commit"})
+                    )
                     self.session_active.clear()
                     break
 
@@ -349,7 +379,10 @@ class BillySession:
             print("🕐 Waiting for button press...")
             return
 
-        if re.search(r"[a-zA-Z]\?\s*$", self.full_response_text.strip()) and self.user_spoke_after_assistant:
+        if (
+            re.search(r"[a-zA-Z]\?\s*$", self.full_response_text.strip())
+            and self.user_spoke_after_assistant
+        ):
             print("🔁 Follow-up detected. Restarting...\n")
             await self.start()
         else:
