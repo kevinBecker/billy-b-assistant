@@ -49,6 +49,11 @@ if _config.has_section("BACKSTORY"):
     ])
 else:
     BACKSTORY = {}
+    BACKSTORY_FACTS = (
+        "You are an enigma and nobody knows anything about you because the person "
+        "talking to you hasn't configured your backstory. You might remind them to do "
+        "that."
+    )
 
 INSTRUCTIONS = (
     BASE_INSTRUCTIONS.strip()
