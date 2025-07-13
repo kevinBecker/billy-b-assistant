@@ -159,7 +159,10 @@ class BillySession:
                     print("🚪 Session marked as inactive, stopping stream loop.")
                     break
                 data = json.loads(message)
-                if DEBUG_MODE:
+                if DEBUG_MODE and (
+                    DEBUG_MODE_INCLUDE_DELTA
+                    or not data.get('type', "").endswith('delta')
+                ):
                     print(f"\n🔁 Raw message: {data} ")
                 await self.handle_message(data)
 

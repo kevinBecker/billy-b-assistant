@@ -69,6 +69,9 @@ VOICE = os.getenv("VOICE", "ash")
 
 # === Modes ===
 DEBUG_MODE = os.getenv("DEBUG_MODE", "true").lower() == "true"
+DEBUG_MODE_INCLUDE_DELTA = (
+    os.getenv("DEBUG_MODE_INCLUDE_DELTA", "false").lower() == "true"
+)
 TEXT_ONLY_MODE = os.getenv("TEXT_ONLY_MODE", "false").lower() == "true"
 
 # === Audio Config ===

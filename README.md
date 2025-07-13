@@ -158,6 +158,9 @@ MQTT_PASSWORD=password
 ## optional overwrites
 MIC_TIMEOUT_SECONDS=5
 SILENCE_THRESHOLD=900
+
+DEBUG_MODE=true
+DEBUG_MODE_INCLUDE_DELTA=false
 ```
 
 ### Explanation of fields
@@ -169,6 +172,8 @@ SILENCE_THRESHOLD=900
 - `SILENCE_THRESHOLD`: Audio threshold (RMS) for what counts as mic input
   - lower this value if Billy interrupts you too quickly
   - higher if Billy doesn't respond (because he thinks you're still talking)
+- `DEBUG_MODE`: Print debug information such as OpenAI responses to the output stream.
+- `DEBUG_MODE_INCLUDE_DELTA`: Also print voice and speech delta data, which can get very noisy.
 
 ---
 
