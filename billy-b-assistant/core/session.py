@@ -19,6 +19,7 @@ from .config import (
     TEXT_ONLY_MODE,
     VOICE,
 )
+from .ha import send_conversation_prompt
 from .mic import MicManager
 from .movements import move_tail_async, stop_all_motors
 from .mqtt import mqtt_publish
@@ -263,10 +264,8 @@ class BillySession:
 
                 if prompt:
                     print(f"\n🏠 Sending to Home Assistant Conversation API: {prompt} ")
-                    from core.ha import send_conversation_prompt
 
                     ha_response = await send_conversation_prompt(prompt)
-
                     # Try to extract plain speech text
                     speech_text = None
                     if isinstance(ha_response, dict):

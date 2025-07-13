@@ -2,8 +2,9 @@ import json
 import subprocess
 
 import paho.mqtt.client as mqtt
-from core.config import MQTT_HOST, MQTT_PASSWORD, MQTT_PORT, MQTT_USERNAME
-from core.movements import stop_all_motors
+
+from .config import MQTT_HOST, MQTT_PASSWORD, MQTT_PORT, MQTT_USERNAME
+from .movements import stop_all_motors
 
 
 mqtt_client: mqtt.Client | None = None

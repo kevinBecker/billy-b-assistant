@@ -12,20 +12,21 @@ from queue import Queue
 
 import numpy as np
 import sounddevice as sd
-from core.config import (
+from scipy.signal import resample
+
+from .config import (
     CHUNK_MS,
     MIC_PREFERENCE,
     PLAYBACK_VOLUME,
     SPEAKER_PREFERENCE,
     TEXT_ONLY_MODE,
 )
-from core.movements import (
+from .movements import (
     flap_from_pcm_chunk,
     interlude,
     move_head,
     move_tail_async,
 )
-from scipy.signal import resample
 
 
 # === Audio Device Globals ===

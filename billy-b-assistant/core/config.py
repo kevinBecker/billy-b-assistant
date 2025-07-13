@@ -1,11 +1,12 @@
 import configparser
 import os
 
-from core.personality import (
+from dotenv import load_dotenv
+
+from .personality import (
     PersonalityProfile,
     load_traits_from_ini,
 )
-from dotenv import load_dotenv
 
 
 # === Paths ===

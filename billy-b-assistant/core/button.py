@@ -2,11 +2,11 @@ import asyncio
 import threading
 import time
 
-import core.audio
-import core.config
-from core.movements import move_head
-from core.session import BillySession
 from gpiozero import Button
+
+from . import audio, config
+from .movements import move_head
+from .session import BillySession
 
 
 # Button and session globals
@@ -18,14 +18,14 @@ last_button_time = 0
 button_debounce_delay = 0.5  # seconds debounce
 
 # Setup hardware button
-button = Button(core.config.BUTTON_PIN, pull_up=True)
+button = Button(config.BUTTON_PIN, pull_up=True)
 
 
 def is_billy_speaking():
     """Return True if Billy is playing audio (wake-up or response)."""
-    if not core.audio.playback_done_event.is_set():
+    if not audio.playback_done_event.is_set():
         return True
-    if not core.audio.playback_queue.empty():
+    if not audio.playback_queue.empty():
         return True
     return False
 
@@ -49,7 +49,7 @@ def on_button():
     if is_active:
         print("🔁 Button pressed during active session.")
         interrupt_event.set()
-        core.audio.stop_playback()
+        audio.stop_playback()
 
         if session_instance:
             try:
@@ -72,9 +72,9 @@ def on_button():
         global session_instance, is_active
         try:
             move_head("on")
-            core.audio.ensure_playback_worker_started(core.config.CHUNK_MS)
+            audio.ensure_playback_worker_started(config.CHUNK_MS)
 
-            clip = core.audio.play_random_wake_up_clip()
+            clip = audio.play_random_wake_up_clip()
             if clip:
                 print(f"🐟 Enqueuing wake-up clip: {clip} ")
 
@@ -91,7 +91,7 @@ def on_button():
 
 
 def start_loop():
-    core.audio.detect_devices(debug=core.config.DEBUG_MODE)
+    audio.detect_devices(debug=config.DEBUG_MODE)
     button.when_pressed = on_button
     print("🎦 Ready. Press button to start a voice session. Press Ctrl+C to quit.")
     print("🕐 Waiting for button press...")
