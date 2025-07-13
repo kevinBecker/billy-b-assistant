@@ -1,7 +1,13 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 import subprocess
 import os
 import configparser
+import threading
+import time
+import json
+import numpy as np
+import sounddevice as sd
+import queue
 from dotenv import dotenv_values, set_key, find_dotenv
 
 app = Flask(__name__)
@@ -102,5 +108,53 @@ def save_persona():
         config.write(f)
     return jsonify({"status": "ok"})
 
+rms_queue = queue.Queue()
+mic_check_running = False
+
+def audio_callback(indata, frames, time_info, status):
+    if not mic_check_running:
+        raise sd.CallbackStop()
+    rms = float(np.sqrt(np.mean(np.square(indata))))
+    rms_queue.put(rms)
+
+@app.route("/mic-check")
+def mic_check():
+    def rms_stream_generator():
+        global mic_check_running
+        mic_check_running = True
+
+        try:
+            with sd.InputStream(callback=audio_callback):
+                while mic_check_running:
+                    try:
+                        rms = rms_queue.get(timeout=1.0)
+                        payload = {
+                            "rms": round(rms, 4),
+                            "threshold": round(float(load_env().get("SILENCE_THRESHOLD", 0.01)), 4)
+                        }
+                        yield f"data: {json.dumps(payload)}\n\n"
+                    except queue.Empty:
+                        continue
+        except Exception as e:
+            print("RMS stream error:", e)
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return Response(rms_stream_generator(), mimetype="text/event-stream")
+
+@app.route("/mic-check/stop")
+def mic_check_stop():
+    global mic_check_running
+    mic_check_running = False
+    return jsonify({"status": "stopped"})
+
+@app.route("/mic-gain")
+def set_mic_gain():
+    value = request.args.get("value", "80")
+    try:
+        subprocess.check_call(["amixer", "set", "Capture", f"{value}%"])
+        return "OK"
+    except Exception as e:
+        return str(e), 500
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=80, debug=True)
+    app.run(host="0.0.0.0", port=8080, debug=True)

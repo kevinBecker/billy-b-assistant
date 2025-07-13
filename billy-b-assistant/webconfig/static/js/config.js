@@ -33,7 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
         logPanel: document.getElementById("log-panel"),
     };
 
-    let isHidden = false;
+    let isHidden = true;
 
     // Toggle log visibility
     function toggleLogPanel() {
@@ -287,6 +287,90 @@ function showNotification(message, duration = 2500) {
         setTimeout(() => bar.classList.add("hidden"), 300);
     }, duration);
 }
+
+// ===================== AUDIO =====================
+let micCheckSource = null;
+
+document.getElementById("mic-check-btn").addEventListener("click", toggleMicCheck);
+
+function toggleMicCheck() {
+    const btn = document.getElementById("mic-check-btn");
+    const isActive = btn.classList.contains("bg-green-600");
+
+    if (isActive) {
+        stopMicCheck();
+        btn.classList.remove("bg-green-600");
+        btn.classList.add("bg-gray-800");
+    } else {
+        startMicCheck();
+        btn.classList.remove("bg-gray-800");
+        btn.classList.add("bg-green-600");
+    }
+}
+function stopMicCheck() {
+    micCheckSource.close();
+    fetch("/mic-check/stop");
+    micCheckSource = null;
+
+    updateMicBar(0);
+    clearThresholdLine();
+}
+
+function startMicCheck() {
+    let maxRms = 0;
+
+    micCheckSource = new EventSource("/mic-check");
+
+    micCheckSource.onmessage = (e) => {
+        let data;
+        try {
+            data = JSON.parse(e.data);
+        } catch (err) {
+            console.error("Invalid JSON from /mic-check:", e.data);
+            return;
+        }
+
+        if (data.error) {
+            console.error("Mic check error:", data.error);
+            return;
+        }
+
+        const SCALING_FACTOR = 32768;
+        const rms = data.rms * SCALING_FACTOR;
+        const threshold = data.threshold;
+        maxRms = Math.max(maxRms, rms);
+
+        const percent = Math.min((rms / threshold) * 100, 100);
+        const thresholdPercent = Math.min((threshold / SCALING_FACTOR) * 100, 100);
+
+        updateMicBar(percent, thresholdPercent);
+        updateThresholdLine(thresholdPercent);
+    };
+
+    micCheckSource.onerror = () => {
+        console.error("Mic check connection error.");
+        stopMicCheck();
+    };
+}
+
+function updateMicBar(percentage, thresholdPercent = 0) {
+    const bar = document.getElementById("mic-level-bar");
+    bar.style.width = `${percentage}%`;
+
+    bar.classList.toggle("bg-gray-500", percentage < thresholdPercent);
+    bar.classList.toggle("bg-green-500", percentage < 70);
+    bar.classList.toggle("bg-yellow-500", percentage >= 70 && percentage < 90);
+    bar.classList.toggle("bg-red-500", percentage >= 90);
+}
+
+function updateThresholdLine(percent) {
+    document.getElementById("threshold-line").style.left = `${percent}%`;
+}
+
+function clearThresholdLine() {
+    document.getElementById("threshold-line").style.left = "0%";
+}
+
 
 // ===================== INITIALIZE =====================
 
