@@ -345,9 +345,7 @@ def is_billy_speaking():
     """Return True if Billy is still playing audio."""
     if not audio.playback_done_event.is_set():
         return True
-    if not audio.playback_queue.empty():
-        return True
-    return False
+    return bool(not audio.playback_queue.empty())
 
 
 def reset_for_new_song():
