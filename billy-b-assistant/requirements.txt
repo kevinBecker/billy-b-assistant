@@ -10,4 +10,3 @@ requests
 openai
 aiohttp
 lgpio
-aiohttp
