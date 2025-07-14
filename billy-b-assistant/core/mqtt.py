@@ -1,15 +1,19 @@
-import paho.mqtt.client as mqtt
 import json
-import os
 import subprocess
-from core.config import MQTT_HOST, MQTT_PORT, MQTT_USERNAME, MQTT_PASSWORD
-from core.movements import stop_all_motors
 
-mqtt_client = None
+import paho.mqtt.client as mqtt
+
+from .config import MQTT_HOST, MQTT_PASSWORD, MQTT_PORT, MQTT_USERNAME
+from .movements import stop_all_motors
+
+
+mqtt_client: mqtt.Client | None = None
 mqtt_connected = False
+
 
 def mqtt_available():
     return all([MQTT_HOST, MQTT_PORT, MQTT_USERNAME, MQTT_PASSWORD])
+
 
 def on_connect(client, userdata, flags, rc):
     global mqtt_connected
@@ -20,6 +24,7 @@ def on_connect(client, userdata, flags, rc):
         client.subscribe("billy/command")
     else:
         print(f"⚠️ MQTT connection failed with code {rc}")
+
 
 def start_mqtt():
     global mqtt_client
@@ -38,6 +43,7 @@ def start_mqtt():
     except Exception as e:
         print(f"❌ MQTT connection error: {e}")
 
+
 def stop_mqtt():
     global mqtt_client
     if mqtt_client:
@@ -45,27 +51,30 @@ def stop_mqtt():
         mqtt_client.disconnect()
         print("\n🔌 MQTT disconnected.")
 
+
 def mqtt_publish(topic, payload, retain=True, retry=True):
     global mqtt_client, mqtt_connected
 
-    if not mqtt_client or not mqtt_connected:
-        if retry:
-            print("🔁 MQTT not connected. Trying to reconnect...")
-            try:
-                mqtt_client.reconnect()
-                mqtt_connected = True
-            except Exception as e:
-                print(f"\n❌ MQTT reconnect failed: {e}")
+    if mqtt_available():
+        if not mqtt_client or not mqtt_connected:
+            if retry:
+                print("🔁 MQTT not connected. Trying to reconnect...")
+                try:
+                    mqtt_client.reconnect()
+                    mqtt_connected = True
+                except Exception as e:
+                    print(f"\n❌ MQTT reconnect failed: {e}")
+                    return
+            else:
+                print(f"\n⚠️ MQTT not connected. Skipping publish {topic}={payload}")
                 return
-        else:
-            print(f"\n⚠️ MQTT not connected. Skipping publish {topic}={payload}")
-            return
 
-    try:
-        mqtt_client.publish(topic, payload, retain=retain)
-        print(f"📡 MQTT publish: {topic} = {payload} (retain={retain})")
-    except Exception as e:
-        print(f"\n❌ MQTT publish failed: {e}")
+        try:
+            mqtt_client.publish(topic, payload, retain=retain)
+            print(f"📡 MQTT publish: {topic} = {payload} (retain={retain})")
+        except Exception as e:
+            print(f"\n❌ MQTT publish failed: {e}")
+
 
 def mqtt_send_discovery():
     """Send MQTT discovery messages for Home Assistant."""
@@ -82,10 +91,14 @@ def mqtt_send_discovery():
             "identifiers": ["billy_bass"],
             "name": "Big Mouth Billy Bass",
             "model": "Billy Bassistant",
-            "manufacturer": "DIY"
-        }
+            "manufacturer": "DIY",
+        },
     }
-    mqtt_client.publish("homeassistant/sensor/billy/state/config", json.dumps(payload_sensor), retain=True)
+    mqtt_client.publish(
+        "homeassistant/sensor/billy/state/config",
+        json.dumps(payload_sensor),
+        retain=True,
+    )
 
     # Button to send shutdown command
     payload_button = {
@@ -97,10 +110,15 @@ def mqtt_send_discovery():
             "identifiers": ["billy_bass"],
             "name": "Big Mouth Billy Bass",
             "model": "Billy Bassistant",
-            "manufacturer": "DIY"
-        }
+            "manufacturer": "DIY",
+        },
     }
-    mqtt_client.publish("homeassistant/button/billy/shutdown/config", json.dumps(payload_button), retain=True)
+    mqtt_client.publish(
+        "homeassistant/button/billy/shutdown/config",
+        json.dumps(payload_button),
+        retain=True,
+    )
+
 
 def on_message(client, userdata, msg):
     print(f" \n📩 MQTT message received: {msg.topic} = {msg.payload.decode()}")

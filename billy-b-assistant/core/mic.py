@@ -1,5 +1,7 @@
 import sounddevice as sd
-import core.audio as audio
+
+from . import audio as audio
+
 
 class MicManager:
     def __init__(self):
@@ -13,7 +15,7 @@ class MicManager:
             channels=audio.MIC_CHANNELS,
             dtype='int16',
             blocksize=audio.CHUNK_SIZE,
-            callback=callback
+            callback=callback,
         )
         self.stream.start()
 

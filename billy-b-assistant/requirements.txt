@@ -10,3 +10,4 @@ requests
 openai
 aiohttp
 flask
+lgpio
