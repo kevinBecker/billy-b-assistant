@@ -95,19 +95,40 @@
                     <h3 class="text-lg font-bold mb-4 text-slate-200">OpenAI Settings</h3>
 
                     <div class="mb-4">
-                        <label for="OPENAI_API_KEY" class="block font-semibold text-sm text-slate-300">OpenAI API Key
+                        <label for="OPENAI_API_KEY" class="block font-semibold text-sm text-slate-300">
+                            OpenAI API Key
                             <span class="text-xs text-zinc-500 font-normal ml-1">(OPENAI_API_KEY)</span>
                         </label>
-                        <input class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                              id="OPENAI_API_KEY" name="OPENAI_API_KEY" value="{{ config.get('OPENAI_API_KEY', '') }}">
+                        <div class="relative">
+                            <input
+                                    type="password"
+                                    class="w-full p-3 mt-1 pr-10 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                    id="OPENAI_API_KEY"
+                                    name="OPENAI_API_KEY"
+                                    value="{{ config.get('OPENAI_API_KEY', '') }}"
+                            >
+                            <button
+                                    type="button"
+                                    onclick="toggleInputVisibility('OPENAI_API_KEY', this)"
+                                    class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white"
+                            >
+                                <span class="material-icons" id="OPENAI_API_KEY_icon">visibility</span>
+                            </button>
+                        </div>
                     </div>
 
-                    <div>
+                    <div class="mb-4 relative">
                         <label for="VOICE" class="block font-semibold text-sm text-slate-300">Voice Model
                             <span class="text-xs text-zinc-500 font-normal ml-1">(VOICE)</span>
                         </label>
-                        <input class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                               id="VOICE" name="VOICE" value="{{ config.get('VOICE', '') }}">
+                        <select id="VOICE" name="VOICE"
+                                class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                            {% for v in config.get('VOICE_OPTIONS',[]) %}
+                            <option value="{{ v }}" {% if config.get('VOICE') == v %}selected{% endif %}>
+                            {{ v|capitalize }}
+                            </option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
 
@@ -189,12 +210,28 @@
                     ("MQTT_PASSWORD", "MQTT Password", "password")
                     ] %}
                     <div class="mb-4">
-                        <span for="{{ field[0] }}" class="block font-semibold text-sm text-slate-300">{{ field[1] }}
+                        <label for="{{ field[0] }}" class="block font-semibold text-sm text-slate-300">
+                            {{ field[1] }}
                             <span class="text-xs text-zinc-500 font-normal ml-1">({{ field[0] }})</span>
-                        </span>
-                        <input type="{{ field[2] if field|length > 2 else 'text' }}"
-                               class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                               name="{{ field[0] }}" value="{{ config.get(field[0], '') }}">
+                        </label>
+                        <div class="relative">
+                            <input
+                                    id="{{ field[0] }}"
+                                    name="{{ field[0] }}"
+                                    type="{{ field[2] if field|length > 2 else 'text' }}"
+                                    class="w-full p-3 mt-1 pr-10 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                    value="{{ config.get(field[0], '') }}"
+                            >
+                            {% if field|length > 2 and field[2] == 'password' %}
+                            <button
+                                    type="button"
+                                    onclick="toggleInputVisibility('{{ field[0] }}', this)"
+                                    class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white"
+                            >
+                                <span class="material-icons" id="{{ field[0] }}_icon">visibility</span>
+                            </button>
+                            {% endif %}
+                        </div>
                     </div>
                     {% endfor %}
                 </div>
@@ -208,12 +245,28 @@
                     ("HA_TOKEN", "Home Assistant Token", "password")
                     ] %}
                     <div class="mb-4">
-                        <label class="block font-semibold text-sm text-slate-300">{{ field[1] }}
+                        <label for="{{ field[0] }}" class="block font-semibold text-sm text-slate-300">
+                            {{ field[1] }}
                             <span class="text-xs text-zinc-500 font-normal ml-1">({{ field[0] }})</span>
                         </label>
-                        <input type="{{ field[2] if field|length > 2 else 'text' }}"
-                               class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                               name="{{ field[0] }}" value="{{ config.get(field[0], '') }}">
+                        <div class="relative">
+                            <input
+                                    id="{{ field[0] }}"
+                                    name="{{ field[0] }}"
+                                    type="{{ field[2] if field|length > 2 else 'text' }}"
+                                    class="w-full p-3 mt-1 pr-10 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                    value="{{ config.get(field[0], '') }}"
+                            >
+                            {% if field|length > 2 and field[2] == 'password' %}
+                            <button
+                                    type="button"
+                                    onclick="toggleInputVisibility('{{ field[0] }}', this)"
+                                    class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white"
+                            >
+                                <span class="material-icons" id="{{ field[0] }}_icon">visibility</span>
+                            </button>
+                            {% endif %}
+                        </div>
                     </div>
                     {% endfor %}
 

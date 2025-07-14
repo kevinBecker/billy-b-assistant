@@ -288,6 +288,15 @@ function showNotification(message, duration = 2500) {
     }, duration);
 }
 
+function toggleInputVisibility(inputId, button) {
+    const input = document.getElementById(inputId);
+    const icon = document.getElementById(`${inputId}_icon`);
+    const isHidden = input.type === "password";
+
+    input.type = isHidden ? "text" : "password";
+    icon.textContent = isHidden ? "visibility_off" : "visibility";
+}
+
 // ===================== AUDIO =====================
 
 fetch("/device-info")

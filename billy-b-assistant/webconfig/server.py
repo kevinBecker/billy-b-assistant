@@ -43,6 +43,17 @@ def load_env():
     return {
         "OPENAI_API_KEY": core_config.OPENAI_API_KEY,
         "VOICE": core_config.VOICE,
+        "VOICE_OPTIONS": [
+            "ash",
+            "ballad",
+            "coral",
+            "sage",
+            "verse",
+            "alloy",
+            "echo",
+            "fable",
+            "nova",
+        ],
         "MIC_TIMEOUT_SECONDS": str(core_config.MIC_TIMEOUT_SECONDS),
         "SILENCE_THRESHOLD": str(core_config.SILENCE_THRESHOLD),
         "MQTT_HOST": core_config.MQTT_HOST,
