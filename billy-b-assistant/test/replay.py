@@ -1,23 +1,25 @@
-import sys
 import os
+import sys
 import wave
-import time
-from scipy.signal import resample
+
 import numpy as np
+from scipy.signal import resample
+
 
 # Add parent directory to sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+import core.movements
 from core.audio import (
-    playback_queue,
-    playback_done_event,
-    detect_devices,
-    ensure_playback_worker_started,
     CHUNK_MS,
     RESPONSE_HISTORY_DIR,
-    play_random_wake_up_clip
+    detect_devices,
+    ensure_playback_worker_started,
+    play_random_wake_up_clip,
+    playback_done_event,
+    playback_queue,
 )
-import core.movements
+
 
 # Detect audio devices and start playback worker
 detect_devices()

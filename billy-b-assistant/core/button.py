@@ -15,7 +15,7 @@ from .session import BillySession
 is_active = False
 session_thread = None
 interrupt_event = threading.Event()
-session_instance = None
+session_instance: BillySession | None = None
 last_button_time = 0
 button_debounce_delay = 0.5  # seconds debounce
 
@@ -27,9 +27,7 @@ def is_billy_speaking():
     """Return True if Billy is playing audio (wake-up or response)."""
     if not audio.playback_done_event.is_set():
         return True
-    if not audio.playback_queue.empty():
-        return True
-    return False
+    return bool(not audio.playback_queue.empty())
 
 
 def on_button():

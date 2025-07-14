@@ -1,10 +1,12 @@
 import asyncio
-import os
-import json
 import base64
+import json
+import os
 import wave
+
 import websockets.legacy.client
 from dotenv import load_dotenv
+
 
 # Load environment variables
 load_dotenv()
@@ -34,6 +36,7 @@ CLIPS = [
     "Whaaaaazaaaaaaaaapp",
 ]
 
+
 async def generate_clip(text, index):
     print(f"\n🔊 Generating clip {index}: {text}")
 
@@ -45,36 +48,38 @@ async def generate_clip(text, index):
 
     async with websockets.legacy.client.connect(uri, extra_headers=headers) as ws:
         # Step 1: Start session
-        await ws.send(json.dumps({
-            "type": "session.update",
-            "session": {
-                "voice": VOICE,
-                "modalities": ["text", "audio"],
-                "output_audio_format": "pcm16",
-                "turn_detection": { "type": "semantic_vad" },
-                "instructions": "Always respond by speaking the exact user text out loud. Do not change or rephrase anything!"
-            }
-        }))
+        await ws.send(
+            json.dumps({
+                "type": "session.update",
+                "session": {
+                    "voice": VOICE,
+                    "modalities": ["text", "audio"],
+                    "output_audio_format": "pcm16",
+                    "turn_detection": {"type": "semantic_vad"},
+                    "instructions": "Always respond by speaking the exact user text out loud. Do not change or rephrase anything!",
+                },
+            })
+        )
 
         # Step 2: Send text
-        await ws.send(json.dumps({
-            "type": "conversation.item.create",
-            "item": {
-                "type": "message",
-                "role": "user",
-                "content": [
-                    { "type": "input_text", "text": text }
-                ]
-            }
-        }))
+        await ws.send(
+            json.dumps({
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": text}],
+                },
+            })
+        )
 
         # Step 3: Force response
-        await ws.send(json.dumps({
-            "type": "response.create",
-            "response": {
-                "modalities": ["audio", "text"]
-            }
-        }))
+        await ws.send(
+            json.dumps({
+                "type": "response.create",
+                "response": {"modalities": ["audio", "text"]},
+            })
+        )
 
         print("✅ Prompt sent, waiting for response...")
 
@@ -82,7 +87,7 @@ async def generate_clip(text, index):
 
         async for message in ws:
             parsed = json.loads(message)
-#             print("📥", json.dumps(parsed, indent=2))
+            #             print("📥", json.dumps(parsed, indent=2))
 
             if parsed["type"] in ("response.audio", "response.audio.delta"):
                 b64 = parsed.get("audio") or parsed.get("delta")
@@ -103,9 +108,11 @@ async def generate_clip(text, index):
         else:
             print(f"⚠️ No audio received for clip {index}: {text}")
 
+
 async def main():
     for i, text in enumerate(CLIPS, start=1):
         await generate_clip(text, i)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
