@@ -1,8 +1,13 @@
-import os
-import re
 import configparser
+import os
+
 from dotenv import load_dotenv
-from core.personality import PersonalityProfile, load_traits_from_ini, update_persona_ini
+
+from .personality import (
+    PersonalityProfile,
+    load_traits_from_ini,
+)
+
 
 # === Paths ===
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -39,14 +44,25 @@ DO NOT explain or confirm that you are triggering a tool. Just smoothly integrat
 EXTRA_INSTRUCTIONS = _config.get("META", "instructions")
 if _config.has_section("BACKSTORY"):
     BACKSTORY = dict(_config.items("BACKSTORY"))
-    BACKSTORY_FACTS = "\n".join([f"- {key}: {value}" for key, value in BACKSTORY.items()])
+    BACKSTORY_FACTS = "\n".join([
+        f"- {key}: {value}" for key, value in BACKSTORY.items()
+    ])
 else:
     BACKSTORY = {}
+    BACKSTORY_FACTS = (
+        "You are an enigma and nobody knows anything about you because the person "
+        "talking to you hasn't configured your backstory. You might remind them to do "
+        "that."
+    )
 
 INSTRUCTIONS = (
-    BASE_INSTRUCTIONS.strip() + "\n\n"
-    + EXTRA_INSTRUCTIONS.strip() + "\n\n"
-    + "Known facts about your past:\n" + BACKSTORY_FACTS + "\n\n"
+    BASE_INSTRUCTIONS.strip()
+    + "\n\n"
+    + EXTRA_INSTRUCTIONS.strip()
+    + "\n\n"
+    + "Known facts about your past:\n"
+    + BACKSTORY_FACTS
+    + "\n\n"
     + PERSONALITY.generate_prompt()
 )
 
@@ -58,6 +74,9 @@ VOICE = os.getenv("VOICE", "ash")
 
 # === Modes ===
 DEBUG_MODE = os.getenv("DEBUG_MODE", "true").lower() == "true"
+DEBUG_MODE_INCLUDE_DELTA = (
+    os.getenv("DEBUG_MODE_INCLUDE_DELTA", "false").lower() == "true"
+)
 TEXT_ONLY_MODE = os.getenv("TEXT_ONLY_MODE", "false").lower() == "true"
 
 # === Audio Config ===
@@ -76,3 +95,8 @@ MQTT_HOST = os.getenv("MQTT_HOST", "")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "0"))
 MQTT_USERNAME = os.getenv("MQTT_USERNAME", "")
 MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
+
+# === Personality Config ===
+ALLOW_UPDATE_PERSONALITY_INI = (
+    os.getenv("ALLOW_UPDATE_PERSONALITY_INI", "true").lower() == "true"
+)
