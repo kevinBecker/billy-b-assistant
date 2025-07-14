@@ -1,3 +1,4 @@
 .idea
 billy-b-assistant/.env
 billy-b-assistant/persona.ini
+billy-b-assistant/webconfig/node_modules
