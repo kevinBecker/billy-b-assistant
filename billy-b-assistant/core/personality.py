@@ -1,5 +1,7 @@
 # core/personality.py
 import configparser
+import os
+import shutil
 
 
 class PersonalityProfile:
@@ -101,6 +103,13 @@ class PersonalityProfile:
 
 # helper to load from persona.ini
 def load_traits_from_ini(path="persona.ini") -> dict:
+    if not os.path.exists(path):
+        # Copy default
+        example_path = path + ".example"
+        if not os.path.exists(example_path):
+            raise RuntimeError(f"❌ Default profile not found: {example_path}")
+        shutil.copy(example_path, path)
+
     config = configparser.ConfigParser()
     config.read(path)
 
