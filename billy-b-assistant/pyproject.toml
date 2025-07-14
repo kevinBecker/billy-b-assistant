@@ -1,0 +1,53 @@
+[project]
+name = "billy-b-assistant"
+
+[tool.ruff]
+# Places ruff should not look
+extend-exclude = []
+
+# Tool configuration
+line-length = 88
+indent-width = 4
+
+[tool.ruff.lint]
+# Linting rules
+
+ignore = [
+  "D100",   # undocumented-public-module
+  "D104",   # undocumented-public-package
+  "D105",   # undocumented-magic-method
+  "D106",   # undocumented-public-nested-class
+  "D107",   # undocumented-public-init
+  "D203",   # one-blank-line-before-class
+  "D213",   # multi-line-summary-second-line
+  "D401",   # non-imperative-mood
+  "D407",   # dashed-underline-after-section
+  "RET501", # unnecessary-return-none
+]
+
+select = [
+  "D300",   # pydocstyle, triple-single-quotes
+  "DJ001",  # flake8-django, django-nullable-model-string-field
+  "DJ012",  # flake8-django, django-unordered-body-content-in-mode
+  "E722",   # pycodestyle, bare-except
+  "FIX",    # flake8-fixme
+  "F401",   # pyflakes unused-import
+  "I",      # isort
+  "RET",    # flake8-return
+  "RUF022", # unsorted-dunder-all
+  "RUF034", # useless-if-else
+  "SIM",    # flake8-simplify
+  "TC006",  # flake8-type-checking, runtime-cast-value
+  "UP",     # pyupgrade
+  "W",      # pycodestyle warnings
+]
+
+[tool.ruff.format]
+preview = true
+line-ending = "native"
+indent-style = "space"
+quote-style = "preserve"
+
+[tool.ruff.lint.isort]
+# Match isort profile=black for blank lines after imports
+lines-after-imports = 2
