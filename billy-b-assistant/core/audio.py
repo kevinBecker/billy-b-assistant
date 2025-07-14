@@ -314,8 +314,19 @@ def play_random_wake_up_clip():
     if not clips:
         print("⚠️ No wake-up clips found.")
         return None
+
     clip = random.choice(clips)
+
+    # Track how many tasks were pending before enqueue
+    already_pending = playback_queue.unfinished_tasks
+
+    # Enqueue the WAV file
     enqueue_wav_to_playback(clip)
+
+    # Wait for exactly those new chunks to finish
+    while playback_queue.unfinished_tasks > already_pending:
+        time.sleep(0.01)
+
     return clip
 
 
