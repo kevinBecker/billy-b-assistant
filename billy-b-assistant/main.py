@@ -1,3 +1,4 @@
+import asyncio
 import shutil
 import signal
 import sys
@@ -44,6 +45,9 @@ def signal_handler(sig, frame):
     stop_all_motors()
     stop_mqtt()
     sys.exit(0)
+
+
+main_event_loop = asyncio.get_event_loop()
 
 
 def main():

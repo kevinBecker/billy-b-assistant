@@ -1,3 +1,4 @@
+import asyncio
 import configparser
 import os
 
@@ -105,3 +106,8 @@ HA_LANG = os.getenv("HA_LANG", "en")
 ALLOW_UPDATE_PERSONALITY_INI = (
     os.getenv("ALLOW_UPDATE_PERSONALITY_INI", "true").lower() == "true"
 )
+
+try:
+    MAIN_LOOP = asyncio.get_event_loop()
+except RuntimeError:
+    MAIN_LOOP = None

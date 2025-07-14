@@ -17,7 +17,12 @@ It streams conversation using the OpenAI Realtime API, turns its head, flaps it'
 - Head and mouth motion controlled via GPIO and PWM
 - Physical button to start/interact/intervene
 - Personality system with configurable traits (e.g., snark, charm)
-- MQTT support for status updates
+- MQTT support:
+ - for status updates (idle, speaking, listening)
+ - `billy/say` topic for triggering spoken messages remotely
+ - Raspberry Pi Safe Shutdown command
+- Home Assistant command passthrough using the Conversation API
+- Lightweight web UI for editing configuration, logs, and systemd service control
 - Custom Song Singing and animation mode
 
 ---
