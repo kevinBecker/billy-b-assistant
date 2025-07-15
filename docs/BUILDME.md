@@ -18,7 +18,7 @@ This guide explains how to physically build and wire your Raspberry Pi–powered
 | 1x USB Microphone                            | [Amazon](https://amzn.eu/d/7Y9GhoL)                                                                                                         | [AliExpress](https://nl.aliexpress.com/item/1005007211513791.html) |
 | 1x L298N Motor Driver                        | [Amazon](https://amzn.eu/d/g9yBNVg)                                                                                                         | [AliExpress](https://nl.aliexpress.com/item/1005006890733953.html) |
 | Jumper Wires / Dupont Cables                 | [Amazon](https://amzn.eu/d/i4kyXG2)                                                                                                         | [AliExpress](https://nl.aliexpress.com/item/1005003641187997.html) |
-| *JST 2.54 4 pin connector (male)             | [Amazon](https://amzn.eu/d/i4kyXG2)                                                                                                         | [AliExpress](https://nl.aliexpress.com/item/1005007460897865.html) |
+| *JST 2.54 4 pin connector (female)           | [Amazon](https://amzn.eu/d/cDqHgNv)                                                                                                         | [AliExpress](https://nl.aliexpress.com/item/1005007460897865.html) |
 
 *recommended to be able to easily (un)plug the motor cables
 
