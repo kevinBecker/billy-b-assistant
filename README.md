@@ -19,7 +19,7 @@ It streams conversation using the OpenAI Realtime API, turns its head, flaps it'
 - Personality system with configurable traits (e.g., snark, charm)
 - MQTT support:
  - for status updates (idle, speaking, listening)
- - `billy/say` topic for triggering spoken messages remotely
+ - `billy/say` topic for triggering spoken messages remotely (feature in beta)
  - Raspberry Pi Safe Shutdown command
 - Home Assistant command passthrough using the Conversation API
 - Lightweight web UI for editing configuration, logs, and systemd service control
@@ -479,10 +479,9 @@ Mismatched language settings may cause parsing errors or incorrect target resolu
 ## Future Ideas
 
 Here are some ideas that I have for features in upcoming releases:
-- **Extended mqtt functionality**  for example an announcement mode
 - **Install script / easier software updates**
-- **Web UI** for easier configuration
 - **Local TTS and STT fallback**
+- **Local custom wake-word detection**
 
 ## Support the Project
 
