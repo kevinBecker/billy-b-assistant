@@ -141,14 +141,13 @@ See [BUILDME.md for detailed build/wiring instructions.](./docs/BUILDME.md)
 
 ## 7. Create your `.env` file
 
-Before running the project, you'll need to create a `.env` file in the root of the `billy-b-assistant` folder.
-Copy `.env.example` to `.env` 
-```bash
-cp .env.example .env
-```
+When first running the project, it will create a `.env` file in the root of the `billy-b-assistant` folder by copying `.env.example` to `.env` 
 
 This file is used to configure your environment, including the [OpenAI API key](https://platform.openai.com/api-keys) and (optional) mqtt settings. 
 This file can also be used to overwrite some of the default config settings (like the voice of billy) that you can find in config.py.
+
+Updates to the settings via the Web UI will also be saved here.  
+(The DEBUG_MODE_* settings are not exposed in the UI)
 
 ### Example `.env` file
 
@@ -228,7 +227,7 @@ Billy should now boot automatically into standby mode. Press the physical button
 
 ---
 
-## 11. (Optional) 🌐 Web Configuration Interface
+## 10. (Optional) 🌐 Web Configuration Interface
 
 Billy includes a lightweight web interface for editing settings, debugging logs, and managing the assistant service without touching the terminal.
 
@@ -296,7 +295,8 @@ If you want the web interface to always be available:
 
 ## 11. (Optional) Configure `persona.ini`
 
-The `persona.ini` file controls Billy's **personality**, **backstory**, and **additional instructions**. You can edit this file manually, or change the personality trait values during a voice session using commands like:
+The `persona.ini` file controls Billy's **personality**, **backstory**, and **additional instructions**.
+This file will also be created on first run. You can edit this file manually, via the Web UI,  or change the personality trait values during a voice session using commands like:
 
 - “What is your humor setting?”
 - “Set sarcasm to 80%”
