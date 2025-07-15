@@ -349,9 +349,10 @@ Here are some ideas that I have for features in upcoming releases:
 - **Local TTS and STT fallback**
 
 ## Support the Project
+Billy B-Assistant is a project built and maintained for fun and experimentation, free for **personal** and **educational** use.
+See [LICENSE](./LICENSE) for full details.
 
-Billy B-Assistant is an free and open-source project built and maintained for fun and experimentation. 
-If you enjoy it or want to help improve it, here’s how you can support:
+If you enjoy your Billy and want to help improve it, here’s how you can support:
 
 ### Contributing Code
 
