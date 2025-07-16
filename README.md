@@ -286,6 +286,7 @@ If you want the web interface to always be available:
 3. Enable and start:
 
    ```bash
+   sudo setcap 'cap_net_bind_service=+ep' /usr/bin/python3.11
    sudo systemctl daemon-reload
    sudo systemctl enable billy-webconfig
    sudo systemctl start billy-webconfig
@@ -479,7 +480,7 @@ Mismatched language settings may cause parsing errors or incorrect target resolu
 ## Future Ideas
 
 Here are some ideas that I have for features in upcoming releases:
-- **Install script / easier software updates**
+- Work in Progress: **Install script / easier software updates**
 - **Local TTS and STT fallback**
 - **Local custom wake-word detection**
 

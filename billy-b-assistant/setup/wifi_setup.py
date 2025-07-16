@@ -43,6 +43,7 @@ FORM = """
       margin-top: 0.5rem;
       border: none;
       border-radius: 5px;
+      font-size: 16px;
     }
     button {
       background-color: #4caf50;
