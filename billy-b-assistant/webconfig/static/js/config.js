@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function toggleLogPanel() {
         isHidden = !isHidden;
         elements.logPanel.classList.toggle("hidden", isHidden);
-        elements.toggleBtn.textContent = isHidden ? "Show Log" : "Hide Log";
+        elements.toggleBtn.textContent = isHidden ? "Show Debug" : "Hide Debug";
     }
 
     // Fullscreen mode using class toggle
@@ -297,14 +297,63 @@ function toggleInputVisibility(inputId, button) {
     icon.textContent = isHidden ? "visibility_off" : "visibility";
 }
 
-// ===================== AUDIO =====================
-
-fetch("/device-info")
+fetch("/version")
     .then(res => res.json())
     .then(data => {
-        document.getElementById("mic-label").innerHTML = data.mic;
-        document.getElementById("speaker-label").innerHTML = data.speaker;
+        document.getElementById("current-version").textContent = `Current: ${data.current}`;
+
+        if (data.update_available) {
+            const latestSpan = document.getElementById("latest-version");
+            latestSpan.textContent = `Latest: ${data.latest}`;
+            latestSpan.classList.remove("hidden");
+            document.getElementById("update-btn").classList.remove("hidden");
+        }
+    })
+    .catch(err => {
+        console.error("Failed to load version info", err);
     });
+document.getElementById("update-btn").addEventListener("click", () => {
+    if (!confirm("Are you sure you want to update Billy to the latest version?")) return;
+
+    fetch("/update", { method: "POST" })
+        .then(res => res.json())
+        .then(data => {
+            showNotification(data.message || "Update triggered");
+
+            let attempts = 0;
+            const maxAttempts = 24; // 5s × 24 = 120s
+
+            const checkForUpdate = async () => {
+                try {
+                    const res = await fetch("/version");
+                    const { current, latest } = await res.json();
+
+                    if (current === latest) {
+                        showNotification("Update complete. Reloading...");
+                        setTimeout(() => location.reload(), 1500);
+                        return;
+                    }
+                } catch (err) {
+                    console.error("Version check failed:", err);
+                }
+
+                attempts++;
+                if (attempts < maxAttempts) {
+                    setTimeout(checkForUpdate, 5000);
+                } else {
+                    showNotification("Update timed out after 2 minutes.");
+                }
+            };
+
+            setTimeout(checkForUpdate, 5000); // Start first check after 5s
+        })
+        .catch(err => {
+            console.error("Failed to start update:", err);
+            showNotification("Failed to start update");
+        });
+});
+
+// ===================== AUDIO =====================
 
 let micCheckSource = null;
 
@@ -430,6 +479,27 @@ document.getElementById("mic-gain").addEventListener("change", async () => {
     document.getElementById("mic-gain-value").textContent = value;
 });
 
+async function updateDeviceLabels() {
+    try {
+        const res = await fetch("/device-info");
+        const data = await res.json();
+
+        const updateParentClass = (id, value) => {
+            const el = document.getElementById(id);
+            if (el && el.parentElement) {
+                el.textContent = value;
+                el.parentElement.classList.add("text-emerald-500");
+            }
+        };
+
+        updateParentClass("mic-label", data.mic);
+        updateParentClass("speaker-label", data.speaker);
+
+    } catch (error) {
+        console.error("Failed to fetch device info:", error);
+    }
+}
+
 // ===================== INITIALIZE =====================
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -437,7 +507,7 @@ document.addEventListener("DOMContentLoaded", () => {
     fetchStatus();
     setInterval(fetchLogs, 5000);
     setInterval(fetchStatus, 10000);
-
+    updateDeviceLabels();
     loadPersona();
     loadMicGain();
     handleSettingsSave();

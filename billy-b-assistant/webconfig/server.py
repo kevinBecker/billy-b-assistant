@@ -9,7 +9,7 @@ import threading
 
 import numpy as np
 import sounddevice as sd
-from dotenv import find_dotenv, set_key
+from dotenv import dotenv_values, find_dotenv, set_key
 from flask import Flask, Response, jsonify, render_template, request
 
 
@@ -38,6 +38,13 @@ CONFIG_KEYS = [
     "MIC_PREFERENCE",
     "SPEAKER_PREFERENCE",
 ]
+
+WEBCONFIG_DIR = os.path.abspath(os.path.dirname(__file__))
+PROJECT_ROOT = os.path.abspath(os.path.join(WEBCONFIG_DIR, ".."))
+GIT_ROOT = os.path.abspath(os.path.join(PROJECT_ROOT, ".."))
+PERSONA_PATH = os.path.join(PROJECT_ROOT, "persona.ini")
+VERSION_PATH = os.path.join(PROJECT_ROOT, ".version.txt")
+ALLOW_RC_TAGS = os.getenv("ALLOW_RC_TAGS", "false").lower() == "true"
 
 
 def load_env():
@@ -74,8 +81,100 @@ def index():
     return render_template("index.html", config=load_env())
 
 
+def get_current_version():
+    try:
+        with open(VERSION_PATH) as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return "?"
+
+
+@app.route("/version")
+def version_info():
+    current = get_current_version()
+    try:
+        # Load flag from .env
+        show_rc = dotenv_values().get("SHOW_RC_VERSIONS", "false").lower() == "true"
+
+        # Fetch latest tags from GitHub
+        output = subprocess.check_output(
+            [
+                "curl",
+                "-s",
+                "https://api.github.com/repos/Thokoop/Billy-b-assistant/tags",
+            ],
+            text=True,
+        )
+        tags = json.loads(output)
+
+        # Filter out RCs if not allowed
+        filtered_tags = [
+            tag["name"]
+            for tag in tags
+            if show_rc or not re.search(r"rc\d*$", tag["name"], re.IGNORECASE)
+        ]
+
+        latest = filtered_tags[0] if filtered_tags else current
+
+    except Exception as e:
+        print("Failed to fetch latest version:", e)
+        latest = current
+
+    return jsonify({
+        "current": current,
+        "latest": latest,
+        "update_available": latest != current and latest != "unknown",
+    })
+
+
+def get_latest_tag():
+    try:
+        output = subprocess.check_output(
+            [
+                "curl",
+                "-s",
+                "https://api.github.com/repos/Thokoop/Billy-b-assistant/tags",
+            ],
+            text=True,
+        )
+        tags = json.loads(output)
+        for tag in tags:
+            name = tag["name"]
+            if ALLOW_RC_TAGS or "-RC" not in name.upper():
+                return name
+        return tags[0]["name"] if tags else "unknown"
+    except Exception as e:
+        print(f"Failed to fetch tags: {e}")
+        return "unknown"
+
+
+@app.route("/update", methods=["POST"])
+def perform_update():
+    current = get_current_version()
+    latest = get_latest_tag()
+
+    if current == latest or latest == "unknown":
+        return jsonify({"status": "up-to-date", "version": current})
+
+    try:
+        subprocess.check_call(["git", "fetch"], cwd=GIT_ROOT)
+        subprocess.check_call(["git", "checkout", f"{latest}"], cwd=GIT_ROOT)
+        subprocess.check_call(["sudo", "systemctl", "restart", "billy.service"])
+        subprocess.check_call([
+            "sudo",
+            "systemctl",
+            "restart",
+            "billy-webconfig.service",
+        ])
+        set_current_version(latest)
+        return jsonify({"status": "updated", "version": latest})
+    except subprocess.CalledProcessError as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
 def restart_webconfig_service():
     subprocess.run(["sudo", "systemctl", "restart", "billy-webconfig.service"])
+    subprocess.run(["sudo", "systemctl", "restart", "billy.service"])
 
 
 @app.route("/save", methods=["POST"])
@@ -153,10 +252,6 @@ def service_status():
         return jsonify({"status": output.decode("utf-8").strip()})
     except subprocess.CalledProcessError as e:
         return jsonify({"status": e.output.decode("utf-8").strip()})
-
-
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-PERSONA_PATH = os.path.join(PROJECT_ROOT, "persona.ini")
 
 
 @app.route("/persona", methods=["GET"])
