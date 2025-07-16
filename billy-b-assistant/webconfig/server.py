@@ -11,6 +11,7 @@ import numpy as np
 import sounddevice as sd
 from dotenv import dotenv_values, find_dotenv, set_key
 from flask import Flask, Response, jsonify, render_template, request
+from packaging.version import parse as parse_version
 
 
 # Add parent directory to sys.path
@@ -114,7 +115,10 @@ def version_info():
             if show_rc or not re.search(r"rc\d*$", tag["name"], re.IGNORECASE)
         ]
 
-        latest = filtered_tags[0] if filtered_tags else current
+        if filtered_tags:
+            latest = max(filtered_tags, key=lambda v: parse_version(v.lstrip("v")))
+        else:
+            latest = 'v50000'
 
     except Exception as e:
         print("Failed to fetch latest version:", e)
@@ -123,35 +127,15 @@ def version_info():
     return jsonify({
         "current": current,
         "latest": latest,
+        "filtered_tags": filtered_tags,
         "update_available": latest != current and latest != "unknown",
     })
-
-
-def get_latest_tag():
-    try:
-        output = subprocess.check_output(
-            [
-                "curl",
-                "-s",
-                "https://api.github.com/repos/Thokoop/Billy-b-assistant/tags",
-            ],
-            text=True,
-        )
-        tags = json.loads(output)
-        for tag in tags:
-            name = tag["name"]
-            if ALLOW_RC_TAGS or "-RC" not in name.upper():
-                return name
-        return tags[0]["name"] if tags else "unknown"
-    except Exception as e:
-        print(f"Failed to fetch tags: {e}")
-        return "unknown"
 
 
 @app.route("/update", methods=["POST"])
 def perform_update():
     current = get_current_version()
-    latest = get_latest_tag()
+    latest = version_info()
 
     if current == latest or latest == "unknown":
         return jsonify({"status": "up-to-date", "version": current})

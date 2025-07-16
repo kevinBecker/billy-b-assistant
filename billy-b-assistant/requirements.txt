@@ -11,3 +11,4 @@ openai
 aiohttp
 flask
 lgpio
+packaging
