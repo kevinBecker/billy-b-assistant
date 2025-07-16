@@ -44,7 +44,7 @@ WEBCONFIG_DIR = os.path.abspath(os.path.dirname(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(WEBCONFIG_DIR, ".."))
 GIT_ROOT = os.path.abspath(os.path.join(PROJECT_ROOT, ".."))
 PERSONA_PATH = os.path.join(PROJECT_ROOT, "persona.ini")
-VERSION_PATH = os.path.join(PROJECT_ROOT, ".version.txt")
+VERSIONS_PATH = os.path.join(PROJECT_ROOT, "versions.ini")
 ALLOW_RC_TAGS = os.getenv("ALLOW_RC_TAGS", "false").lower() == "true"
 
 
@@ -77,58 +77,47 @@ def load_env():
     }
 
 
+def load_versions():
+    config = configparser.ConfigParser()
+    if os.path.exists(VERSIONS_PATH):
+        config.read(VERSIONS_PATH)
+    else:
+        config["version"] = {"current": "unknown", "latest": "unknown"}
+    return config
+
+
+def save_versions(current, latest):
+    config = configparser.ConfigParser()
+    config["version"] = {"current": current, "latest": latest}
+    with open(VERSIONS_PATH, "w") as f:
+        config.write(f)
+
+
+def get_current_version():
+    return load_versions()["version"].get("current", "unknown")
+
+
+def set_current_version(version):
+    config = load_versions()
+    config["version"]["current"] = version
+    with open(VERSIONS_PATH, "w") as f:
+        config.write(f)
+
+
 @app.route("/")
 def index():
     return render_template("index.html", config=load_env())
 
 
-def get_current_version():
-    try:
-        with open(VERSION_PATH) as f:
-            return f.read().strip()
-    except FileNotFoundError:
-        return "?"
-
-
 @app.route("/version")
 def version_info():
-    current = get_current_version()
-    try:
-        # Load flag from .env
-        show_rc = dotenv_values().get("SHOW_RC_VERSIONS", "false").lower() == "true"
-
-        # Fetch latest tags from GitHub
-        output = subprocess.check_output(
-            [
-                "curl",
-                "-s",
-                "https://api.github.com/repos/Thokoop/Billy-b-assistant/tags",
-            ],
-            text=True,
-        )
-        tags = json.loads(output)
-
-        # Filter out RCs if not allowed
-        filtered_tags = [
-            tag["name"]
-            for tag in tags
-            if show_rc or not re.search(r"rc\d*$", tag["name"], re.IGNORECASE)
-        ]
-
-        if filtered_tags:
-            latest = max(filtered_tags, key=lambda v: parse_version(v.lstrip("v")))
-        else:
-            latest = 'v50000'
-
-    except Exception as e:
-        print("Failed to fetch latest version:", e)
-        latest = current
-
+    versions = load_versions()
+    current = versions["version"].get("current", "unknown")
+    latest = versions["version"].get("latest", "unknown")
     return jsonify({
         "current": current,
         "latest": latest,
-        "filtered_tags": filtered_tags,
-        "update_available": latest != current and latest != "unknown",
+        "update_available": current != latest and latest != "unknown",
     })
 
 
@@ -192,6 +181,38 @@ def write_env_var(filepath, key, value):
 
     with open(filepath, "w") as f:
         f.writelines(lines)
+
+
+def fetch_latest_tag():
+    try:
+        show_rc = dotenv_values().get("SHOW_RC_VERSIONS", "false").lower() == "true"
+        output = subprocess.check_output(
+            [
+                "curl",
+                "-s",
+                "https://api.github.com/repos/Thokoop/Billy-B-assistant/tags",
+            ],
+            text=True,
+        )
+        tags = json.loads(output)
+
+        filtered = [
+            tag["name"]
+            for tag in tags
+            if show_rc or not re.search(r"-?rc\d*$", tag["name"], re.IGNORECASE)
+        ]
+        if filtered:
+            return max(filtered, key=lambda v: parse_version(v.lstrip("v")))
+        return "unknown"
+    except Exception as e:
+        print("Failed to fetch latest tag:", e)
+        return "unknown"
+
+
+# --- Fetch latest tag once at service start ---
+versions = load_versions()
+latest = fetch_latest_tag()
+save_versions(versions["version"].get("current", "unknown"), latest)
 
 
 @app.route("/config")
