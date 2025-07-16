@@ -5,6 +5,7 @@ import queue
 import re
 import subprocess
 import sys
+import threading
 
 import numpy as np
 import sounddevice as sd
@@ -73,13 +74,41 @@ def index():
     return render_template("index.html", config=load_env())
 
 
+def restart_webconfig_service():
+    subprocess.run(["sudo", "systemctl", "restart", "billy-webconfig.service"])
+
+
 @app.route("/save", methods=["POST"])
 def save():
     data = request.json
     for key, value in data.items():
         if key in CONFIG_KEYS:
             set_key(ENV_PATH, key, value)
+
+    # Restart service *after* the response is returned
+    threading.Thread(target=restart_webconfig_service).start()
+
     return jsonify({"status": "ok"})
+
+
+def write_env_var(filepath, key, value):
+    lines = []
+    if os.path.exists(filepath):
+        with open(filepath) as f:
+            lines = f.readlines()
+
+    found = False
+    for i, line in enumerate(lines):
+        if line.strip().startswith(f"{key}="):
+            lines[i] = f"{key}={value}\n"
+            found = True
+            break
+
+    if not found:
+        lines.append(f"{key}={value}\n")
+
+    with open(filepath, "w") as f:
+        f.writelines(lines)
 
 
 @app.route("/config")
