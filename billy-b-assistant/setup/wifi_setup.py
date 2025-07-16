@@ -130,6 +130,7 @@ def save_wifi_credentials(ssid, password, country):
 
         subprocess.run(
             [
+                "sudo",
                 "nmcli",
                 "dev",
                 "wifi",
@@ -139,6 +140,8 @@ def save_wifi_credentials(ssid, password, country):
                 password,
                 "ifname",
                 "wlan0",
+                "name",
+                ssid,
             ],
             check=True,
         )
@@ -179,4 +182,4 @@ def shutdown_flask_soon():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=80)
+    app.run(host="0.0.0.0", port=8080)

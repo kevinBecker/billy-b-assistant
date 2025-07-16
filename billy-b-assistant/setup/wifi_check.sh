@@ -9,6 +9,7 @@ echo "[$LOG_TAG] Checking internet connectivity..."
 # Try to ping Google DNS
 if ping -c 1 -W 3 8.8.8.8 &> /dev/null; then
     echo "[$LOG_TAG] Internet is available."
+    sudo systemctl stop billy-wifi-setup.service
 else
     echo "[$LOG_TAG] No internet connection. Starting onboarding flow..."
     # Stop conflicting services
@@ -29,6 +30,6 @@ else
     sudo systemctl restart hostapd
 
     # Start the Flask onboarding app (in service)
-    sudo systemctl restart billy-onboarding.service
+    sudo systemctl restart billy-wifi-setup.service
     echo "[$LOG_TAG] Onboarding Flask app launched."
 fi
