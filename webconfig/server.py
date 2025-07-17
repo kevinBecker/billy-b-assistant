@@ -3,6 +3,7 @@ import json
 import os
 import queue
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -42,7 +43,6 @@ CONFIG_KEYS = [
 
 WEBCONFIG_DIR = os.path.abspath(os.path.dirname(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(WEBCONFIG_DIR, ".."))
-GIT_ROOT = os.path.abspath(os.path.join(PROJECT_ROOT, ".."))
 PERSONA_PATH = os.path.join(PROJECT_ROOT, "persona.ini")
 VERSIONS_PATH = os.path.join(PROJECT_ROOT, "versions.ini")
 ALLOW_RC_TAGS = os.getenv("ALLOW_RC_TAGS", "false").lower() == "true"
@@ -50,8 +50,7 @@ ALLOW_RC_TAGS = os.getenv("ALLOW_RC_TAGS", "false").lower() == "true"
 
 def load_env():
     return {
-        "OPENAI_API_KEY": core_config.OPENAI_API_KEY,
-        "VOICE": core_config.VOICE,
+        **{key: str(getattr(core_config, key, "")) for key in CONFIG_KEYS},
         "VOICE_OPTIONS": [
             "ash",
             "ballad",
@@ -63,30 +62,27 @@ def load_env():
             "fable",
             "nova",
         ],
-        "MIC_TIMEOUT_SECONDS": str(core_config.MIC_TIMEOUT_SECONDS),
-        "SILENCE_THRESHOLD": str(core_config.SILENCE_THRESHOLD),
-        "MQTT_HOST": core_config.MQTT_HOST,
-        "MQTT_PORT": str(core_config.MQTT_PORT),
-        "MQTT_USERNAME": core_config.MQTT_USERNAME,
-        "MQTT_PASSWORD": core_config.MQTT_PASSWORD,
-        "HA_HOST": getattr(core_config, "HA_HOST", ""),
-        "HA_TOKEN": getattr(core_config, "HA_TOKEN", ""),
-        "HA_LANG": getattr(core_config, "HA_LANG", ""),
-        "MIC_PREFERENCE": core_config.MIC_PREFERENCE,
-        "SPEAKER_PREFERENCE": core_config.SPEAKER_PREFERENCE,
     }
 
 
 def load_versions():
     config = configparser.ConfigParser()
-    if os.path.exists(VERSIONS_PATH):
-        config.read(VERSIONS_PATH)
-    else:
-        config["version"] = {"current": "unknown", "latest": "unknown"}
+    if not os.path.exists(VERSIONS_PATH):
+        example_path = os.path.join(PROJECT_ROOT, "versions.ini.example")
+        if os.path.exists(example_path):
+            shutil.copy(example_path, VERSIONS_PATH)
+        else:
+            config["version"] = {"current": "unknown", "latest": "unknown"}
+            with open(VERSIONS_PATH, "w") as f:
+                config.write(f)
+    config.read(VERSIONS_PATH)
     return config
 
 
 def save_versions(current, latest):
+    if not current or not latest:
+        print("[save_versions] Refusing to save empty version")
+        return
     config = configparser.ConfigParser()
     config["version"] = {"current": current, "latest": latest}
     with open(VERSIONS_PATH, "w") as f:
@@ -102,6 +98,42 @@ def set_current_version(version):
     config["version"]["current"] = version
     with open(VERSIONS_PATH, "w") as f:
         config.write(f)
+
+
+def get_usb_pcm_card_index():
+    preference = core_config.SPEAKER_PREFERENCE.lower()
+
+    try:
+        output = subprocess.check_output(["aplay", "-l"], text=True)
+        cards = re.findall(
+            r"card (\d+): ([^\s]+) \[(.*?)\], device (\d+): (.*?) \[", output
+        )
+
+        for card_index, shortname, longname, device_index, desc in cards:
+            name_combined = f"{shortname} {longname} {desc}".lower()
+            if preference in name_combined:
+                return int(card_index)
+
+        # Fallback to any USB Audio device if no match
+        for card_index, _, longname, _, _ in cards:
+            if "usb audio" in longname.lower():
+                return int(card_index)
+
+        return None
+    except Exception as e:
+        print("Failed to detect speaker card:", e)
+        return None
+
+
+rms_queue = queue.Queue()
+mic_check_running = False
+
+
+def audio_callback(indata, frames, time_info, status):
+    if not mic_check_running:
+        raise sd.CallbackStop()
+    rms = float(np.sqrt(np.mean(np.square(indata))))
+    rms_queue.put(rms)
 
 
 @app.route("/")
@@ -123,15 +155,16 @@ def version_info():
 
 @app.route("/update", methods=["POST"])
 def perform_update():
-    current = get_current_version()
-    latest = version_info()
-
+    versions = load_versions()
+    current = versions["version"].get("current", "unknown")
+    latest = versions["version"].get("latest", "unknown")
     if current == latest or latest == "unknown":
         return jsonify({"status": "up-to-date", "version": current})
-
     try:
-        subprocess.check_call(["git", "fetch"], cwd=GIT_ROOT)
-        subprocess.check_call(["git", "checkout", f"{latest}"], cwd=GIT_ROOT)
+        subprocess.check_call(["git", "fetch"], cwd=PROJECT_ROOT)
+        subprocess.check_call(
+            ["git", "checkout", "--force", f"{latest}"], cwd=PROJECT_ROOT
+        )
         subprocess.check_call(["sudo", "systemctl", "restart", "billy.service"])
         subprocess.check_call([
             "sudo",
@@ -150,39 +183,6 @@ def restart_webconfig_service():
     subprocess.run(["sudo", "systemctl", "restart", "billy.service"])
 
 
-@app.route("/save", methods=["POST"])
-def save():
-    data = request.json
-    for key, value in data.items():
-        if key in CONFIG_KEYS:
-            set_key(ENV_PATH, key, value)
-
-    # Restart service *after* the response is returned
-    threading.Thread(target=restart_webconfig_service).start()
-
-    return jsonify({"status": "ok"})
-
-
-def write_env_var(filepath, key, value):
-    lines = []
-    if os.path.exists(filepath):
-        with open(filepath) as f:
-            lines = f.readlines()
-
-    found = False
-    for i, line in enumerate(lines):
-        if line.strip().startswith(f"{key}="):
-            lines[i] = f"{key}={value}\n"
-            found = True
-            break
-
-    if not found:
-        lines.append(f"{key}={value}\n")
-
-    with open(filepath, "w") as f:
-        f.writelines(lines)
-
-
 def fetch_latest_tag():
     try:
         show_rc = dotenv_values().get("SHOW_RC_VERSIONS", "false").lower() == "true"
@@ -195,7 +195,6 @@ def fetch_latest_tag():
             text=True,
         )
         tags = json.loads(output)
-
         filtered = [
             tag["name"]
             for tag in tags
@@ -209,10 +208,19 @@ def fetch_latest_tag():
         return "unknown"
 
 
-# --- Fetch latest tag once at service start ---
 versions = load_versions()
 latest = fetch_latest_tag()
 save_versions(versions["version"].get("current", "unknown"), latest)
+
+
+@app.route("/save", methods=["POST"])
+def save():
+    data = request.json
+    for key, value in data.items():
+        if key in CONFIG_KEYS:
+            set_key(ENV_PATH, key, value)
+    threading.Thread(target=restart_webconfig_service).start()
+    return jsonify({"status": "ok"})
 
 
 @app.route("/config")
@@ -263,7 +271,6 @@ def service_status():
 def get_persona():
     config = configparser.ConfigParser()
     config.read(PERSONA_PATH)
-
     return jsonify({
         "PERSONALITY": dict(config["PERSONALITY"]) if "PERSONALITY" in config else {},
         "BACKSTORY": dict(config["BACKSTORY"]) if "BACKSTORY" in config else {},
@@ -275,25 +282,33 @@ def get_persona():
 def save_persona():
     data = request.json
     config = configparser.ConfigParser()
-
     config["PERSONALITY"] = {k: str(v) for k, v in data.get("PERSONALITY", {}).items()}
     config["BACKSTORY"] = data.get("BACKSTORY", {})
     config["META"] = {"instructions": data.get("META", "")}
-
     with open(PERSONA_PATH, "w") as f:
         config.write(f)
     return jsonify({"status": "ok"})
 
 
-rms_queue = queue.Queue()
-mic_check_running = False
+@app.route("/speaker-test", methods=["POST"])
+def speaker_test():
+    try:
+        card_index = get_usb_pcm_card_index()
+        if card_index is None:
+            return jsonify({"error": "No matching speaker card found"}), 404
 
+        device = f"plughw:{card_index},0"
+        subprocess.Popen([
+            "aplay",
+            "-D",
+            device,
+            "/usr/share/sounds/alsa/Front_Center.wav",
+        ])
 
-def audio_callback(indata, frames, time_info, status):
-    if not mic_check_running:
-        raise sd.CallbackStop()
-    rms = float(np.sqrt(np.mean(np.square(indata))))
-    rms_queue.put(rms)
+        return jsonify({"status": f"playing on {device}"})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/mic-check")
@@ -301,7 +316,6 @@ def mic_check():
     def rms_stream_generator():
         global mic_check_running
         mic_check_running = True
-
         try:
             with sd.InputStream(callback=audio_callback):
                 while mic_check_running:
@@ -342,7 +356,7 @@ def mic_gain():
     if request.method == "POST":
         try:
             data = request.get_json()
-            value = int(data.get("value", 8))  # default to midrange
+            value = int(data.get("value", 8))
             if 0 <= value <= 16:
                 subprocess.check_call(["amixer", "cset", "numid=3", str(value)])
                 return "OK"
@@ -353,16 +367,52 @@ def mic_gain():
     return jsonify({"error": "Unsupported method"}), 405
 
 
+@app.route("/volume", methods=["GET", "POST"])
+def volume():
+    card_index = get_usb_pcm_card_index()
+    if card_index is None:
+        return jsonify({"error": "Could not determine speaker card"}), 500
+
+    try:
+        if request.method == "GET":
+            output = subprocess.check_output(
+                ["amixer", "-c", str(card_index), "get", "PCM"], text=True
+            )
+            match = re.search(r"\[(\d{1,3})%\]", output)
+            if match:
+                return jsonify({"volume": int(match.group(1))})
+            return jsonify({"error": "Could not parse volume"}), 500
+
+        if request.method == "POST":
+            data = request.get_json()
+            value = data.get("volume")
+            if value is None:
+                return jsonify({"error": "Missing volume"}), 400
+
+            value = int(value)
+            if 0 <= value <= 100:
+                subprocess.check_call([
+                    "amixer",
+                    "-c",
+                    str(card_index),
+                    "set",
+                    "PCM",
+                    f"{value}%",
+                ])
+                return jsonify({"volume": value})
+            return jsonify({"error": "Volume must be 0–100"}), 400
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/device-info")
 def device_info():
     try:
         devices = sd.query_devices()
-
         mic_name = "Unknown"
         speaker_name = "Unknown"
-
         for dev in devices:
-            # Set mic name
             if (
                 mic_name == "Unknown"
                 and dev["max_input_channels"] > 0
@@ -372,8 +422,6 @@ def device_info():
                 )
             ):
                 mic_name = dev["name"]
-
-            # Set speaker name
             if (
                 speaker_name == "Unknown"
                 and dev["max_output_channels"] > 0
@@ -383,9 +431,7 @@ def device_info():
                 )
             ):
                 speaker_name = dev["name"]
-
         return jsonify({"mic": mic_name, "speaker": speaker_name})
-
     except Exception as e:
         return jsonify({"mic": "Unknown", "speaker": "Unknown", "error": str(e)}), 500
 

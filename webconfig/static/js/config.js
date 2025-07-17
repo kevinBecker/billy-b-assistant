@@ -83,13 +83,13 @@ function updateServiceStatusUI(status) {
     statusEl.textContent = `(${status})`;
 
     // Reset previous color classes
-    statusEl.classList.remove("text-emerald-500", "text-amber-500", "text-rose-500");
+    statusEl.classList.remove("text-emerald-500", "text-yellow-500", "text-rose-500");
 
     // Add color based on status
     if (status === "active") {
         statusEl.classList.add("text-emerald-500");
     } else if (status === "inactive") {
-        statusEl.classList.add("text-amber-500");
+        statusEl.classList.add("text-yellow-500");
     } else if (status === "failed") {
         statusEl.classList.add("text-rose-500");
     }
@@ -100,7 +100,7 @@ function updateServiceStatusUI(status) {
     const createButton = (label, action, color) => {
         const btn = document.createElement("button");
         btn.textContent = label;
-        btn.className = `bg-${color}-500 hover:bg-${color}-600 text-white font-semibold py-1 px-3 rounded`;
+        btn.className = `bg-${color}-500 hover:bg-${color}-600 text-black font-semibold py-1 px-3 rounded`;
         btn.onclick = () => handleServiceAction(action);
         return btn;
     };
@@ -139,7 +139,7 @@ function handleSettingsSave() {
             body: JSON.stringify(payload),
         });
 
-        showNotification("Settings saved");
+        showNotification("Settings saved", "success");
 
         if (res.ok) {
             await setupDeviceControls();
@@ -149,7 +149,7 @@ function handleSettingsSave() {
 
         if (wasActive === "active") {
             await fetch("/service/restart");
-            showNotification("Settings saved – service restarted");
+            showNotification("Settings saved – service restarted", "success");
             fetchStatus();
         }
     });
@@ -263,11 +263,11 @@ function handlePersonaSave() {
             body: JSON.stringify({ PERSONALITY: personality, BACKSTORY: backstory, META: meta })
         });
 
-        showNotification("Persona saved");
+        showNotification("Persona saved", "success");
 
         if (wasActive === "active") {
             await fetch("/service/restart");
-            showNotification("Persona saved – service restarted");
+            showNotification("Persona saved – service restarted", "success");
             fetchStatus();
         }
     });
@@ -275,12 +275,24 @@ function handlePersonaSave() {
 
 // ===================== UI =====================
 
-function showNotification(message, duration = 2500) {
+function showNotification(message, type = "info", duration = 2500) {
     const bar = document.getElementById("notification");
     bar.textContent = message;
-    bar.classList.remove("hidden", "opacity-0");
-    bar.classList.add("opacity-100");
 
+    // Remove old type classes
+    bar.classList.remove("hidden", "opacity-0", "bg-blue-500", "bg-green-500", "bg-amber-500", "bg-rose-500");
+
+    // Add the new type class
+    const typeClass = {
+        info: "bg-cyan-500/80",
+        success: "bg-emerald-500/80",
+        warning: "bg-amber-500/80",
+        error: "bg-rose-500/80",
+    }[type] || "bg-cyan-500/80";
+
+    bar.classList.add(typeClass, "opacity-100");
+
+    // Hide after duration
     setTimeout(() => {
         bar.classList.remove("opacity-100");
         bar.classList.add("opacity-0");
@@ -288,7 +300,7 @@ function showNotification(message, duration = 2500) {
     }, duration);
 }
 
-function toggleInputVisibility(inputId, button) {
+function toggleInputVisibility(inputId) {
     const input = document.getElementById(inputId);
     const icon = document.getElementById(`${inputId}_icon`);
     const isHidden = input.type === "password";
@@ -329,7 +341,7 @@ document.getElementById("update-btn").addEventListener("click", () => {
                     const { current, latest } = await res.json();
 
                     if (current === latest) {
-                        showNotification("Update complete. Reloading...");
+                        showNotification("Update complete. Reloading...", "info");
                         setTimeout(() => location.reload(), 1500);
                         return;
                     }
@@ -349,7 +361,7 @@ document.getElementById("update-btn").addEventListener("click", () => {
         })
         .catch(err => {
             console.error("Failed to start update:", err);
-            showNotification("Failed to start update");
+            showNotification("Failed to start update", "error");
         });
 });
 
@@ -358,6 +370,11 @@ document.getElementById("update-btn").addEventListener("click", () => {
 let micCheckSource = null;
 
 document.getElementById("mic-check-btn").addEventListener("click", toggleMicCheck);
+
+document.getElementById("speaker-check-btn").addEventListener("click", () => {
+    fetch("/speaker-test", { method: "POST" })
+        .catch(err => console.error("Failed to trigger speaker test:", err));
+});
 
 async function toggleMicCheck() {
     const btn = document.getElementById("mic-check-btn");
@@ -393,11 +410,11 @@ function stopMicCheck() {
     micCheckSource = null;
 
     updateMicBar(0);
-    clearThresholdLine();
 }
 
 function startMicCheck() {
     let maxRms = 0;
+    const SCALING_FACTOR = 32768;
 
     micCheckSource = new EventSource("/mic-check");
 
@@ -415,16 +432,14 @@ function startMicCheck() {
             return;
         }
 
-        const SCALING_FACTOR = 32768;
         const rms = data.rms * SCALING_FACTOR;
-        const threshold = data.threshold;
+        const threshold = data.threshold; // already a scaled int like 300, 500, etc.
         maxRms = Math.max(maxRms, rms);
 
-        const percent = Math.min((rms / threshold) * 100, 100);
+        const percent = Math.min((rms / threshold) * 100, 100); // percent of threshold
         const thresholdPercent = Math.min((threshold / SCALING_FACTOR) * 100, 100);
 
         updateMicBar(percent, thresholdPercent);
-        updateThresholdLine(thresholdPercent);
     };
 
     micCheckSource.onerror = () => {
@@ -441,14 +456,6 @@ function updateMicBar(percentage, thresholdPercent = 0) {
     bar.classList.toggle("bg-emerald-500", percentage < 70);
     bar.classList.toggle("bg-yellow-500", percentage >= 70 && percentage < 90);
     bar.classList.toggle("bg-red-500", percentage >= 90);
-}
-
-function updateThresholdLine(percent) {
-    document.getElementById("threshold-line").style.left = `${percent}%`;
-}
-
-function clearThresholdLine() {
-    document.getElementById("threshold-line").style.left = "0%";
 }
 
 async function loadMicGain() {
@@ -477,6 +484,71 @@ document.getElementById("mic-gain").addEventListener("change", async () => {
         body: JSON.stringify({ value })
     });
     document.getElementById("mic-gain-value").textContent = value;
+});
+
+let micBar = document.getElementById("mic-bar-container");
+let thresholdLine = document.getElementById("threshold-line");
+let silenceThresholdInput = document.getElementById("SILENCE_THRESHOLD");
+
+let dragging = false;
+
+thresholdLine.addEventListener("mousedown", (e) => {
+    dragging = true;
+    e.preventDefault();
+});
+
+document.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+
+    const rect = micBar.getBoundingClientRect();
+    if (rect.width === 0) return;
+
+    let offsetX = e.clientX - rect.left;
+    offsetX = Math.max(0, Math.min(offsetX, rect.width));
+
+    const percent = offsetX / rect.width;
+    const scaledThreshold = Math.round(percent * 32768); // scale and round
+
+    thresholdLine.style.left = `${percent * 100}%`;
+    silenceThresholdInput.value = scaledThreshold; // set int value
+
+    console.log("Threshold %:", (percent * 100).toFixed(1), "Scaled:", scaledThreshold);
+});
+
+document.addEventListener("mouseup", () => {
+    dragging = false;
+});
+
+// Initialize threshold line position on load
+window.addEventListener("load", () => {
+    const threshold = parseInt(silenceThresholdInput.value || "1000", 10); // fallback to safe int
+    thresholdLine.style.left = `${(threshold / 32768) * 100}%`;
+});
+
+const speakerSlider = document.getElementById("speaker-volume");
+
+// Load current volume
+fetch("/volume")
+    .then(res => res.json())
+    .then(data => {
+        if (data.volume !== undefined) {
+            speakerSlider.value = data.volume;
+        }
+    });
+
+// Set new volume on slider change
+let volumeDebounceTimeout;
+
+speakerSlider.addEventListener("input", () => {
+    clearTimeout(volumeDebounceTimeout); // cancel previous timer
+
+    volumeDebounceTimeout = setTimeout(() => {
+        fetch("/volume", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ volume: parseInt(speakerSlider.value) })
+        }).catch(err => console.error("Failed to set speaker volume:", err));
+    }, 500); // wait 500ms after last input
 });
 
 async function updateDeviceLabels() {
