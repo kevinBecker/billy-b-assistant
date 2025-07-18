@@ -38,22 +38,37 @@ All notable changes to this project will be documented in this file.
     - `metadata.txt` to control animation timing and motion profiles
 - Function-calling support to trigger songs via conversation with Billy.
 
+## [1.1.0] — 2025-07-18
+### Adds initial version of Home Assistant API integration and major stability improvements.
 
-## [1.1.0] — 2025-06-??
-### Feature Release: Home Assistant API Integration, Web UI, 
+### Added
 
-#### Core Enhancements
-- Improved session flow with follow-up intent detection and looping behavior.
-- Integrated `ruff` for linting and formatting, with pre-commit hook support.
+- Initial integration with Home Assistant's conversation API.
+- Graceful fallback when Home Assistant is not configured.
+- New environment variable `ALLOW_UPDATE_PERSONALITY_INI` to prevent users from permanently changing Billy's personality traits.
+- Wake-up audio now blocks the assistant from listening until playback is complete.
+- Retain reference to mic checker task to avoid premature destruction.
+- Added Ruff linter with configuration and a pre-commit hook.
+- Added `CHANGELOG.md`.
 
-#### Web UI (`/webconfig`)
-- Web-based configuration for:
-    - OpenAI API key, MQTT configuration, Home Assistant settings.
-    - Microphone/speaker information and silence timeout settings.
-    - Home Assistant  URL, token, and language.
-    - Personality Traits and Backstory
-- Microphone gain control slider (0–16) using `amixer`.
-- Live microphone level meter with RMS graph for threshold tuning.
-- System log viewer powered by `journalctl`.
-- Service control panel to start/stop/restart `billy.service`.
-- Dark mode UI with Tailwind CSS and Material Icons.
+### Changed
+
+- Audio session now ensures WebSocket session is created before sending audio.
+- All audio sends are awaited to prevent race conditions.
+- WebSocket connections now use additional mutex locking to avoid lifecycle errors.
+- Improved full audio transcript logging with newlines.
+- Error responses from the assistant API are now shown clearly in the output stream.
+- Cleaned up import statements and used proper relative imports.
+- MQTT logic now checks if MQTT is configured before sending or receiving.
+
+### Fixed
+
+- Fixed race condition where audio might be sent before the session is initialized.
+- Prevented audio from being interpreted when `self.ws` is unexpectedly reset.
+- Suppressed redundant session-end output.
+- Addressed expected `CancelledError` when stopping sessions.
+- Removed duplicate and unused imports and functions.
+- Removed duplicate `aiohttp` dependency from `requirements.txt`.
+- Fixed potential undefined variable.
+- Fixed usage of legacy `websockets` API.
+- Added missing dependencies: `aiohttp`, `lgpio`.
