@@ -280,7 +280,7 @@ function showNotification(message, type = "info", duration = 2500) {
     bar.textContent = message;
 
     // Remove old type classes
-    bar.classList.remove("hidden", "opacity-0", "bg-blue-500", "bg-green-500", "bg-amber-500", "bg-rose-500");
+    bar.classList.remove("hidden", "opacity-0", "bg-cyan-500/80", "bg-emerald-500/80", "bg-amber-500/80", "bg-rose-500/80");
 
     // Add the new type class
     const typeClass = {
@@ -312,11 +312,11 @@ function toggleInputVisibility(inputId) {
 fetch("/version")
     .then(res => res.json())
     .then(data => {
-        document.getElementById("current-version").textContent = `Current: ${data.current}`;
+        document.getElementById("current-version").textContent = `${data.current}`;
 
         if (data.update_available) {
             const latestSpan = document.getElementById("latest-version");
-            latestSpan.textContent = `Latest: ${data.latest}`;
+            latestSpan.textContent = `Update to: ${data.latest}`;
             latestSpan.classList.remove("hidden");
             document.getElementById("update-btn").classList.remove("hidden");
         }
@@ -371,36 +371,52 @@ let micCheckSource = null;
 
 document.getElementById("mic-check-btn").addEventListener("click", toggleMicCheck);
 
-document.getElementById("speaker-check-btn").addEventListener("click", () => {
-    fetch("/speaker-test", { method: "POST" })
-        .catch(err => console.error("Failed to trigger speaker test:", err));
+document.getElementById("speaker-check-btn").addEventListener("click", async () => {
+    try {
+        const res = await fetch("/service/status");
+        const { status } = await res.json();
+
+        if (status === "active") {
+            showNotification("⚠️ Please stop the Billy service before running speaker test.", "warning");
+            return;
+        }
+
+        await fetch("/speaker-test", { method: "POST" });
+        showNotification("Speaker test triggered");
+
+    } catch (err) {
+        console.error("Failed to trigger speaker test:", err);
+        showNotification("Failed to trigger speaker test", "error");
+    }
 });
 
 async function toggleMicCheck() {
     const btn = document.getElementById("mic-check-btn");
-    const warning = document.getElementById("mic-check-warning");
     const isActive = btn.classList.contains("bg-emerald-600");
 
     if (isActive) {
         stopMicCheck();
         btn.classList.remove("bg-emerald-600");
         btn.classList.add("bg-zinc-800");
-        warning.classList.add("hidden");
+        showNotification("Mic check stopped");
     } else {
-        // Check if the service is running
-        const res = await fetch("/service/status");
-        const { status } = await res.json();
+        try {
+            const res = await fetch("/service/status");
+            const { status } = await res.json();
 
-        if (status === "active") {
-            warning.textContent = "⚠️ Please stop the Billy service with the button at the top of the page before running mic check.";
-            warning.classList.remove("hidden");
-            return; // Block mic check start
+            if (status === "active") {
+                showNotification("⚠️ Please stop the Billy service before running mic check.", "warning");
+                return;
+            }
+
+            startMicCheck();
+            btn.classList.remove("bg-zinc-800");
+            btn.classList.add("bg-emerald-600");
+            showNotification("Mic check started");
+        } catch (err) {
+            console.error("Failed to toggle mic check:", err);
+            showNotification("Mic check failed", "error");
         }
-
-        warning.classList.add("hidden");
-        startMicCheck();
-        btn.classList.remove("bg-zinc-800");
-        btn.classList.add("bg-emerald-600");
     }
 }
 
@@ -511,8 +527,6 @@ document.addEventListener("mousemove", (e) => {
 
     thresholdLine.style.left = `${percent * 100}%`;
     silenceThresholdInput.value = scaledThreshold; // set int value
-
-    console.log("Threshold %:", (percent * 100).toFixed(1), "Scaled:", scaledThreshold);
 });
 
 document.addEventListener("mouseup", () => {

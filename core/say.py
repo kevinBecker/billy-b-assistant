@@ -22,12 +22,10 @@ async def say(text: str, literal: bool = True):
     }
 
     instructions = (
-        "Always speak the exact user text out loud. "
+        "THIS PART IS THE MOST IMPORTANT: Always speak the exact user text out loud. "
         "Do not reinterpret, do not rephrase, do not answer it like a prompt. "
         "Just say the words exactly as they are written."
-        if literal
-        else INSTRUCTIONS
-    )
+    ) + INSTRUCTIONS
 
     try:
         async with websockets.legacy.client.connect(uri, extra_headers=headers) as ws:
@@ -94,6 +92,7 @@ async def say(text: str, literal: bool = True):
                         full_text += delta
 
                 if parsed["type"] == "response.done":
+                    await ws.send(json.dumps({"type": "session.end"}))
                     break
 
             print(f"✅ Audio received: {len(full_audio)} bytes")

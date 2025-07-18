@@ -47,6 +47,9 @@ PERSONA_PATH = os.path.join(PROJECT_ROOT, "persona.ini")
 VERSIONS_PATH = os.path.join(PROJECT_ROOT, "versions.ini")
 ALLOW_RC_TAGS = os.getenv("ALLOW_RC_TAGS", "false").lower() == "true"
 
+rms_queue = queue.Queue()
+mic_check_running = False
+
 
 def load_env():
     return {
@@ -125,8 +128,44 @@ def get_usb_pcm_card_index():
         return None
 
 
-rms_queue = queue.Queue()
-mic_check_running = False
+def get_usb_capture_card_index():
+    preference = (core_config.MIC_PREFERENCE or "").lower()
+
+    try:
+        output = subprocess.check_output(["arecord", "-l"], text=True)
+        cards = re.findall(
+            r"card (\d+): ([^\s]+) \[(.*?)\], device (\d+): (.*?) \[", output
+        )
+
+        for card_index, shortname, longname, device_index, desc in cards:
+            name_combined = f"{shortname} {longname} {desc}".lower()
+            if preference in name_combined:
+                return int(card_index)
+
+        # Fallback to any USB Audio device if no match
+        for card_index, _, longname, _, _ in cards:
+            if "usb" in longname.lower():
+                return int(card_index)
+
+        return None
+    except Exception as e:
+        print("Failed to detect mic card:", e)
+        return None
+
+
+def get_mic_gain_numid(card_index):
+    try:
+        output = subprocess.check_output(
+            ["amixer", "-c", str(card_index), "controls"], text=True
+        )
+        for line in output.splitlines():
+            if "Mic Capture Volume" in line:
+                match = re.search(r"numid=(\d+)", line)
+                if match:
+                    return int(match.group(1))
+    except Exception as e:
+        print("Failed to get mic gain numid:", e)
+    return None
 
 
 def audio_callback(indata, frames, time_info, status):
@@ -298,11 +337,12 @@ def speaker_test():
             return jsonify({"error": "No matching speaker card found"}), 404
 
         device = f"plughw:{card_index},0"
+        sound_path = os.path.join(PROJECT_ROOT, "sounds", "speakertest.wav")
         subprocess.Popen([
             "aplay",
             "-D",
             device,
-            "/usr/share/sounds/alsa/Front_Center.wav",
+            sound_path,
         ])
 
         return jsonify({"status": f"playing on {device}"})
@@ -344,9 +384,18 @@ def mic_check_stop():
 
 @app.route("/mic-gain", methods=["GET", "POST"])
 def mic_gain():
+    card_index = (
+        get_usb_capture_card_index()
+    )  # You’ll need to write this if it doesn’t exist yet
+    numid = get_mic_gain_numid(card_index)
+    if card_index is None or numid is None:
+        return jsonify({"error": "Could not determine mic card or control ID"}), 500
+
     if request.method == "GET":
         try:
-            output = subprocess.check_output(["amixer", "cget", "numid=3"], text=True)
+            output = subprocess.check_output(
+                ["amixer", "-c", str(card_index), "cget", f"numid={numid}"], text=True
+            )
             match = re.search(r": values=(\d+)", output)
             gain = int(match.group(1)) if match else None
             return jsonify({"gain": gain})
@@ -357,8 +406,15 @@ def mic_gain():
         try:
             data = request.get_json()
             value = int(data.get("value", 8))
-            if 0 <= value <= 16:
-                subprocess.check_call(["amixer", "cset", "numid=3", str(value)])
+            if 0 <= value <= 16:  # or the correct max based on `amixer` output
+                subprocess.check_call([
+                    "amixer",
+                    "-c",
+                    str(card_index),
+                    "cset",
+                    f"numid={numid}",
+                    str(value),
+                ])
                 return "OK"
             return jsonify({"error": "Mic gain must be between 0 and 16"}), 400
         except Exception as e:
