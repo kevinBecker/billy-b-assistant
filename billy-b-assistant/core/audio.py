@@ -1,21 +1,33 @@
-import sounddevice as sd
-import numpy as np
-from scipy.signal import resample
-from queue import Queue
-import wave
-import threading
-import sys
-import time
-import glob
-import os
 import asyncio
-import json
 import base64
+import glob
+import json
+import os
 import random
-import contextlib
+import sys
+import threading
+import time
+import wave
+from queue import Queue
 
-from core.config import CHUNK_MS, TEXT_ONLY_MODE, DEBUG_MODE, MIC_PREFERENCE, SPEAKER_PREFERENCE, PLAYBACK_VOLUME, BACKSTORY
-from core.movements import flap_from_pcm_chunk, move_head, head_out, interlude, move_tail_async
+import numpy as np
+import sounddevice as sd
+from scipy.signal import resample
+
+from .config import (
+    CHUNK_MS,
+    MIC_PREFERENCE,
+    PLAYBACK_VOLUME,
+    SPEAKER_PREFERENCE,
+    TEXT_ONLY_MODE,
+)
+from .movements import (
+    flap_from_pcm_chunk,
+    interlude,
+    move_head,
+    move_tail_async,
+)
+
 
 # === Audio Device Globals ===
 MIC_DEVICE_INDEX = None
@@ -38,6 +50,7 @@ song_mode = False
 beat_length = 0.5
 compensate_tail_beats = 0.0
 
+
 def detect_devices(debug=False):
     global MIC_DEVICE_INDEX, MIC_RATE, MIC_CHANNELS, CHUNK_SIZE
     global OUTPUT_DEVICE_INDEX, OUTPUT_RATE, OUTPUT_CHANNELS
@@ -46,12 +59,16 @@ def detect_devices(debug=False):
 
     for i, d in enumerate(devices):
         if debug:
-            print(f"{i}: {d['name']} (inputs: {d['max_input_channels']}, outputs: {d['max_output_channels']})")
+            print(
+                f"{i}: {d['name']} (inputs: {d['max_input_channels']}, outputs: {d['max_output_channels']})"
+            )
 
         if MIC_DEVICE_INDEX is None and d['max_input_channels'] > 0:
-            if MIC_PREFERENCE and MIC_PREFERENCE.lower() in d['name'].lower():
-                MIC_DEVICE_INDEX = i
-            elif not MIC_PREFERENCE:
+            if (
+                MIC_PREFERENCE
+                and MIC_PREFERENCE.lower() in d['name'].lower()
+                or not MIC_PREFERENCE
+            ):
                 MIC_DEVICE_INDEX = i
 
             MIC_RATE = int(d['default_samplerate'])
@@ -59,9 +76,11 @@ def detect_devices(debug=False):
             CHUNK_SIZE = int(MIC_RATE * CHUNK_MS / 1000)
 
         if OUTPUT_DEVICE_INDEX is None and d['max_output_channels'] > 0:
-            if SPEAKER_PREFERENCE and SPEAKER_PREFERENCE.lower() in d['name'].lower():
-                OUTPUT_DEVICE_INDEX = i
-            elif not SPEAKER_PREFERENCE:
+            if (
+                SPEAKER_PREFERENCE
+                and SPEAKER_PREFERENCE.lower() in d['name'].lower()
+                or not SPEAKER_PREFERENCE
+            ):
                 OUTPUT_DEVICE_INDEX = i
 
             OUTPUT_RATE = int(d['default_samplerate'])
@@ -70,6 +89,7 @@ def detect_devices(debug=False):
     if MIC_DEVICE_INDEX is None or (OUTPUT_DEVICE_INDEX is None and not TEXT_ONLY_MODE):
         print("❌ No suitable input/output devices found.")
         sys.exit(1)
+
 
 def playback_worker(chunk_ms):
     global last_played_time
@@ -87,10 +107,7 @@ def playback_worker(chunk_ms):
 
     try:
         with sd.OutputStream(
-            samplerate=48000,
-            channels=2,
-            dtype='int16',
-            device=OUTPUT_DEVICE_INDEX
+            samplerate=48000, channels=2, dtype='int16', device=OUTPUT_DEVICE_INDEX
         ) as stream:
             print("🔈 Output stream opened")
             while True:
@@ -122,16 +139,20 @@ def playback_worker(chunk_ms):
                     if mode == "song":
                         audio_chunk, flap_chunk, rms_drums = item[1], item[2], item[3]
 
-                        flap_from_pcm_chunk(np.frombuffer(flap_chunk, dtype=np.int16), chunk_ms=chunk_ms)
+                        flap_from_pcm_chunk(
+                            np.frombuffer(flap_chunk, dtype=np.int16), chunk_ms=chunk_ms
+                        )
 
                         if rms_drums > drums_peak:
-                                drums_peak = rms_drums
-                                drums_peak_time = now
+                            drums_peak = rms_drums
+                            drums_peak_time = now
 
-                        adjusted_now = (now - song_start_time) + (compensate_tail_beats * beat_length)
+                        adjusted_now = (now - song_start_time) + (
+                            compensate_tail_beats * beat_length
+                        )
                         elapsed_song_time = now - song_start_time
 
-                        #print(f"[DEBUG] ⏱ elapsed: {elapsed_song_time:.2f}s | 🥁 adjusted: {adjusted_now:.2f}s | 🎯 next beat at {next_beat_time:.2f}s | 🐟 head_move_queue: {list(head_move_queue.queue)}")
+                        # print(f"[DEBUG] ⏱ elapsed: {elapsed_song_time:.2f}s | 🥁 adjusted: {adjusted_now:.2f}s | 🎯 next beat at {next_beat_time:.2f}s | 🐟 head_move_queue: {list(head_move_queue.queue)}")
 
                         if adjusted_now >= next_beat_time:
                             if drums_peak > 1500 and not head_out:
@@ -141,9 +162,13 @@ def playback_worker(chunk_ms):
                             next_beat_time += beat_length
 
                         mono = np.frombuffer(audio_chunk, dtype=np.int16)
-                        resampled = resample(mono, int(len(mono) * 48000 / 24000)).astype(np.int16)
+                        resampled = resample(
+                            mono, int(len(mono) * 48000 / 24000)
+                        ).astype(np.int16)
                         stereo = np.repeat(resampled[:, np.newaxis], 2, axis=1)
-                        stereo = np.clip(stereo * PLAYBACK_VOLUME, -32768, 32767).astype(np.int16)
+                        stereo = np.clip(
+                            stereo * PLAYBACK_VOLUME, -32768, 32767
+                        ).astype(np.int16)
                         stream.write(stereo)
 
                     elif mode == "tts":
@@ -151,13 +176,17 @@ def playback_worker(chunk_ms):
                         mono = np.frombuffer(chunk, dtype=np.int16)
                         chunk_len = int(24000 * chunk_ms / 1000)
                         for i in range(0, len(mono), chunk_len):
-                            sub = mono[i:i+chunk_len]
+                            sub = mono[i : i + chunk_len]
                             if len(sub) == 0:
                                 continue
                             flap_from_pcm_chunk(sub, chunk_ms=chunk_ms)
-                            resampled = resample(sub, int(len(sub) * 48000 / 24000)).astype(np.int16)
+                            resampled = resample(
+                                sub, int(len(sub) * 48000 / 24000)
+                            ).astype(np.int16)
                             stereo = np.repeat(resampled[:, np.newaxis], 2, axis=1)
-                            stereo = np.clip(stereo * PLAYBACK_VOLUME, -32768, 32767).astype(np.int16)
+                            stereo = np.clip(
+                                stereo * PLAYBACK_VOLUME, -32768, 32767
+                            ).astype(np.int16)
                             stream.write(stereo)
 
                             interlude_counter += len(sub)
@@ -171,13 +200,17 @@ def playback_worker(chunk_ms):
                     mono = np.frombuffer(chunk, dtype=np.int16)
                     chunk_len = int(24000 * chunk_ms / 1000)
                     for i in range(0, len(mono), chunk_len):
-                        sub = mono[i:i+chunk_len]
+                        sub = mono[i : i + chunk_len]
                         if len(sub) == 0:
                             continue
                         flap_from_pcm_chunk(sub, chunk_ms=chunk_ms)
-                        resampled = resample(sub, int(len(sub) * 48000 / 24000)).astype(np.int16)
+                        resampled = resample(sub, int(len(sub) * 48000 / 24000)).astype(
+                            np.int16
+                        )
                         stereo = np.repeat(resampled[:, np.newaxis], 2, axis=1)
-                        stereo = np.clip(stereo * PLAYBACK_VOLUME, -32768, 32767).astype(np.int16)
+                        stereo = np.clip(
+                            stereo * PLAYBACK_VOLUME, -32768, 32767
+                        ).astype(np.int16)
                         stream.write(stereo)
 
                         interlude_counter += len(sub)
@@ -194,17 +227,17 @@ def playback_worker(chunk_ms):
     finally:
         playback_done_event.set()
 
+
 def ensure_playback_worker_started(chunk_ms):
     global _playback_thread
     if TEXT_ONLY_MODE:
         return
     if not _playback_thread or not _playback_thread.is_alive():
         _playback_thread = threading.Thread(
-            target=playback_worker,
-            args=(chunk_ms,),
-            daemon=True
+            target=playback_worker, args=(chunk_ms,), daemon=True
         )
         _playback_thread.start()
+
 
 def save_audio_to_wav(audio_bytes, filename):
     full_path = os.path.join(RESPONSE_HISTORY_DIR, filename)
@@ -215,11 +248,12 @@ def save_audio_to_wav(audio_bytes, filename):
         wf.writeframes(audio_bytes)
     print(f"🎨 Saved response audio to {full_path}")
 
+
 def rotate_and_save_response_audio(audio_bytes):
     # Rotate old files first (2 -> 3, 1 -> 2)
     for i in range(2, 0, -1):
         src = os.path.join(RESPONSE_HISTORY_DIR, f"response-{i}.wav")
-        dst = os.path.join(RESPONSE_HISTORY_DIR, f"response-{i+1}.wav")
+        dst = os.path.join(RESPONSE_HISTORY_DIR, f"response-{i + 1}.wav")
         if os.path.exists(src):
             os.replace(src, dst)
 
@@ -234,18 +268,36 @@ def handle_incoming_audio_chunk(audio_b64, buffer):
 
 
 def send_mic_audio(ws, samples, loop):
-    pcm = resample(samples, int(len(samples) * 24000 / MIC_RATE)).astype(np.int16).tobytes()
-    asyncio.run_coroutine_threadsafe(
-        ws.send(json.dumps({
-            "type": "input_audio_buffer.append",
-            "audio": base64.b64encode(pcm).decode("utf-8")
-        })), loop
+    pcm = (
+        resample(samples, int(len(samples) * 24000 / MIC_RATE))
+        .astype(np.int16)
+        .tobytes()
     )
+    try:
+        future = asyncio.run_coroutine_threadsafe(
+            ws.send(
+                json.dumps({
+                    "type": "input_audio_buffer.append",
+                    "audio": base64.b64encode(pcm).decode("utf-8"),
+                })
+            ),
+            loop,
+        )
+
+        # Await the result; avoid race conditions.
+        future.result()
+    except Exception as e:
+        print(f"❌ Failed to send audio chunk: {e}")
+
 
 def enqueue_wav_to_playback(filepath):
     """Reads a WAV file and enqueues its PCM audio data to the playback queue."""
     with wave.open(filepath, 'rb') as wf:
-        if wf.getframerate() != 24000 or wf.getnchannels() != 1 or wf.getsampwidth() != 2:
+        if (
+            wf.getframerate() != 24000
+            or wf.getnchannels() != 1
+            or wf.getsampwidth() != 2
+        ):
             raise ValueError("WAV file must be 24000 Hz, mono, 16-bit")
 
         chunk_size = int(24000 * CHUNK_MS / 1000)
@@ -255,15 +307,28 @@ def enqueue_wav_to_playback(filepath):
                 break
             playback_queue.put(frames)
 
+
 def play_random_wake_up_clip():
     """Select and enqueue a random wake-up WAV file with mouth movement."""
     clips = glob.glob(os.path.join(WAKE_UP_DIR, "*.wav"))
     if not clips:
         print("⚠️ No wake-up clips found.")
         return None
+
     clip = random.choice(clips)
+
+    # Track how many tasks were pending before enqueue
+    already_pending = playback_queue.unfinished_tasks
+
+    # Enqueue the WAV file
     enqueue_wav_to_playback(clip)
+
+    # Wait for exactly those new chunks to finish
+    while playback_queue.unfinished_tasks > already_pending:
+        time.sleep(0.01)
+
     return clip
+
 
 def stop_playback():
     """Immediately stop playback and flush queue."""
@@ -275,17 +340,21 @@ def stop_playback():
             break
     playback_done_event.set()
 
+
 def is_billy_speaking():
     """Return True if Billy is still playing audio."""
     if not audio.playback_done_event.is_set():
         return True
-    if not audio.playback_queue.empty():
-        return True
-    return False
+    return bool(not audio.playback_queue.empty())
 
 
 def reset_for_new_song():
-    global last_played_time, song_start_time, next_beat_time, drums_peak, drums_peak_time
+    global \
+        last_played_time, \
+        song_start_time, \
+        next_beat_time, \
+        drums_peak, \
+        drums_peak_time
     playback_queue.queue.clear()
     head_move_queue.queue.clear()
     playback_done_event.clear()
@@ -295,12 +364,14 @@ def reset_for_new_song():
     drums_peak = 0
     drums_peak_time = 0
 
+
 async def play_song(song_name):
     """Play a full Billy song: main audio, vocals for mouth, drums for tail."""
     import contextlib
+
     from core import audio
+    from core.movements import stop_all_motors
     from core.mqtt import mqtt_publish
-    from core.movements import flap_from_pcm_chunk, move_tail_async, stop_all_motors
 
     reset_for_new_song()
 
@@ -323,12 +394,15 @@ async def play_song(song_name):
             print(f"⚠️ No metadata.txt found at {path}")
             return metadata
 
-        with open(path, 'r') as f:
+        with open(path) as f:
             for line in f:
                 if '=' in line:
                     key, value = line.strip().split('=', 1)
                     if key == "head_moves":
-                        metadata[key] = [(float(v.split(':')[0]), float(v.split(':')[1])) for v in value.split(',')]
+                        metadata[key] = [
+                            (float(v.split(':')[0]), float(v.split(':')[1]))
+                            for v in value.split(',')
+                        ]
                     elif key in ("bpm", "tail_threshold", "gain", "compensate_tail"):
                         metadata[key] = float(value.strip())
                     elif key == "half_tempo_tail_flap":
@@ -384,26 +458,43 @@ async def play_song(song_name):
                 samples_main = np.frombuffer(frames_main, dtype=np.int16)
                 samples_main = samples_main.reshape((-1, 2)).mean(axis=1)
                 if rate_main == 48000:
-                    samples_main = resample(samples_main, len(samples_main) // 2).astype(np.int16)
-                samples_main = np.clip(samples_main * GAIN, -32768, 32767).astype(np.int16)
+                    samples_main = resample(
+                        samples_main, len(samples_main) // 2
+                    ).astype(np.int16)
+                samples_main = np.clip(samples_main * GAIN, -32768, 32767).astype(
+                    np.int16
+                )
 
                 # --- Vocals (for mouth flap)
                 samples_vocals = np.frombuffer(frames_vocals, dtype=np.int16)
                 samples_vocals = samples_vocals.reshape((-1, 2)).mean(axis=1)
                 if rate_vocals == 48000:
-                    samples_vocals = resample(samples_vocals, len(samples_vocals) // 2).astype(np.int16)
-                samples_vocals = np.clip(samples_vocals * GAIN, -32768, 32767).astype(np.int16)
+                    samples_vocals = resample(
+                        samples_vocals, len(samples_vocals) // 2
+                    ).astype(np.int16)
+                samples_vocals = np.clip(samples_vocals * GAIN, -32768, 32767).astype(
+                    np.int16
+                )
 
                 # --- Drums (for tail flap)
                 samples_drums = np.frombuffer(frames_drums, dtype=np.int16)
                 samples_drums = samples_drums.reshape((-1, 2)).mean(axis=1)
                 if rate_drums == 48000:
-                    samples_drums = resample(samples_drums, len(samples_drums) // 2).astype(np.int16)
-                samples_drums = np.clip(samples_drums * GAIN, -32768, 32767).astype(np.int16)
+                    samples_drums = resample(
+                        samples_drums, len(samples_drums) // 2
+                    ).astype(np.int16)
+                samples_drums = np.clip(samples_drums * GAIN, -32768, 32767).astype(
+                    np.int16
+                )
                 rms_drums = np.sqrt(np.mean(samples_drums.astype(np.float32) ** 2))
 
                 # --- Enqueue combined chunk
-                audio.playback_queue.put(("song", samples_main.tobytes(), samples_vocals.tobytes(), rms_drums))
+                audio.playback_queue.put((
+                    "song",
+                    samples_main.tobytes(),
+                    samples_vocals.tobytes(),
+                    rms_drums,
+                ))
 
         print("⌛ Waiting for song playback to complete...")
         await asyncio.to_thread(audio.playback_queue.join())
