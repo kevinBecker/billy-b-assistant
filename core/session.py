@@ -462,9 +462,6 @@ class BillySession:
                     print(f"⚠️ Error closing websocket: {e}")
                 self.ws = None
 
-        stop_all_motors()
-        await asyncio.sleep(0.2)
-
     async def request_stop(self):
         print("🛑 Stop requested via external signal.")
         self.session_active.clear()

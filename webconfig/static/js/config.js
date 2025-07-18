@@ -83,13 +83,13 @@ function updateServiceStatusUI(status) {
     statusEl.textContent = `(${status})`;
 
     // Reset previous color classes
-    statusEl.classList.remove("text-emerald-500", "text-yellow-500", "text-rose-500");
+    statusEl.classList.remove("text-emerald-500", "text-amber-500", "text-rose-500");
 
     // Add color based on status
     if (status === "active") {
         statusEl.classList.add("text-emerald-500");
     } else if (status === "inactive") {
-        statusEl.classList.add("text-yellow-500");
+        statusEl.classList.add("text-amber-500");
     } else if (status === "failed") {
         statusEl.classList.add("text-rose-500");
     }
@@ -116,6 +116,12 @@ function updateServiceStatusUI(status) {
 }
 
 async function handleServiceAction(action) {
+    if(action == "restart") {
+        const statusEl = document.getElementById("service-status");
+        statusEl.textContent = `restarting`;
+        statusEl.classList.remove("text-emerald-500", "text-amber-500", "text-rose-500");
+        statusEl.classList.add("text-amber-500");
+    }
     await fetch(`/service/${action}`);
     fetchStatus();
     fetchLogs();
@@ -470,7 +476,7 @@ function updateMicBar(percentage, thresholdPercent = 0) {
 
     bar.classList.toggle("bg-zinc-500", percentage < thresholdPercent);
     bar.classList.toggle("bg-emerald-500", percentage < 70);
-    bar.classList.toggle("bg-yellow-500", percentage >= 70 && percentage < 90);
+    bar.classList.toggle("bg-amber-500", percentage >= 70 && percentage < 90);
     bar.classList.toggle("bg-red-500", percentage >= 90);
 }
 

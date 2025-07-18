@@ -22,10 +22,11 @@ async def say(text: str, literal: bool = True):
     }
 
     instructions = (
-        "THIS PART IS THE MOST IMPORTANT: Always speak the exact user text out loud. "
-        "Do not reinterpret, do not rephrase, do not answer it like a prompt. "
-        "Just say the words exactly as they are written."
-    ) + INSTRUCTIONS
+        INSTRUCTIONS + "\n\n"
+        "If the user message begins with anything other than [[PROMPT]], Override for this turn while maintaining your tone and accent:"
+        "say the user's message **verbatim**, word for word, with no additions or reinterpretation. "
+        "Maintain personality, but do NOT rephrase or expand."
+    )
 
     try:
         async with websockets.legacy.client.connect(uri, extra_headers=headers) as ws:
@@ -51,7 +52,7 @@ async def say(text: str, literal: bool = True):
                     "item": {
                         "type": "message",
                         "role": "user",
-                        "content": [{"type": "input_text", "text": text}],
+                        "content": [{"type": "input_text", "text": f"{text}"}],
                     },
                 })
             )
@@ -106,11 +107,6 @@ async def say(text: str, literal: bool = True):
 
             # Wait for playback to complete
             await asyncio.to_thread(playback_queue.join)
-
-            # Stop motors after speaking
-            from core.movements import stop_all_motors
-
-            stop_all_motors()
 
     except Exception as e:
         print(f"❌ say() failed: {e}")
