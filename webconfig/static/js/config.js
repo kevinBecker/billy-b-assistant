@@ -353,9 +353,9 @@ document.getElementById("update-btn").addEventListener("click", () => {
             const checkForUpdate = async () => {
                 try {
                     const res = await fetch("/version");
-                    const { current, latest } = await res.json();
+                    const data = await res.json();
 
-                    if (current === latest) {
+                    if (data.update_available === false) {
                         showNotification("Update complete. Reloading...", "info");
                         setTimeout(() => location.reload(), 1500);
                         return;
@@ -368,7 +368,8 @@ document.getElementById("update-btn").addEventListener("click", () => {
                 if (attempts < maxAttempts) {
                     setTimeout(checkForUpdate, 5000);
                 } else {
-                    showNotification("Update timed out after 2 minutes.");
+                    showNotification("Update timed out after 2 minutes. Reloading");
+                    setTimeout(() => location.reload(), 1500);
                 }
             };
 

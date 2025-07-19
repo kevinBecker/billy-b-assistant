@@ -89,6 +89,16 @@ def save_versions(current, latest):
     if not current or not latest:
         print("[save_versions] Refusing to save empty version")
         return
+
+    parsed_current = parse_version(current.lstrip("v"))
+    parsed_latest = parse_version(latest.lstrip("v"))
+
+    if parsed_latest < parsed_current:
+        print(
+            f"[save_versions] Skipping downgrade from {parsed_current} to {parsed_latest}"
+        )
+        latest = current
+
     config = configparser.ConfigParser()
     config["version"] = {"current": current, "latest": latest}
     with open(VERSIONS_PATH, "w") as f:
@@ -96,18 +106,30 @@ def save_versions(current, latest):
 
 
 def get_current_version():
-    return load_versions()["version"].get("current", "unknown")
-
-
-def set_current_version(version):
-    config = load_versions()
-    config["version"]["current"] = version
-    with open(VERSIONS_PATH, "w") as f:
-        config.write(f)
+    try:
+        # Check if HEAD points to a tag
+        return subprocess.check_output(
+            ["git", "describe", "--tags", "--exact-match"],
+            cwd=PROJECT_ROOT,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except subprocess.CalledProcessError:
+        # Fallback: show short commit hash
+        try:
+            commit = subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=PROJECT_ROOT,
+                text=True,
+            ).strip()
+            return f"(commit {commit})"
+        except Exception as e:
+            print("[get_current_version] Failed:", e)
+            return "unknown"
 
 
 def get_usb_pcm_card_index():
-    preference = core_config.SPEAKER_PREFERENCE.lower()
+    preference = (core_config.SPEAKER_PREFERENCE or "").lower()
 
     try:
         output = subprocess.check_output(["aplay", "-l"], text=True)
@@ -194,23 +216,38 @@ def fetch_latest_tag():
             ],
             text=True,
         )
-        tags = json.loads(output)
+        data = json.loads(output)
+
+        # Check for GitHub rate limit or error response
+        if isinstance(data, dict) and data.get("message"):
+            print(f"[fetch_latest_tag] GitHub error: {data['message']}")
+            return None
+
+        if not isinstance(data, list):
+            print("[fetch_latest_tag] Unexpected response format")
+            return None
+
         filtered = [
             tag["name"]
-            for tag in tags
-            if show_rc or not re.search(r"-?rc\d*$", tag["name"], re.IGNORECASE)
+            for tag in data
+            if "name" in tag
+            and (show_rc or not re.search(r"-?rc\d*$", tag["name"], re.IGNORECASE))
         ]
+
         if filtered:
             return max(filtered, key=lambda v: parse_version(v.lstrip("v")))
-        return "unknown"
+
+        print("[fetch_latest_tag] No tags found")
+        return None
+
     except Exception as e:
-        print("Failed to fetch latest tag:", e)
-        return "unknown"
+        print("[fetch_latest_tag] Exception:", e)
+        return None
 
 
-versions = load_versions()
 latest = fetch_latest_tag()
-save_versions(versions["version"].get("current", "unknown"), latest)
+current = get_current_version()
+save_versions(current, latest)
 
 
 @app.route("/")
@@ -223,10 +260,21 @@ def version_info():
     versions = load_versions()
     current = versions["version"].get("current", "unknown")
     latest = versions["version"].get("latest", "unknown")
+
+    try:
+        update_available = (
+            current != "unknown"
+            and latest != "unknown"
+            and parse_version(latest.lstrip("v")) > parse_version(current.lstrip("v"))
+        )
+    except Exception as e:
+        print("[/version] version parse error:", e)
+        update_available = False
+
     return jsonify({
         "current": current,
         "latest": latest,
-        "update_available": current != latest and latest != "unknown",
+        "update_available": update_available,
     })
 
 
@@ -252,7 +300,7 @@ def perform_update():
         )
         subprocess.check_call(["git", "clean", "-xfd"], cwd=PROJECT_ROOT)
 
-        set_current_version(latest)
+        save_versions(latest, latest)
 
         def restart_later():
             time.sleep(2)  # Give time to flush response
