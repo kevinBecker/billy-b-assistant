@@ -105,7 +105,7 @@
 
                 <!-- OpenAI Settings -->
                 <div class="bg-zinc-900 border border-zinc-700 p-6 rounded-lg shadow-sm">
-                    <h3 class="text-lg font-bold mb-4 text-slate-200">OpenAI Settings</h3>
+                    <h3 class="text-lg font-bold mb-4 text-slate-200">General Settings</h3>
 
                     <div class="mb-4">
                         <label for="OPENAI_API_KEY" class="block font-semibold text-sm text-slate-300">
@@ -154,6 +154,21 @@
                             {{ v|capitalize }}
                             </option>
                             {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="BILLY_MODEL" class="block font-semibold text-sm text-slate-300">
+                            Billy Version
+                        </label>
+                        <select id="BILLY_MODEL" name="BILLY_MODEL"
+                                class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                            <option value="modern" {% if config.get('BILLY_MODEL', 'modern') == 'modern' %}selected{% endif %}>
+                            Modern (2 motors)
+                            </option>
+                            <option value="classic" {% if config.get('BILLY_MODEL') == 'classic' %}selected{% endif %}>
+                            Classic (3 motors)
+                            </option>
                         </select>
                     </div>
                 </div>

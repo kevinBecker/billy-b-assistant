@@ -162,6 +162,7 @@ function handleSettingsSave() {
         showNotification("Settings saved", "success");
 
         if (wasActive === "active") {
+            await fetch("/service/restart");
             showNotification("Settings saved – Billy restarted", "success");
         }
     });
@@ -344,7 +345,7 @@ document.getElementById("update-btn").addEventListener("click", () => {
     fetch("/update", { method: "POST" })
         .then(res => res.json())
         .then(data => {
-            showNotification(data.message || "Update triggered");
+            showNotification(data.message || "Update started");
 
             let attempts = 0;
             const maxAttempts = 24; // 5s × 24 = 120s
@@ -374,8 +375,8 @@ document.getElementById("update-btn").addEventListener("click", () => {
             setTimeout(checkForUpdate, 5000); // Start first check after 5s
         })
         .catch(err => {
-            console.error("Failed to start update:", err);
-            showNotification("Failed to start update", "error");
+            console.error("Failed to update:", err);
+            showNotification("Failed to update", "error");
         });
 });
 

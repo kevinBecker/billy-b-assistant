@@ -79,6 +79,9 @@ DEBUG_MODE_INCLUDE_DELTA = (
 )
 TEXT_ONLY_MODE = os.getenv("TEXT_ONLY_MODE", "false").lower() == "true"
 
+# === Billy Hardware ===
+BILLY_MODEL = os.getenv("BILLY_MODEL", "modern").strip().lower()
+
 # === Audio Config ===
 SPEAKER_PREFERENCE = os.getenv("SPEAKER_PREFERENCE")
 MIC_PREFERENCE = os.getenv("MIC_PREFERENCE")
@@ -105,6 +108,13 @@ HA_LANG = os.getenv("HA_LANG", "en")
 ALLOW_UPDATE_PERSONALITY_INI = (
     os.getenv("ALLOW_UPDATE_PERSONALITY_INI", "true").lower() == "true"
 )
+
+
+def is_classic_billy():
+    print('MODEL')
+    print(os.getenv("BILLY_MODEL", "modern"))
+    return os.getenv("BILLY_MODEL", "modern").strip().lower() == "classic"
+
 
 try:
     MAIN_LOOP = asyncio.get_event_loop()

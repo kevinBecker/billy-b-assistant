@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 
 import numpy as np
 import sounddevice as sd
@@ -29,6 +30,7 @@ CONFIG_KEYS = [
     "OPENAI_API_KEY",
     "OPENAI_MODEL",
     "VOICE",
+    "BILLY_MODEL",
     "MIC_TIMEOUT_SECONDS",
     "SILENCE_THRESHOLD",
     "MQTT_HOST",
@@ -238,19 +240,26 @@ def perform_update():
         return jsonify({"status": "up-to-date", "version": current})
 
     try:
-        subprocess.check_call(["git", "fetch"], cwd=PROJECT_ROOT)
-        subprocess.check_call(
-            ["git", "checkout", "--force", f"{latest}"], cwd=PROJECT_ROOT
+        # ✅ safer fetch without assuming 'origin'
+        remotes = subprocess.check_output(
+            ["git", "remote", "-v"], cwd=PROJECT_ROOT, text=True
         )
+        print("Git remotes:\n", remotes)
+
+        subprocess.check_call(["git", "fetch", "--tags"], cwd=PROJECT_ROOT)  # ✅ fix
+        subprocess.check_call(
+            ["git", "checkout", "--force", f"tags/{latest}"], cwd=PROJECT_ROOT
+        )
+        subprocess.check_call(["git", "clean", "-xfd"], cwd=PROJECT_ROOT)
+
         set_current_version(latest)
 
         def restart_later():
-            time.sleep(2)  # give time for response to flush
+            time.sleep(2)  # Give time to flush response
             restart_services()
 
         threading.Thread(target=restart_later).start()
 
-        # Force flush with Response
         return Response(
             '{"status": "updated", "version": "' + latest + '"}',
             status=200,
@@ -267,7 +276,6 @@ def save():
     for key, value in data.items():
         if key in CONFIG_KEYS:
             set_key(ENV_PATH, key, value)
-    threading.Thread(target=restart_services).start()
     return jsonify({"status": "ok"})
 
 

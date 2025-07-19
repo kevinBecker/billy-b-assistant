@@ -7,31 +7,48 @@ from threading import Lock, Thread
 import lgpio
 import numpy as np
 
+from .config import is_classic_billy
 
+
+# === Configuration ===
+USE_THIRD_MOTOR = is_classic_billy()
+
+print(f"⚠️ Using third motor")
+print(is_classic_billy())
+
+# === GPIO Setup ===
+h = lgpio.gpiochip_open(0)
+FREQ = 10000  # PWM frequency
+
+# Pin mapping
+MOUTH_IN1 = 12  # PWM0
+MOUTH_IN2 = 5
+HEAD_IN1 = 13  # PWM1
+HEAD_IN2 = 6
+
+if USE_THIRD_MOTOR:
+    TAIL_IN1 = 18  # PWM2 (Pi 5) or any free GPIO
+    TAIL_IN2 = 19
+
+# Claim GPIOs
+motor_pins = [MOUTH_IN1, MOUTH_IN2, HEAD_IN1, HEAD_IN2]
+if USE_THIRD_MOTOR:
+    motor_pins += [TAIL_IN1, TAIL_IN2]
+
+for pin in motor_pins:
+    lgpio.gpio_claim_output(h, pin)
+    lgpio.gpio_write(h, pin, 0)
+
+# === State ===
 _head_tail_lock = Lock()
 _motor_watchdog_running = False
-
-# GPIO setup
-h = lgpio.gpiochip_open(0)
-
-# Motor pins
-MOUTH_IN1 = 12
-MOUTH_IN2 = 5
-HEAD_IN1 = 13
-HEAD_IN2 = 6
-FREQ = 10000  # PWM frequency in Hz
-
-# Claim pins
-for claim_pin in [MOUTH_IN1, MOUTH_IN2, HEAD_IN1, HEAD_IN2]:
-    lgpio.gpio_claim_output(h, claim_pin)
-    lgpio.gpio_write(h, claim_pin, 0)
-
 _last_flap = 0
-head_out = False
 _mouth_open_until = 0
 _last_rms = 0
+head_out = False
 
 
+# === Motor Helpers ===
 def brake_motor(pin1, pin2):
     lgpio.tx_pwm(h, pin1, FREQ, 0)
     lgpio.tx_pwm(h, pin2, FREQ, 0)
@@ -47,14 +64,9 @@ def run_motor(pwm_pin, low_pin, speed_percent=100, duration=0.3, brake=True):
         brake_motor(pwm_pin, low_pin)
 
 
+# === Movement Functions ===
 def move_mouth(speed_percent, duration, brake=False):
-    run_motor(
-        MOUTH_IN1,
-        MOUTH_IN2,
-        speed_percent=speed_percent,
-        duration=duration,
-        brake=brake,
-    )
+    run_motor(MOUTH_IN1, MOUTH_IN2, speed_percent, duration, brake)
 
 
 def stop_mouth():
@@ -68,8 +80,7 @@ def move_head(state="on"):
         lgpio.gpio_write(h, HEAD_IN2, 0)
         lgpio.tx_pwm(h, HEAD_IN1, FREQ, 80)
         time.sleep(1)
-        lgpio.tx_pwm(h, HEAD_IN1, FREQ, 100)
-        # Do not brake here — stays extended
+        lgpio.tx_pwm(h, HEAD_IN1, FREQ, 100)  # Stay extended
 
     if state == "on":
         if not head_out:
@@ -81,15 +92,19 @@ def move_head(state="on"):
 
 
 def move_tail(duration=0.2):
-    run_motor(HEAD_IN2, HEAD_IN1, speed_percent=80, duration=duration)
+    if USE_THIRD_MOTOR:
+        run_motor(TAIL_IN1, TAIL_IN2, speed_percent=80, duration=duration)
+    else:
+        run_motor(HEAD_IN2, HEAD_IN1, speed_percent=80, duration=duration)
 
 
 def move_tail_async(duration=0.3):
     threading.Thread(target=move_tail, args=(duration,), daemon=True).start()
 
 
+# === Mouth Sync ===
 def flap_from_pcm_chunk(
-    audio, threshold=1500, min_flap_gap=0.10, chunk_ms=40, sample_rate=24000
+    audio, threshold=1500, min_flap_gap=0.1, chunk_ms=40, sample_rate=24000
 ):
     global _last_flap, _mouth_open_until, _last_rms
     now = time.time()
@@ -131,6 +146,7 @@ def flap_from_pcm_chunk(
     move_mouth(speed, duration, brake=False)
 
 
+# === Interlude Behavior ===
 def _interlude_routine():
     try:
         move_head("off")
@@ -151,63 +167,48 @@ def interlude():
     """Run head/tail interlude in a background thread if not already running."""
     if _head_tail_lock.locked():
         return
-
-    def run():
-        with _head_tail_lock:
-            _interlude_routine()
-
-    Thread(target=run, daemon=True).start()
+    Thread(target=lambda: _interlude_routine(), daemon=True).start()
 
 
+# === Motor Watchdog ===
 def stop_all_motors():
     print("🛑 Stopping all motors")
-    for pin in [MOUTH_IN1, MOUTH_IN2, HEAD_IN1, HEAD_IN2]:
+    for pin in motor_pins:
         lgpio.tx_pwm(h, pin, FREQ, 0)
         lgpio.gpio_write(h, pin, 0)
 
 
 def is_motor_active():
-    """Returns True if any motor pin is actively PWM-ing or HIGH."""
-    pins = [MOUTH_IN1, MOUTH_IN2, HEAD_IN1, HEAD_IN2]
-    for pin in pins:
-        level = lgpio.gpio_read(h, pin)
-        if level == 1:
-            return True
-    return False
+    return any(lgpio.gpio_read(h, pin) == 1 for pin in motor_pins)
 
 
 def motor_watchdog():
     """Background thread that stops motors if active too long."""
     global _motor_watchdog_running
     _motor_watchdog_running = True
-    last_motor_activity = time.time()
-    motors_already_idle = True
-
+    last_activity = time.time()
+    idle = True
     while _motor_watchdog_running:
         active = is_motor_active()
         now = time.time()
 
         if active:
-            last_motor_activity = now
-            motors_already_idle = False
-        elif not motors_already_idle and now - last_motor_activity > 60:
+            last_activity = now
+            idle = False
+        elif not idle and now - last_activity > 60:
             stop_all_motors()
-            motors_already_idle = True
-
+            idle = True
         time.sleep(1)
 
 
 def start_motor_watchdog():
-    """Start motor watchdog thread once."""
-    threading.Thread(target=motor_watchdog, daemon=True).start()
+    Thread(target=motor_watchdog, daemon=True).start()
 
 
 def stop_motor_watchdog():
-    """Stop watchdog when exiting cleanly."""
     global _motor_watchdog_running
     _motor_watchdog_running = False
 
 
-# 🛑 Make sure motors stop when Python exits
 atexit.register(stop_all_motors)
 atexit.register(stop_motor_watchdog)
