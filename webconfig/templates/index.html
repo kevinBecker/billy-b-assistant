@@ -110,7 +110,6 @@
                     <div class="mb-4">
                         <label for="OPENAI_API_KEY" class="block font-semibold text-sm text-slate-300">
                             OpenAI API Key
-                            <span class="text-xs text-zinc-500 font-normal ml-1">(OPENAI_API_KEY)</span>
                         </label>
                         <div class="relative">
                             <input
@@ -130,9 +129,23 @@
                         </div>
                     </div>
 
+                    <label class="block mb-4">
+                        <label for="OPENAI_MODEL" class="block font-semibold text-sm text-slate-300">OpenAI Model
+                        </label>
+                        <select id="OPENAI_MODEL" name="OPENAI_MODEL" class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                            <option value="gpt-4o-mini-realtime-preview"
+                                    {% if config.get('OPENAI_MODEL') == 'gpt-4o-mini-realtime-preview' %}selected{% endif %}>
+                            gpt-4o-mini-realtime-preview (default)
+                            </option>
+                            <option value="gpt-4o-realtime-preview"
+                                    {% if config.get('OPENAI_MODEL') == 'gpt-4o-realtime-preview' %}selected{% endif %}>
+                            gpt-4o-realtime-preview (more expensive)
+                            </option>
+                        </select>
+                    </label>
+
                     <div class="mb-4 relative">
-                        <label for="VOICE" class="block font-semibold text-sm text-slate-300">Voice Model
-                            <span class="text-xs text-zinc-500 font-normal ml-1">(VOICE)</span>
+                        <label for="VOICE" class="block font-semibold text-sm text-slate-300">Voice
                         </label>
                         <select id="VOICE" name="VOICE"
                                 class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
@@ -156,7 +169,6 @@
 
                     <div class="mb-4">
                         <label for="MIC_TIMEOUT_SECONDS" class="block font-semibold text-sm text-slate-300">Mic Timeout (seconds)
-                            <span class="text-xs text-zinc-500 font-normal ml-1">(MIC_TIMEOUT_SECONDS)</span>
                         </label>
                         <input type="number"
                                class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -165,7 +177,6 @@
 
                     <div class="mb-4 hidden">
                         <label for="SILENCE_THRESHOLD" class="block font-semibold text-sm text-slate-300">Silence Threshold
-                            <span class="text-xs text-zinc-500 font-normal ml-1">(SILENCE_THRESHOLD)</span>
                         </label>
                         <input type="number" step="1" id="SILENCE_THRESHOLD"
                                class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -232,75 +243,86 @@
                 <div class="bg-zinc-900 border border-zinc-700 p-6 rounded-lg shadow-sm">
                     <h3 class="text-lg font-bold mb-4 text-slate-200">MQTT Settings</h3>
 
-                    {% for field in [
-                    ("MQTT_HOST", "MQTT Host"),
-                    ("MQTT_USERNAME", "MQTT Username"),
-                    ("MQTT_PASSWORD", "MQTT Password", "password")
-                    ] %}
                     <div class="mb-4">
-                        <label for="{{ field[0] }}" class="block font-semibold text-sm text-slate-300">
-                            {{ field[1] }}
-                            <span class="text-xs text-zinc-500 font-normal ml-1">({{ field[0] }})</span>
-                        </label>
+                        <label for="MQTT_HOST" class="block font-semibold text-sm text-slate-300">MQTT Host</label>
+                        <input
+                                id="MQTT_HOST"
+                                name="MQTT_HOST"
+                                type="text"
+                                class="w-full p-3 mt-1 pr-10 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                value="{{ config.get('MQTT_HOST', '') }}"
+                        >
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="MQTT_USERNAME" class="block font-semibold text-sm text-slate-300">MQTT Username</label>
+                        <input
+                                id="MQTT_USERNAME"
+                                name="MQTT_USERNAME"
+                                type="text"
+                                class="w-full p-3 mt-1 pr-10 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                value="{{ config.get('MQTT_USERNAME', '') }}"
+                        >
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="MQTT_PASSWORD" class="block font-semibold text-sm text-slate-300">MQTT Password</label>
                         <div class="relative">
                             <input
-                                    id="{{ field[0] }}"
-                                    name="{{ field[0] }}"
-                                    type="{{ field[2] if field|length > 2 else 'text' }}"
+                                    id="MQTT_PASSWORD"
+                                    name="MQTT_PASSWORD"
+                                    type="password"
                                     class="w-full p-3 mt-1 pr-10 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                                    value="{{ config.get(field[0], '') }}"
+                                    value="{{ config.get('MQTT_PASSWORD', '') }}"
                             >
-                            {% if field|length > 2 and field[2] == 'password' %}
                             <button
                                     type="button"
-                                    onclick="toggleInputVisibility('{{ field[0] }}', this)"
+                                    onclick="toggleInputVisibility('MQTT_PASSWORD', this)"
                                     class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white"
                             >
-                                <span class="material-icons" id="{{ field[0] }}_icon">visibility</span>
+                                <span class="material-icons" id="MQTT_PASSWORD_icon">visibility</span>
                             </button>
-                            {% endif %}
                         </div>
                     </div>
-                    {% endfor %}
                 </div>
 
                 <!-- Home Assistant -->
                 <div class="bg-zinc-900 border border-zinc-700 p-6 rounded-lg shadow-sm">
                     <h3 class="text-lg font-bold mb-4 text-slate-200">Home Assistant</h3>
 
-                    {% for field in [
-                    ("HA_HOST", "Home Assistant Host"),
-                    ("HA_TOKEN", "Home Assistant Token", "password")
-                    ] %}
                     <div class="mb-4">
-                        <label for="{{ field[0] }}" class="block font-semibold text-sm text-slate-300">
-                            {{ field[1] }}
-                            <span class="text-xs text-zinc-500 font-normal ml-1">({{ field[0] }})</span>
-                        </label>
+                        <label for="HA_HOST" class="block font-semibold text-sm text-slate-300">Home Assistant Host</label>
+                        <input
+                                id="HA_HOST"
+                                name="HA_HOST"
+                                type="text"
+                                class="w-full p-3 mt-1 pr-10 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                value="{{ config.get('HA_HOST', '') }}"
+                        >
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="HA_TOKEN" class="block font-semibold text-sm text-slate-300">Home Assistant Token</label>
                         <div class="relative">
                             <input
-                                    id="{{ field[0] }}"
-                                    name="{{ field[0] }}"
-                                    type="{{ field[2] if field|length > 2 else 'text' }}"
+                                    id="HA_TOKEN"
+                                    name="HA_TOKEN"
+                                    type="password"
                                     class="w-full p-3 mt-1 pr-10 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                                    value="{{ config.get(field[0], '') }}"
+                                    value="{{ config.get('HA_TOKEN', '') }}"
                             >
-                            {% if field|length > 2 and field[2] == 'password' %}
                             <button
                                     type="button"
-                                    onclick="toggleInputVisibility('{{ field[0] }}', this)"
+                                    onclick="toggleInputVisibility('HA_TOKEN', this)"
                                     class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white"
                             >
-                                <span class="material-icons" id="{{ field[0] }}_icon">visibility</span>
+                                <span class="material-icons" id="HA_TOKEN_icon">visibility</span>
                             </button>
-                            {% endif %}
                         </div>
                     </div>
-                    {% endfor %}
 
                     <div>
                         <label for="HA_LANG" class="block font-semibold text-sm text-slate-300 mb-1">Language
-                            <span class="text-xs text-zinc-500 font-normal ml-1">(HA_LANG)</span>
                         </label>
                         {% set ha_languages = [
                         ('en', 'English'), ('nl', 'Dutch'), ('it', 'Italian'), ('fr', 'French'),
@@ -375,13 +397,6 @@
                 </div>
             </div>
         </section>
-    </div>
-    <div class="hidden">
-        text-emerald-500 text-amber-500 text-rose-500
-        bg-emerald-500 hover:bg-emerald-600
-        bg-amber-500 hover:bg-amber-600
-        bg-rose-500 hover:bg-rose-600
-        bg-cyan-500 bg-zinc-800
     </div>
 </main>
 <script src="{{ url_for('static', filename='js/config.js') }}"></script>

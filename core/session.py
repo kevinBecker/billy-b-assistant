@@ -16,6 +16,7 @@ from .config import (
     INSTRUCTIONS,
     MIC_TIMEOUT_SECONDS,
     OPENAI_API_KEY,
+    OPENAI_MODEL,
     PERSONALITY,
     SILENCE_THRESHOLD,
     TEXT_ONLY_MODE,
@@ -105,7 +106,7 @@ class BillySession:
 
         async with self.ws_lock:
             if self.ws is None:
-                uri = "wss://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview"
+                uri = f"wss://api.openai.com/v1/realtime?model={OPENAI_MODEL}"
                 headers = {
                     "Authorization": f"Bearer {OPENAI_API_KEY}",
                     "openai-beta": "realtime=v1",

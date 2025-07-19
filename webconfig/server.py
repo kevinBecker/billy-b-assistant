@@ -27,6 +27,7 @@ app = Flask(__name__)
 ENV_PATH = find_dotenv()
 CONFIG_KEYS = [
     "OPENAI_API_KEY",
+    "OPENAI_MODEL",
     "VOICE",
     "MIC_TIMEOUT_SECONDS",
     "SILENCE_THRESHOLD",
@@ -119,7 +120,7 @@ def get_usb_pcm_card_index():
 
         # Fallback to any USB Audio device if no match
         for card_index, _, longname, _, _ in cards:
-            if "usb audio" in longname.lower():
+            if "usb" in longname.lower():
                 return int(card_index)
 
         return None
@@ -175,49 +176,7 @@ def audio_callback(indata, frames, time_info, status):
     rms_queue.put(rms)
 
 
-@app.route("/")
-def index():
-    return render_template("index.html", config=load_env())
-
-
-@app.route("/version")
-def version_info():
-    versions = load_versions()
-    current = versions["version"].get("current", "unknown")
-    latest = versions["version"].get("latest", "unknown")
-    return jsonify({
-        "current": current,
-        "latest": latest,
-        "update_available": current != latest and latest != "unknown",
-    })
-
-
-@app.route("/update", methods=["POST"])
-def perform_update():
-    versions = load_versions()
-    current = versions["version"].get("current", "unknown")
-    latest = versions["version"].get("latest", "unknown")
-    if current == latest or latest == "unknown":
-        return jsonify({"status": "up-to-date", "version": current})
-    try:
-        subprocess.check_call(["git", "fetch"], cwd=PROJECT_ROOT)
-        subprocess.check_call(
-            ["git", "checkout", "--force", f"{latest}"], cwd=PROJECT_ROOT
-        )
-        subprocess.check_call(["sudo", "systemctl", "restart", "billy.service"])
-        subprocess.check_call([
-            "sudo",
-            "systemctl",
-            "restart",
-            "billy-webconfig.service",
-        ])
-        set_current_version(latest)
-        return jsonify({"status": "updated", "version": latest})
-    except subprocess.CalledProcessError as e:
-        return jsonify({"status": "error", "error": str(e)}), 500
-
-
-def restart_webconfig_service():
+def restart_services():
     subprocess.run(["sudo", "systemctl", "restart", "billy-webconfig.service"])
     subprocess.run(["sudo", "systemctl", "restart", "billy.service"])
 
@@ -252,13 +211,63 @@ latest = fetch_latest_tag()
 save_versions(versions["version"].get("current", "unknown"), latest)
 
 
+@app.route("/")
+def index():
+    return render_template("index.html", config=load_env())
+
+
+@app.route("/version")
+def version_info():
+    versions = load_versions()
+    current = versions["version"].get("current", "unknown")
+    latest = versions["version"].get("latest", "unknown")
+    return jsonify({
+        "current": current,
+        "latest": latest,
+        "update_available": current != latest and latest != "unknown",
+    })
+
+
+@app.route("/update", methods=["POST"])
+def perform_update():
+    versions = load_versions()
+    current = versions["version"].get("current", "unknown")
+    latest = versions["version"].get("latest", "unknown")
+
+    if current == latest or latest == "unknown":
+        return jsonify({"status": "up-to-date", "version": current})
+
+    try:
+        subprocess.check_call(["git", "fetch"], cwd=PROJECT_ROOT)
+        subprocess.check_call(
+            ["git", "checkout", "--force", f"{latest}"], cwd=PROJECT_ROOT
+        )
+        set_current_version(latest)
+
+        def restart_later():
+            time.sleep(2)  # give time for response to flush
+            restart_services()
+
+        threading.Thread(target=restart_later).start()
+
+        # Force flush with Response
+        return Response(
+            '{"status": "updated", "version": "' + latest + '"}',
+            status=200,
+            mimetype="application/json",
+        )
+
+    except subprocess.CalledProcessError as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
 @app.route("/save", methods=["POST"])
 def save():
     data = request.json
     for key, value in data.items():
         if key in CONFIG_KEYS:
             set_key(ENV_PATH, key, value)
-    threading.Thread(target=restart_webconfig_service).start()
+    threading.Thread(target=restart_services).start()
     return jsonify({"status": "ok"})
 
 

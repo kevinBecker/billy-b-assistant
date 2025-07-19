@@ -116,13 +116,27 @@ function updateServiceStatusUI(status) {
 }
 
 async function handleServiceAction(action) {
-    if(action == "restart") {
-        const statusEl = document.getElementById("service-status");
-        statusEl.textContent = `restarting`;
+    const statusEl = document.getElementById("service-status");
+
+    const statusMap = {
+        restart: { text: "restarting", color: "text-amber-500" },
+        stop:    { text: "stopping",   color: "text-rose-500" },
+        start:   { text: "starting",   color: "text-emerald-500" }
+    };
+
+    if (statusMap[action]) {
+        const { text, color } = statusMap[action];
+        statusEl.textContent = text;
         statusEl.classList.remove("text-emerald-500", "text-amber-500", "text-rose-500");
-        statusEl.classList.add("text-amber-500");
+        statusEl.classList.add(color);
     }
-    await fetch(`/service/${action}`);
+
+    try {
+        await fetch(`/service/${action}`);
+    } catch (err) {
+        console.error(`Failed to ${action} service:`, err);
+    }
+
     fetchStatus();
     fetchLogs();
 }
@@ -147,16 +161,8 @@ function handleSettingsSave() {
 
         showNotification("Settings saved", "success");
 
-        if (res.ok) {
-            await setupDeviceControls();
-        } else {
-            alert("Failed to save settings.");
-        }
-
         if (wasActive === "active") {
-            await fetch("/service/restart");
-            showNotification("Settings saved – service restarted", "success");
-            fetchStatus();
+            showNotification("Settings saved – Billy restarted", "success");
         }
     });
 }
@@ -330,6 +336,8 @@ fetch("/version")
     .catch(err => {
         console.error("Failed to load version info", err);
     });
+
+
 document.getElementById("update-btn").addEventListener("click", () => {
     if (!confirm("Are you sure you want to update Billy to the latest version?")) return;
 
@@ -411,14 +419,16 @@ async function toggleMicCheck() {
             const { status } = await res.json();
 
             if (status === "active") {
-                showNotification("⚠️ Please stop the Billy service before running mic check.", "warning");
-                return;
+                await fetch("/service/stop");
+                showNotification("Billy was stopped for mic check. You’ll need to start it again afterwards.", "warning");
             }
 
             startMicCheck();
             btn.classList.remove("bg-zinc-800");
             btn.classList.add("bg-emerald-600");
-            showNotification("Mic check started");
+            if (status !== "active") {
+                showNotification("Mic check started");
+            }
         } catch (err) {
             console.error("Failed to toggle mic check:", err);
             showNotification("Mic check failed", "error");
