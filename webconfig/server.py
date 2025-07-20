@@ -288,17 +288,15 @@ def perform_update():
         return jsonify({"status": "up-to-date", "version": current})
 
     try:
-        # ✅ safer fetch without assuming 'origin'
         remotes = subprocess.check_output(
             ["git", "remote", "-v"], cwd=PROJECT_ROOT, text=True
         )
         print("Git remotes:\n", remotes)
 
-        subprocess.check_call(["git", "fetch", "--tags"], cwd=PROJECT_ROOT)  # ✅ fix
+        subprocess.check_call(["git", "fetch", "--tags"], cwd=PROJECT_ROOT)
         subprocess.check_call(
             ["git", "checkout", "--force", f"tags/{latest}"], cwd=PROJECT_ROOT
         )
-        subprocess.check_call(["git", "clean", "-xfd"], cwd=PROJECT_ROOT)
 
         save_versions(latest, latest)
 

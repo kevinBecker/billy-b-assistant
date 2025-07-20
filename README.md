@@ -13,16 +13,15 @@ It streams conversation using the OpenAI Realtime API, turns its head, flaps it'
 
 - Realtime conversations using OpenAI GPT-4o-mini
 - 3D-printable backplate for housing USB microphone and speaker
-- Lip-synced audio playback using audio chunk analysis
-- Head and mouth motion controlled via GPIO and PWM
+- Lightweight web UI for editing configuration, logs, and systemd service control
+- Support for the Modern Billy hardware version with 2 motors as well as the Classic Billy hardware version (3 motors) 
 - Physical button to start/interact/intervene
 - Personality system with configurable traits (e.g., snark, charm)
 - MQTT support:
- - for status updates (idle, speaking, listening)
+ - sensor with status updates of Billy (idle, speaking, listening)
  - `billy/say` topic for triggering spoken messages remotely (feature in beta)
  - Raspberry Pi Safe Shutdown command
 - Home Assistant command passthrough using the Conversation API
-- Lightweight web UI for editing configuration, logs, and systemd service control
 - Custom Song Singing and animation mode
 
 ---
@@ -139,7 +138,63 @@ See [BUILDME.md for detailed build/wiring instructions.](./docs/BUILDME.md)
 
 ---
 
-## 7. Create your `.env` file
+## 7. Web Configuration Interface
+
+Billy includes a lightweight web interface for editing settings, debugging logs, and managing the assistant service without touching the terminal.
+
+### Features
+
+- Edit `.env` configuration values (e.g., API keys, MQTT)
+- View and edit `persona.ini` (traits, backstory, instructions)
+- Control the Billy system service (start, stop, restart)
+- View live logs from the assistant process
+
+### How to Use
+
+1. Run the web server manually (from the project root):
+
+   ```bash
+   python3 webconfig/server.py
+   ```
+
+2. Enter the your pi's hostname + .local in your browser:
+
+   ```
+   http://billy.local
+   ```
+
+   (Replace `billy` if you have set a custom Pi's hostname)
+
+---
+
+### Run the Web UI as a Systemd Service
+
+If you want the web interface to always be available:
+
+1. copy the service file from the repository to the :
+
+   ```bash
+   cp setup/system/billy-webconfig.service /etc/systemd/system/billy-webconfig.service
+   ```
+
+2. Adjust the username / paths if needed:
+
+   ```bash
+   nano /etc/systemd/system/billy-webconfig.service
+   ```
+
+3. Enable and start:
+
+   ```bash
+   sudo setcap 'cap_net_bind_service=+ep' /usr/bin/python3.11
+   sudo systemctl daemon-reload
+   sudo systemctl enable billy-webconfig
+   sudo systemctl start billy-webconfig
+   ```
+
+4. Visit `http://billy.local` anytime to reconfigure Billy!
+
+## 8. Create your `.env` file
 
 When first running the project, it will create a `.env` file in the root of the `billy-b-assistant` folder by copying `.env.example` to `.env` 
 
@@ -181,7 +236,7 @@ DEBUG_MODE_INCLUDE_DELTA=false
 - `ALLOW_UPDATE_PERSONALITY_INI`: If true, personality updates asked for by the user will be written and committed to the personality file. If false, changes to personality will only affect the current running process.
 ---
 
-## 8. Systemd Service (for auto-boot)
+## 9. Systemd Service (for auto-boot)
 
 To run Billy as a background service at boot, create `/etc/systemd/system/billy.service`:
 
@@ -221,80 +276,13 @@ journalctl -u billy.service -f
 
 ---
 
-## 9. Run It!
+## 10. Run It!
 
 Billy should now boot automatically into standby mode. Press the physical button to start a voice session. Enjoy!
 
 ---
 
-## 10. (Optional) 🌐 Web Configuration Interface
-
-Billy includes a lightweight web interface for editing settings, debugging logs, and managing the assistant service without touching the terminal.
-
-### Features
-
-- Edit `.env` configuration values (e.g., API keys, MQTT)
-- View and edit `persona.ini` (traits, backstory, instructions)
-- Control the Billy system service (start, stop, restart)
-- View live logs from the assistant process
-
-### How to Use
-
-1. Run the web server manually (from the project root):
-
-   ```bash
-   python3 webconfig/server.py
-   ```
-
-2. Enter the your pi's hostname + .local in your browser:
-
-   ```
-   http://billy.local
-   ```
-
-   (Replace `billy` if you have set a custom Pi's hostname)
-
----
-
-### Run the Web UI as a Systemd Service
-
-If you want the web interface to always be available:
-
-1. Create the service file:
-
-   ```bash
-   sudo nano /etc/systemd/system/billy-webconfig.service
-   ```
-
-2. Paste the following:
-
-   ```ini
-   [Unit]
-   Description=Billy Web Configuration Server
-   After=network.target
-
-   [Service]
-   WorkingDirectory=/home/billy/billy-b-assistant
-   ExecStart=/usr/bin/python3 /home/billy/billy-b-assistant/webconfig/server.py
-   Restart=on-failure
-   User=billy
-
-   [Install]
-   WantedBy=multi-user.target
-   ```
-
-3. Enable and start:
-
-   ```bash
-   sudo setcap 'cap_net_bind_service=+ep' /usr/bin/python3.11
-   sudo systemctl daemon-reload
-   sudo systemctl enable billy-webconfig
-   sudo systemctl start billy-webconfig
-   ```
-
-4. Visit `http://billy.local` anytime to reconfigure Billy!
-
-## 11. (Optional) Configure `persona.ini`
+## 11. (Optional) Configure Persona (via web UI or in `persona.ini`)
 
 The `persona.ini` file controls Billy's **personality**, **backstory**, and **additional instructions**.
 This file will also be created on first run. You can edit this file manually, via the Web UI,  or change the personality trait values during a voice session using commands like:
@@ -422,7 +410,7 @@ If the folder exists it will play the contents with full animation.
 
 ---
 
-## 13. (Optional) 🏠 Home Assistant Integration
+## 13. (Optional) 🏠 Home Assistant Integration (via web UI or in `.env`)
 
 Billy B-Assistant can send smart home commands to your **Home Assistant** instance using its [Conversation API](https://developers.home-assistant.io/docs/api/rest/#post-apiconversationprocess). 
 This lets you say things to Billy like:
@@ -445,7 +433,7 @@ Billy will forward your command to Home Assistant and speak back the response.
    In Home Assistant, go to **Profile → Long-Lived Access Tokens → Create Token**  
    Name it something like `billy-assistant` and copy the token.
 
-2. **Add these values to your `.env`**:
+2. **Add these values in the Web UI or directly to your `.env`**:
    ```env
    HA_URL=http://homeassistant.local:8123
    HA_TOKEN=your_long_lived_token

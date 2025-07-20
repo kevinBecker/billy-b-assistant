@@ -111,8 +111,6 @@ ALLOW_UPDATE_PERSONALITY_INI = (
 
 
 def is_classic_billy():
-    print('MODEL')
-    print(os.getenv("BILLY_MODEL", "modern"))
     return os.getenv("BILLY_MODEL", "modern").strip().lower() == "classic"
 
 

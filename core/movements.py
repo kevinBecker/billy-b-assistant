@@ -13,8 +13,7 @@ from .config import is_classic_billy
 # === Configuration ===
 USE_THIRD_MOTOR = is_classic_billy()
 
-print(f"⚠️ Using third motor")
-print(is_classic_billy())
+print(f"⚙️ Using third motor: {USE_THIRD_MOTOR}")
 
 # === GPIO Setup ===
 h = lgpio.gpiochip_open(0)
