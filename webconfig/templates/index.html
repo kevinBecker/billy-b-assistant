@@ -6,33 +6,6 @@
     <title>Billy B-Assistant</title>
     <link href="../static/css/styles.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <style>
-        /* Scrollbar styling for WebKit browsers */
-        ::-webkit-scrollbar {
-            width: 10px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #1a1a1a;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background-color: #4b5563; /* Tailwind zinc-600 */
-            border-radius: 5px;
-            border: 2px solid #1a1a1a;
-        }
-
-        .log-fullscreen {
-            position: fixed !important;
-            inset: 0;
-            z-index: 50;
-            background-color: black;
-            padding: 1rem;
-            max-height: none !important;
-            height: 100vh;
-            overflow-y: auto !important;
-        }
-    </style>
 </head>
 <body class="bg-black text-white font-sans">
 
@@ -48,19 +21,24 @@
         <div class="flex items-center gap-2 grow justify-end">
             <div id="version-info" class="text-sm text-zinc-300 flex flex-col md:items-end">
                 <span id="current-version">Current: ...</span>
-                <span id="latest-version" class="hidden text-amber-400">Latest: ...</span>
+                <span id="latest-version" class="hidden text-amber-500">Latest: ...</span>
             </div>
             <div class="flex gap-2 items-center">
                 <button id="update-btn"
-                        class="hidden bg-amber-500 hover:bg-amber-400 text-black text-sm py-1 px-3 rounded">
+                        class="hidden bg-amber-500 hover:bg-amber-400 text-zinc-800 text-sm py-1 px-3 rounded gap-1.5 items-center cursor-pointer">
+                    <span class="material-icons align-middle">system_update_alt</span>
                     Update Available
                 </button>
             </div>
-        </div>
-        <div>
+
             <button id="toggle-log-btn"
-                    class="bg-zinc-700 hover:bg-zinc-600 text-white text-sm py-1 px-3 rounded">
-                Show Debug
+                    class="bg-zinc-700 hover:bg-zinc-600 text-white text-sm py-1 px-3 rounded flex gap-1.5 items-center cursor-pointer">
+                <span class="material-icons bug_report">bug_report</span>
+            </button>
+
+            <button id="toggle-env-btn"
+                    class="bg-zinc-700 hover:bg-zinc-600 text-white text-sm py-1 px-3 rounded flex gap-1.5 items-center cursor-pointer">
+                <span class="material-icons">admin_panel_settings</span>
             </button>
         </div>
     </div>
@@ -69,24 +47,46 @@
     <section id="log-panel" class="relative hidden">
         <!-- Normal Log View -->
         <div id="log-container"
-             class="relative px-4 rounded max-h-96 overflow-y-scroll text-sm transition-all duration-300">
+             class="relative rounded px-2 max-h-96 overflow-y-scroll text-sm transition-all duration-300 border border-cyan-500 ">
 
             <!-- Fullscreen Button (top right) -->
             <button id="toggle-fullscreen-btn"
-                    class="sticky top-2 left-full right-2 bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-1 rounded z-10 shadow flex items-center justify-center"
+                    class="sticky top-2 left-full mr-3 bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-1 rounded z-10 shadow flex items-center justify-center"
                     title="Toggle Fullscreen Log">
                 <span class="material-icons" id="fullscreen-icon">fullscreen</span>
             </button>
 
             <pre id="log-output"
-                 class="text-emerald-300 whitespace-pre-wrap break-words overflow-x-hidden max-w-full">Loading logs…</pre>
+                 class="text-cyan-500  whitespace-pre-wrap break-words overflow-x-hidden max-w-full">Loading logs…</pre>
 
             <!-- Scroll-to-bottom Button (bottom right) -->
             <button id="scroll-bottom-btn"
                     title="Auto-scroll"
-                    class="sticky bottom-2 left-full ml-auto bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-1 rounded z-10 shadow flex items-center justify-center">
+                    class="sticky bottom-2 left-full mr-3 ml-auto bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-1 rounded z-10 shadow flex items-center justify-center cursor-pointer">
                 <span class="material-icons">arrow_downward</span>
             </button>
+        </div>
+    </section>
+
+    <!-- Env Panel -->
+    <section id="env-panel" class="relative hidden">
+        <div class="relative rounded  text-sm transition-all duration-300  text-white">
+            <textarea id="env-textarea" rows="25"
+                      class="w-full h-64  bg-zinc-800/80 text-amber-500 p-3 rounded font-mono resize-y border border-yellow-600"
+                      spellcheck="false">Loading .env…</textarea>
+
+            <!-- Save button -->
+            <div class="mt-4 flex justify-end gap-2">
+                <div class=" bg-yellow-700/80 text-yellow-100 p-2 rounded border border-yellow-600 flex grow gap-2 items-center">
+                    <span class="material-icons">warning</span>
+                    Changes will be written to .env as-is. Invalid values could cause errors. Save only if you’re sure of your changes.
+                </div>
+
+                <button id="save-env-btn"
+                        class="bg-amber-500 hover:bg-amber-400 text-zinc-800 text-sm font-semibold  py-1 px-4 rounded shadow">
+                    Save .env
+                </button>
+            </div>
         </div>
     </section>
 
@@ -117,11 +117,12 @@
                                     id="OPENAI_API_KEY"
                                     name="OPENAI_API_KEY"
                                     value="{{ config.get('OPENAI_API_KEY', '') }}"
+                                    placeholder="sk-proj..."
                             >
                             <button
                                     type="button"
                                     onclick="toggleInputVisibility('OPENAI_API_KEY', this)"
-                                    class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white"
+                                    class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white cursor-pointer"
                             >
                                 <span class="material-icons" id="OPENAI_API_KEY_icon">visibility</span>
                             </button>
@@ -177,7 +178,7 @@
                     <h3 class="text-lg font-bold mb-4 text-slate-200">Audio Settings</h3>
 
                     <div class="flex items-center gap-2 mb-4">
-                        <span class="material-icons">mic</span>
+                        <span class="material-icons">settings_voice</span>
                         <span id="mic-label" class="grow">Loading...</span>
                     </div>
 
@@ -218,7 +219,8 @@
                             </div>
 
                             <button type="button" id="mic-check-btn"
-                                    class="bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-1 rounded shadow w-20">
+                                    class="bg-zinc-800 hover:bg-zinc-700 text-white text-sm items-center px-2 py-1 rounded shadow w-20 flex gap-1.5 cursor-pointer">
+                                <span class="material-icons align-middle">mic</span>
                                 Test
                             </button>
 
@@ -246,7 +248,8 @@
                                    class="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer">
 
                             <button type="button" id="speaker-check-btn"
-                                    class="bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-1 rounded shadow w-20">
+                                    class="bg-zinc-800 hover:bg-zinc-700 text-white text-sm items-center px-2 py-1 rounded shadow w-20 flex gap-1.5 cursor-pointer">
+                                <span class="material-icons align-middle">volume_up</span>
                                 Test
                             </button>
                         </div>
@@ -292,7 +295,7 @@
                             <button
                                     type="button"
                                     onclick="toggleInputVisibility('MQTT_PASSWORD', this)"
-                                    class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white"
+                                    class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white cursor-pointer"
                             >
                                 <span class="material-icons" id="MQTT_PASSWORD_icon">visibility</span>
                             </button>
@@ -328,7 +331,7 @@
                             <button
                                     type="button"
                                     onclick="toggleInputVisibility('HA_TOKEN', this)"
-                                    class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white"
+                                    class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white cursor-pointer"
                             >
                                 <span class="material-icons" id="HA_TOKEN_icon">visibility</span>
                             </button>
@@ -359,7 +362,8 @@
                 <div class="sticky bottom-0 z-10 border-t border-black bg-black/50 backdrop-blur-[2px] shadow-[0_-4px_10px_rgba(0,0,0,0.5)] py-4 px-6">
                     <div class="flex justify-center md:justify-start">
                         <button type="submit"
-                                class="bg-cyan-500 hover:bg-teal-500 ttext-white font-semibold py-2 px-6 rounded shadow">
+                                class="bg-emerald-500 hover:bg-emerald-400 text-zinc-800 font-semibold py-2 px-4 rounded shadow flex gap-1 cursor-pointer">
+                            <span class="material-icons align-middle">save</span>
                             Save Settings
                         </button>
                     </div>
@@ -387,8 +391,9 @@
                     <div>
                         <span class="block font-semibold text-sm text-slate-300 mb-1">Backstory</span>
                         <div id="backstory-fields" class="space-y-2"></div>
-                        <button type="button" onclick="addBackstoryField()" class="text-sm text-emerald-400 mt-2">+ Add
-                            Field
+                        <button type="button" onclick="addBackstoryField()" class="text-sm text-emerald-500 hover:text-emerald-400 mt-2 flex items-center cursor-pointer">
+                            <span class="material-icons align-middle mr-1 ">add_circle_outline</span>
+                            Add Field
                         </button>
                     </div>
 
@@ -405,7 +410,8 @@
             <div class="sticky bottom-0 z-10 border-t border-black bg-black/50 backdrop-blur-[4px] shadow-[0_-4px_10px_rgba(0,0,0,0.5)] py-4 px-6">
                 <div class="flex justify-center md:justify-end">
                     <button form="persona-form" type="submit"
-                            class="bg-cyan-500 hover:bg-teal-500 text-white font-semibold py-2 px-6 rounded shadow">
+                            class="bg-emerald-500 hover:bg-emerald-400 text-zinc-800 font-semibold py-2 px-4 rounded shadow flex gap-1 cursor-pointer">
+                        <span class="material-icons align-middle">person</span>
                         Save Persona
                     </button>
                 </div>

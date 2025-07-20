@@ -1,6 +1,8 @@
 // ===================== LOGS =====================
 
 let autoScrollEnabled = false;
+let isLogHidden = true;
+let isEnvHidden = true;
 
 async function fetchLogs() {
     const res = await fetch("/logs");
@@ -11,6 +13,7 @@ async function fetchLogs() {
     logOutput.textContent = data.logs || "No logs found.";
 
     if (autoScrollEnabled) {
+        console.log('scroll')
         requestAnimationFrame(() => {
             logContainer.scrollTop = logContainer.scrollHeight;
         });
@@ -24,28 +27,44 @@ document.addEventListener("DOMContentLoaded", () => {
         logContainer: document.getElementById("log-container"),
         toggleFullscreenBtn: document.getElementById("toggle-fullscreen-btn"),
         scrollBtn: document.getElementById("scroll-bottom-btn"),
-        scrollBtnFullscreen: document.getElementById("scroll-bottom-btn-fullscreen"),
-        logOverlay: document.getElementById("log-overlay"),
-        body: document.body,
         toggleBtn: document.getElementById("toggle-log-btn"),
         logPanel: document.getElementById("log-panel"),
+        toggleEnvBtn: document.getElementById("toggle-env-btn"),
+        envPanel: document.getElementById("env-panel"),
+        envTextarea: document.getElementById("env-textarea"),
+        saveEnvBtn: document.getElementById("save-env-btn"),
     };
-
-    let isHidden = true;
 
     // Toggle log visibility
     function toggleLogPanel() {
-        isHidden = !isHidden;
-        elements.logPanel.classList.toggle("hidden", isHidden);
-        elements.toggleBtn.textContent = isHidden ? "Show Debug" : "Hide Debug";
+        isLogHidden = !isLogHidden;
+        elements.logPanel.classList.toggle("hidden", isLogHidden);
+        elements.toggleBtn.classList.toggle("bg-cyan-500", !isLogHidden);
+        elements.toggleBtn.classList.toggle("bg-zinc-700", isLogHidden);
     }
 
-    // Fullscreen mode using class toggle
-    function toggleFullscreenLog() {
-        const container = document.getElementById("log-container");
-        const icon = document.getElementById("fullscreen-icon");
+    // Toggle env visibility
+    function toggleEnvPanel() {
+        isEnvHidden = !isEnvHidden;
+        elements.envPanel.classList.toggle("hidden", isEnvHidden);
+        elements.toggleEnvBtn.classList.toggle("bg-amber-500", !isEnvHidden);
+        elements.toggleEnvBtn.classList.toggle("bg-zinc-700", isEnvHidden);
 
-        const isFullscreen = container.classList.toggle("log-fullscreen");
+        if (!isEnvHidden) {
+            // Fetch and load .env content
+            fetch('/get-env')
+                .then(res => res.text())
+                .then(text => elements.envTextarea.value = text.trim())
+                .catch(() => {
+                    showNotification("An error occurred while loading .env", "error");
+                });
+        }
+    }
+
+    // Fullscreen mode for log
+    function toggleFullscreenLog() {
+        const icon = document.getElementById("fullscreen-icon");
+        const isFullscreen = elements.logContainer.classList.toggle("log-fullscreen");
         icon.textContent = isFullscreen ? "fullscreen_exit" : "fullscreen";
     }
 
@@ -61,10 +80,50 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    // Save .env handler
+    async function saveEnv() {
+        if (!confirm("Are you sure you want to overwrite the .env file? This may affect how Billy runs.")) {
+            return;
+        }
+
+        try {
+            const res = await fetch('/save-env', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: elements.envTextarea.value })
+            });
+
+            const data = await res.json();
+
+            if (data.status === "ok") {
+                fetch('/restart', { method: 'POST' })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status === "ok") {
+                            showNotification(".env saved. Restarting", "success");
+                            setTimeout(() => location.reload(), 3000);
+                        } else {
+                            showNotification(data.error || "Restart failed", "error");
+                        }
+                    })
+                    .catch(err => showNotification(err.message, "error"));
+            } else {
+                if (data.status !== "ok") {
+                    showNotification(data.error || "Unknown error", "error");
+                    return;
+                }
+            }
+        } catch (err) {
+            showNotification(err.message, "error");
+        }
+    }
+
     // Event bindings
     elements.toggleBtn.addEventListener("click", toggleLogPanel);
     elements.toggleFullscreenBtn.addEventListener("click", toggleFullscreenLog);
     elements.scrollBtn.addEventListener("click", toggleAutoScroll);
+    elements.toggleEnvBtn.addEventListener("click", toggleEnvPanel);
+    elements.saveEnvBtn.addEventListener("click", saveEnv);
 });
 
 // ===================== SERVICE STATUS =====================
@@ -97,19 +156,26 @@ function updateServiceStatusUI(status) {
     // Clear and repopulate controls
     controlsEl.innerHTML = "";
 
-    const createButton = (label, action, color) => {
+    const createButton = (label, action, color, iconName) => {
         const btn = document.createElement("button");
-        btn.textContent = label;
-        btn.className = `bg-${color}-500 hover:bg-${color}-600 text-black font-semibold py-1 px-3 rounded`;
+        btn.className = `flex items-center gap-1 bg-${color}-500 hover:bg-${color}-400 text-zinc-800 font-semibold py-1 px-2 rounded`;
+
+        const icon = document.createElement("i");
+        icon.className = "material-icons";
+        icon.textContent = iconName;
+
+        btn.appendChild(icon);
+        btn.appendChild(document.createTextNode(label));
         btn.onclick = () => handleServiceAction(action);
+
         return btn;
     };
 
     if (status === "inactive" || status === "failed") {
-        controlsEl.appendChild(createButton("Start", "start", "emerald"));
+        controlsEl.appendChild(createButton("Start", "start", "emerald", "play_arrow"));
     } else if (status === "active") {
-        controlsEl.appendChild(createButton("Restart", "restart", "amber"));
-        controlsEl.appendChild(createButton("Stop", "stop", "rose"));
+        controlsEl.appendChild(createButton("Restart", "restart", "amber", "restart_alt"));
+        controlsEl.appendChild(createButton("Stop", "stop", "rose", "stop"));
     } else {
         controlsEl.textContent = "Unknown status.";
     }
@@ -190,8 +256,13 @@ function addBackstoryField(key = "", value = "") {
 
     const removeBtn = document.createElement("button");
     removeBtn.type = "button";
-    removeBtn.className = "text-red-400 text-xl";
-    removeBtn.innerHTML = "&minus;";
+    removeBtn.className = "text-rose-500 hover:text-rose-400 cursor-pointer";
+
+    const icon = document.createElement("span");
+    icon.className = "material-icons align-middle";
+    icon.textContent = "remove_circle_outline";
+
+    removeBtn.appendChild(icon);
     removeBtn.onclick = () => wrapper.remove();
 
     wrapper.append(keyInput, valInput, removeBtn);
@@ -329,9 +400,11 @@ fetch("/version")
 
         if (data.update_available) {
             const latestSpan = document.getElementById("latest-version");
+            const updateBtn = document.getElementById("update-btn");
             latestSpan.textContent = `Update to: ${data.latest}`;
             latestSpan.classList.remove("hidden");
-            document.getElementById("update-btn").classList.remove("hidden");
+            updateBtn.classList.add('flex');
+            updateBtn.classList.remove("hidden");
         }
     })
     .catch(err => {

@@ -1,1 +1,28 @@
 @import "tailwindcss";
+
+
+/* Scrollbar styling for WebKit browsers */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1a1a1a;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: #4b5563; /* Tailwind zinc-600 */
+    border-radius: 5px;
+    border: 2px solid #1a1a1a;
+}
+
+.log-fullscreen {
+    position: fixed !important;
+    inset: 0;
+    z-index: 50;
+    background-color: black;
+    padding-left: 1rem;
+    max-height: none !important;
+    height: 100vh;
+    overflow-y: auto !important;
+}

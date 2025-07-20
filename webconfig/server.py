@@ -205,6 +205,11 @@ def restart_services():
     subprocess.run(["sudo", "systemctl", "restart", "billy.service"])
 
 
+def delayed_restart():
+    time.sleep(1.5)
+    restart_services()
+
+
 def fetch_latest_tag():
     try:
         show_rc = dotenv_values().get("SHOW_RC_VERSIONS", "false").lower() == "true"
@@ -330,6 +335,27 @@ def get_config():
     return jsonify(load_env())
 
 
+@app.route('/get-env')
+def get_env():
+    try:
+        with open('.env') as f:
+            return f.read(), 200
+    except Exception as e:
+        return str(e), 500
+
+
+@app.route('/save-env', methods=['POST'])
+def save_env():
+    content = request.json.get('content', '')
+    try:
+        with open('.env', 'w') as f:
+            f.write(content)
+
+        return jsonify({"status": "ok", "message": ".env saved"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/logs")
 def logs():
     try:
@@ -356,6 +382,15 @@ def control_service(action):
         return jsonify({"status": "success", "action": action})
     except subprocess.CalledProcessError:
         return jsonify({"error": "Failed to run systemctl"}), 500
+
+
+@app.route('/restart', methods=['POST'])
+def restart_billy_services():
+    try:
+        threading.Thread(target=delayed_restart).start()
+        return jsonify({"status": "ok", "message": "Restarting..."})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 
 @app.route("/service/status")
