@@ -29,7 +29,7 @@ All notable changes to this project will be documented in this file.
 - Adjustable silence threshold and mic timeout for voice session logic.
 
 **MQTT Integration (Optional)**
-- Basic MQTT connectivity for status reporting, safe shutdown raspberry pi command and future integration with Home Assistant.
+- Basic MQTT connectivity for status reporting, safe shutdown Raspberry Pi command and future integration with Home Assistant.
 
 **Song Mode**
 - Folder-based song playback system supporting:

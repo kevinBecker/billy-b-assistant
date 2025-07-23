@@ -57,10 +57,11 @@ def detect_devices(debug=False):
 
     devices = sd.query_devices()
 
+    print("🔢 Enumerating audio devices...")
     for i, d in enumerate(devices):
         if debug:
             print(
-                f"{i}: {d['name']} (inputs: {d['max_input_channels']}, outputs: {d['max_output_channels']})"
+                f"  {i}: {d['name']} (inputs: {d['max_input_channels']}, outputs: {d['max_output_channels']})"
             )
 
         if MIC_DEVICE_INDEX is None and d['max_input_channels'] > 0:
@@ -70,6 +71,7 @@ def detect_devices(debug=False):
                 or not MIC_PREFERENCE
             ):
                 MIC_DEVICE_INDEX = i
+                print(f"✔ Input device index {i} selected.")
 
             MIC_RATE = int(d['default_samplerate'])
             MIC_CHANNELS = d['max_input_channels']
@@ -82,6 +84,7 @@ def detect_devices(debug=False):
                 or not SPEAKER_PREFERENCE
             ):
                 OUTPUT_DEVICE_INDEX = i
+                print(f"✔ Output device index {i} selected.")
 
             OUTPUT_RATE = int(d['default_samplerate'])
             OUTPUT_CHANNELS = d['max_output_channels']
@@ -128,7 +131,8 @@ def playback_worker(chunk_ms):
                         head_out = True
                         head_move_active = True
                         head_move_end_time = now + move_duration
-                        print(f"🐟 Head move started for {move_duration:.2f} seconds")
+                        print(
+                            f"🐟 Head move started for {move_duration:.2f} seconds")
 
                 if item is None:
                     print("🧵 Received stop signal, cleaning up.")
@@ -183,14 +187,15 @@ def playback_worker(chunk_ms):
                         mono = np.frombuffer(chunk, dtype=np.int16)
                         chunk_len = int(24000 * chunk_ms / 1000)
                         for i in range(0, len(mono), chunk_len):
-                            sub = mono[i : i + chunk_len]
+                            sub = mono[i: i + chunk_len]
                             if len(sub) == 0:
                                 continue
                             flap_from_pcm_chunk(sub, chunk_ms=chunk_ms)
                             resampled = resample(
                                 sub, int(len(sub) * 48000 / 24000)
                             ).astype(np.int16)
-                            stereo = np.repeat(resampled[:, np.newaxis], 2, axis=1)
+                            stereo = np.repeat(
+                                resampled[:, np.newaxis], 2, axis=1)
                             stereo = np.clip(
                                 stereo * PLAYBACK_VOLUME, -32768, 32767
                             ).astype(np.int16)
@@ -200,14 +205,15 @@ def playback_worker(chunk_ms):
                             if interlude_counter >= interlude_target:
                                 interlude()
                                 interlude_counter = 0
-                                interlude_target = random.randint(80000, 160000)
+                                interlude_target = random.randint(
+                                    80000, 160000)
 
                 else:
                     chunk = item
                     mono = np.frombuffer(chunk, dtype=np.int16)
                     chunk_len = int(24000 * chunk_ms / 1000)
                     for i in range(0, len(mono), chunk_len):
-                        sub = mono[i : i + chunk_len]
+                        sub = mono[i: i + chunk_len]
                         if len(sub) == 0:
                             continue
                         flap_from_pcm_chunk(sub, chunk_ms=chunk_ms)
@@ -437,7 +443,8 @@ async def play_song(song_name):
     ensure_playback_worker_started(CHUNK_MS)
 
     mqtt_publish("billy/state", "playing_song")
-    print(f"\n🎧 Playing {song_name} with mouth (vocals) and tail (drums) flaps")
+    print(
+        f"\n🎧 Playing {song_name} with mouth (vocals) and tail (drums) flaps")
 
     try:
         with contextlib.ExitStack() as stack:
@@ -493,7 +500,8 @@ async def play_song(song_name):
                 samples_drums = np.clip(samples_drums * GAIN, -32768, 32767).astype(
                     np.int16
                 )
-                rms_drums = np.sqrt(np.mean(samples_drums.astype(np.float32) ** 2))
+                rms_drums = np.sqrt(
+                    np.mean(samples_drums.astype(np.float32) ** 2))
 
                 # --- Enqueue combined chunk
                 audio.playback_queue.put((
