@@ -6,8 +6,10 @@ This guide explains how to physically build and wire your Raspberry Pi–powered
 
 ## Parts List
 
-- [3D-printed custom backplate](https://makerworld.com/en/models/1457024-ai-fish-billy-big-mouth-bass-backplate#profileId-1518677)
-- [Alternative 3D-printed parts (for Christmas edition)](https://www.thingiverse.com/thing:7096350)
+- Modern Billy version:
+  - [3D-printed custom backplate](https://makerworld.com/en/models/1457024-ai-fish-billy-big-mouth-bass-backplate#profileId-1518677)
+- Classic (& Christmas edition) version: 
+  - [Alternative 3D-printed parts](https://www.thingiverse.com/thing:7096350)
 
 | Part                                         | Source |
 |----------------------------------------------|--------|
