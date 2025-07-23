@@ -4,10 +4,10 @@ After=network.target
 
 [Service]
 User=root
-WorkingDirectory=/home/billy/billy-b-assistant/setup
-ExecStart=/usr/bin/python3 /home/billy/billy-b-assistant/setup/wifi_setup.py
-Restart=on-failure
 Environment="PYTHONBUFFERED=1"
+WorkingDirectory=/home/pi/billy-b-assistant/setup
+ExecStart=/home/pi/billy-b-assistant/venv/bin/python /home/pi/billy-b-assistant/setup/wifi_setup.py
+Restart=on-failure
 StandardOutput=journal
 StandardError=journal
 

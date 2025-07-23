@@ -5,12 +5,12 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStartPre=/bin/sleep 15
-ExecStart=/home/billy/billy-b-assistant/setup/wifi_check.sh
-WorkingDirectory=/home/billy/billy-b-assistant/setup
-Restart=on-failure
 User=root
 Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+WorkingDirectory=/home/pi/billy-b-assistant/setup
+ExecStartPre=/bin/sleep 15
+ExecStart=/home/pi/billy-b-assistant/setup/wifi_check.sh
+Restart=on-failure
 StandardOutput="journal"
 StandardError="journal"
 

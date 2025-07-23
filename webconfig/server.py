@@ -13,12 +13,11 @@ import numpy as np
 import sounddevice as sd
 from dotenv import dotenv_values, find_dotenv, set_key
 from flask import Flask, Response, jsonify, render_template, request
-from packaging.version import parse as parse_version
+from packaging.version import parse as parse_version, InvalidVersion
 
 
-# Add parent directory to sys.path
+# Add parent directory to sys.path to be able to import from it
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 from core import config as core_config
 
 
@@ -90,8 +89,18 @@ def save_versions(current, latest):
         print("[save_versions] Refusing to save empty version")
         return
 
-    parsed_current = parse_version(current.lstrip("v"))
-    parsed_latest = parse_version(latest.lstrip("v"))
+    try:
+        parsed_current = parse_version(current.lstrip("v"))
+    except InvalidVersion as e:
+        parsed_current = "unknown"
+        print("[save_versions] Parse of current version is invalid, skipping")
+        return
+    try:
+        parsed_latest = parse_version(latest.lstrip("v"))
+    except InvalidVersion as e:
+        parsed_current = "unknown"
+        print("[save_versions] Parse of latest version is invalid, skipping")
+        return
 
     if parsed_latest < parsed_current:
         print(
@@ -419,7 +428,8 @@ def get_persona():
 def save_persona():
     data = request.json
     config = configparser.ConfigParser()
-    config["PERSONALITY"] = {k: str(v) for k, v in data.get("PERSONALITY", {}).items()}
+    config["PERSONALITY"] = {k: str(v)
+                             for k, v in data.get("PERSONALITY", {}).items()}
     config["BACKSTORY"] = data.get("BACKSTORY", {})
     config["META"] = {"instructions": data.get("META", "")}
     with open(PERSONA_PATH, "w") as f:
