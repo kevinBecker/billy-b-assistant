@@ -1,2 +1,70 @@
+# MACOS-SPECIFIC FILES
+## General
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon[]
+
+## Thumbnails
+._*
+
+## Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+## Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# WINDOWS-SPECIFIC FILES
+## Windows thumbnail cache files
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+
+## Dump file
+*.stackdump
+
+## Folder config file
+[Dd]esktop.ini
+
+## Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+## Windows Installer files
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+
+## Windows shortcuts
+*.lnk
+
+# IDE-SPECIFIC FILES
+.idea/				# JetBrains IDEs
+.vscode/			# VS Code settings
+*.suo				# Visual Studio solution user options
+*.user				# Visual Studio user options
+*.vcproj.filters	# Visual C++ project filters
+*.sln.docstates		# Visual Studio solution document states
+
+# PYTHON-SPECIFIC FILES
+core/__pycache__/
+
+# PROJECT-SPECIFIC FILES
 .idea
-billy-b-assistant/.env
+.env
+persona.ini
+versions.ini
+venv
+webconfig/node_modules

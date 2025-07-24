@@ -29,7 +29,7 @@ All notable changes to this project will be documented in this file.
 - Adjustable silence threshold and mic timeout for voice session logic.
 
 **MQTT Integration (Optional)**
-- Basic MQTT connectivity for status reporting, safe shutdown raspberry pi command and future integration with Home Assistant.
+- Basic MQTT connectivity for status reporting, safe shutdown Raspberry Pi command and future integration with Home Assistant.
 
 **Song Mode**
 - Folder-based song playback system supporting:
@@ -72,3 +72,28 @@ All notable changes to this project will be documented in this file.
 - Fixed potential undefined variable.
 - Fixed usage of legacy `websockets` API.
 - Added missing dependencies: `aiohttp`, `lgpio`.
+
+## [1.2.0] — 2025-07-??
+
+### Web UI 
+
+### Added
+- Web-based user interface for easy configuration of Billy
+  - Versioning check logic during boot & button to trigger OTA update
+  - Speaker volume test and control in UI.
+  - Tailwind CSS included locally for styling.
+  - Password field visibility toggles in the UI.
+  - Dropdown for selecting voice options in UI.
+  - Mic input and speaker output level test utility.
+- Option to change openAI Model
+- Compatibilty for Classic Billy Model with 3 motors
+
+### Improved
+- Folder structure simplified and clarified.
+- Automatic creation of `.env` and `persona.ini` from *.example files on first run.
+- Committed `persona.ini`; now ignored by `.gitignore`.
+
+### Added in beta
+- MQTT "say" command integration for announcing messages
+- Systemd service install process.
+- Wi-Fi onboarding form (captive portal)
