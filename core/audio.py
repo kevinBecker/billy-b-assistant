@@ -131,8 +131,7 @@ def playback_worker(chunk_ms):
                         head_out = True
                         head_move_active = True
                         head_move_end_time = now + move_duration
-                        print(
-                            f"🐟 Head move started for {move_duration:.2f} seconds")
+                        print(f"🐟 Head move started for {move_duration:.2f} seconds")
 
                 if item is None:
                     print("🧵 Received stop signal, cleaning up.")
@@ -187,15 +186,14 @@ def playback_worker(chunk_ms):
                         mono = np.frombuffer(chunk, dtype=np.int16)
                         chunk_len = int(24000 * chunk_ms / 1000)
                         for i in range(0, len(mono), chunk_len):
-                            sub = mono[i: i + chunk_len]
+                            sub = mono[i : i + chunk_len]
                             if len(sub) == 0:
                                 continue
                             flap_from_pcm_chunk(sub, chunk_ms=chunk_ms)
                             resampled = resample(
                                 sub, int(len(sub) * 48000 / 24000)
                             ).astype(np.int16)
-                            stereo = np.repeat(
-                                resampled[:, np.newaxis], 2, axis=1)
+                            stereo = np.repeat(resampled[:, np.newaxis], 2, axis=1)
                             stereo = np.clip(
                                 stereo * PLAYBACK_VOLUME, -32768, 32767
                             ).astype(np.int16)
@@ -205,15 +203,14 @@ def playback_worker(chunk_ms):
                             if interlude_counter >= interlude_target:
                                 interlude()
                                 interlude_counter = 0
-                                interlude_target = random.randint(
-                                    80000, 160000)
+                                interlude_target = random.randint(80000, 160000)
 
                 else:
                     chunk = item
                     mono = np.frombuffer(chunk, dtype=np.int16)
                     chunk_len = int(24000 * chunk_ms / 1000)
                     for i in range(0, len(mono), chunk_len):
-                        sub = mono[i: i + chunk_len]
+                        sub = mono[i : i + chunk_len]
                         if len(sub) == 0:
                             continue
                         flap_from_pcm_chunk(sub, chunk_ms=chunk_ms)
@@ -336,6 +333,9 @@ def play_random_wake_up_clip():
     # Enqueue the WAV file
     enqueue_wav_to_playback(clip)
 
+    # Once done, set the event
+    playback_done_event.set()
+
     # Wait for exactly those new chunks to finish
     while playback_queue.unfinished_tasks > already_pending:
         time.sleep(0.01)
@@ -443,8 +443,7 @@ async def play_song(song_name):
     ensure_playback_worker_started(CHUNK_MS)
 
     mqtt_publish("billy/state", "playing_song")
-    print(
-        f"\n🎧 Playing {song_name} with mouth (vocals) and tail (drums) flaps")
+    print(f"\n🎧 Playing {song_name} with mouth (vocals) and tail (drums) flaps")
 
     try:
         with contextlib.ExitStack() as stack:
@@ -500,8 +499,7 @@ async def play_song(song_name):
                 samples_drums = np.clip(samples_drums * GAIN, -32768, 32767).astype(
                     np.int16
                 )
-                rms_drums = np.sqrt(
-                    np.mean(samples_drums.astype(np.float32) ** 2))
+                rms_drums = np.sqrt(np.mean(samples_drums.astype(np.float32) ** 2))
 
                 # --- Enqueue combined chunk
                 audio.playback_queue.put((

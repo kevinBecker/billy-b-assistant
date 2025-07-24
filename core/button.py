@@ -69,6 +69,8 @@ def on_button():
         is_active = False  # ✅ Ensure this is always set after stopping
         return
 
+    audio.ensure_playback_worker_started(config.CHUNK_MS)
+    threading.Thread(target=audio.play_random_wake_up_clip, daemon=True).start()
     is_active = True
     interrupt_event = threading.Event()  # Fresh event for each session
     print("🎤 Button pressed. Listening...")
@@ -77,12 +79,6 @@ def on_button():
         global session_instance, is_active
         try:
             move_head("on")
-            audio.ensure_playback_worker_started(config.CHUNK_MS)
-
-            clip = audio.play_random_wake_up_clip()
-            if clip:
-                print(f"🐟 Enqueuing wake-up clip: {clip} ")
-
             session_instance = BillySession(interrupt_event=interrupt_event)
             session_instance.last_activity[0] = time.time()
             asyncio.run(session_instance.start())
