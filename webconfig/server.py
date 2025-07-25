@@ -12,7 +12,7 @@ import time
 import numpy as np
 import sounddevice as sd
 from dotenv import dotenv_values, find_dotenv, set_key
-from flask import Flask, Response, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request, send_file
 from packaging.version import InvalidVersion
 from packaging.version import parse as parse_version
 
@@ -628,6 +628,40 @@ def test_motor():
         return jsonify({"status": f"{motor} tested", "service_was_active": was_active})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ==== Export/Import  ====
+
+
+@app.route('/persona/import', methods=['POST'])
+def import_persona():
+    # For JSON (your current style)
+    if request.is_json:
+        ini = request.json.get('ini', '')
+    # For file uploads (multipart/form-data)
+    elif 'file' in request.files:
+        ini = request.files['file'].read().decode('utf-8')
+    else:
+        return jsonify({'error': 'No file provided'}), 400
+
+    if not ini or '[PERSONALITY]' not in ini:
+        return jsonify({'error': 'Invalid INI file'}), 400
+    try:
+        with open(PERSONA_PATH, 'w') as f:
+            f.write(ini)
+        return jsonify({'status': 'ok'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/persona/export')
+def export_persona():
+    return send_file(
+        PERSONA_PATH,
+        as_attachment=True,
+        download_name="persona.ini",
+        mimetype="text/plain",
+    )
 
 
 # ==== MAIN ====
