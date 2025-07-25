@@ -1,75 +1,58 @@
 // ===================== LOGS =====================
 
-let autoScrollEnabled = false;
-let isLogHidden = true;
-let isEnvHidden = true;
+const LogPanel = (() => {
+    let autoScrollEnabled = false;
+    let isLogHidden = true;
+    let isEnvHidden = true;
 
-async function fetchLogs() {
-    const res = await fetch("/logs");
-    const data = await res.json();
-    const logOutput = document.getElementById("log-output");
-    const logContainer = document.getElementById("log-container");
+    // Fetch logs and update UI
+    const fetchLogs = async () => {
+        const res = await fetch("/logs");
+        const data = await res.json();
+        const logOutput = document.getElementById("log-output");
+        const logContainer = document.getElementById("log-container");
 
-    logOutput.textContent = data.logs || "No logs found.";
+        logOutput.textContent = data.logs || "No logs found.";
 
-    if (autoScrollEnabled) {
-        console.log('scroll')
-        requestAnimationFrame(() => {
-            logContainer.scrollTop = logContainer.scrollHeight;
-        });
-    }
-}
-
-document.addEventListener("DOMContentLoaded", () => {
-    // Element references
-    const elements = {
-        logOutput: document.getElementById("log-output"),
-        logContainer: document.getElementById("log-container"),
-        toggleFullscreenBtn: document.getElementById("toggle-fullscreen-btn"),
-        scrollBtn: document.getElementById("scroll-bottom-btn"),
-        toggleBtn: document.getElementById("toggle-log-btn"),
-        logPanel: document.getElementById("log-panel"),
-        toggleEnvBtn: document.getElementById("toggle-env-btn"),
-        envPanel: document.getElementById("env-panel"),
-        envTextarea: document.getElementById("env-textarea"),
-        saveEnvBtn: document.getElementById("save-env-btn"),
+        if (autoScrollEnabled) {
+            requestAnimationFrame(() => {
+                logContainer.scrollTop = logContainer.scrollHeight;
+            });
+        }
     };
 
-    // Toggle log visibility
-    function toggleLogPanel() {
+    // Toggle log panel visibility
+    const toggleLogPanel = () => {
         isLogHidden = !isLogHidden;
         elements.logPanel.classList.toggle("hidden", isLogHidden);
         elements.toggleBtn.classList.toggle("bg-cyan-500", !isLogHidden);
         elements.toggleBtn.classList.toggle("bg-zinc-700", isLogHidden);
-    }
+    };
 
-    // Toggle env visibility
-    function toggleEnvPanel() {
+    // Toggle .env editor visibility and fetch content if showing
+    const toggleEnvPanel = () => {
         isEnvHidden = !isEnvHidden;
         elements.envPanel.classList.toggle("hidden", isEnvHidden);
         elements.toggleEnvBtn.classList.toggle("bg-amber-500", !isEnvHidden);
         elements.toggleEnvBtn.classList.toggle("bg-zinc-700", isEnvHidden);
 
         if (!isEnvHidden) {
-            // Fetch and load .env content
             fetch('/get-env')
                 .then(res => res.text())
                 .then(text => elements.envTextarea.value = text.trim())
-                .catch(() => {
-                    showNotification("An error occurred while loading .env", "error");
-                });
+                .catch(() => showNotification("An error occurred while loading .env", "error"));
         }
-    }
+    };
 
-    // Fullscreen mode for log
-    function toggleFullscreenLog() {
+    // Fullscreen toggle
+    const toggleFullscreenLog = () => {
         const icon = document.getElementById("fullscreen-icon");
         const isFullscreen = elements.logContainer.classList.toggle("log-fullscreen");
         icon.textContent = isFullscreen ? "fullscreen_exit" : "fullscreen";
-    }
+    };
 
-    // Auto-scroll toggle
-    function toggleAutoScroll() {
+    // Toggle auto-scroll to bottom of log
+    const toggleAutoScroll = () => {
         autoScrollEnabled = !autoScrollEnabled;
         elements.scrollBtn.classList.toggle("bg-cyan-500", autoScrollEnabled);
         elements.scrollBtn.classList.toggle("bg-zinc-800", !autoScrollEnabled);
@@ -78,13 +61,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (autoScrollEnabled) {
             elements.logOutput.scrollTop = elements.logOutput.scrollHeight;
         }
-    }
+    };
 
-    // Save .env handler
-    async function saveEnv() {
-        if (!confirm("Are you sure you want to overwrite the .env file? This may affect how Billy runs.")) {
-            return;
-        }
+    // Save .env file and optionally restart service
+    const saveEnv = async () => {
+        if (!confirm("Are you sure you want to overwrite the .env file? This may affect how Billy runs.")) return;
 
         try {
             const res = await fetch('/save-env', {
@@ -92,7 +73,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content: elements.envTextarea.value })
             });
-
             const data = await res.json();
 
             if (data.status === "ok") {
@@ -108,323 +88,324 @@ document.addEventListener("DOMContentLoaded", () => {
                     })
                     .catch(err => showNotification(err.message, "error"));
             } else {
-                if (data.status !== "ok") {
-                    showNotification(data.error || "Unknown error", "error");
-                }
+                showNotification(data.error || "Unknown error", "error");
             }
         } catch (err) {
             showNotification(err.message, "error");
         }
-    }
+    };
 
-    // Event bindings
-    elements.toggleBtn.addEventListener("click", toggleLogPanel);
-    elements.toggleFullscreenBtn.addEventListener("click", toggleFullscreenLog);
-    elements.scrollBtn.addEventListener("click", toggleAutoScroll);
-    elements.toggleEnvBtn.addEventListener("click", toggleEnvPanel);
-    elements.saveEnvBtn.addEventListener("click", saveEnv);
-});
+    // Cache DOM references after DOMContentLoaded
+    let elements = {};
+    const bindUI = () => {
+        elements = {
+            logOutput: document.getElementById("log-output"),
+            logContainer: document.getElementById("log-container"),
+            toggleFullscreenBtn: document.getElementById("toggle-fullscreen-btn"),
+            scrollBtn: document.getElementById("scroll-bottom-btn"),
+            toggleBtn: document.getElementById("toggle-log-btn"),
+            logPanel: document.getElementById("log-panel"),
+            toggleEnvBtn: document.getElementById("toggle-env-btn"),
+            envPanel: document.getElementById("env-panel"),
+            envTextarea: document.getElementById("env-textarea"),
+            saveEnvBtn: document.getElementById("save-env-btn"),
+        };
+
+        elements.toggleBtn.addEventListener("click", toggleLogPanel);
+        elements.toggleFullscreenBtn.addEventListener("click", toggleFullscreenLog);
+        elements.scrollBtn.addEventListener("click", toggleAutoScroll);
+        elements.toggleEnvBtn.addEventListener("click", toggleEnvPanel);
+        elements.saveEnvBtn.addEventListener("click", saveEnv);
+    };
+
+    return { fetchLogs, bindUI };
+})();
 
 // ===================== SERVICE STATUS =====================
 
-async function fetchStatus() {
-    const res = await fetch("/service/status");
-    const data = await res.json();
-    updateServiceStatusUI(data.status);
-}
-
-function updateServiceStatusUI(status) {
-    const statusEl = document.getElementById("service-status");
-    const controlsEl = document.getElementById("service-controls");
-
-    // Set status text
-    statusEl.textContent = `(${status})`;
-
-    // Reset previous color classes
-    statusEl.classList.remove("text-emerald-500", "text-amber-500", "text-rose-500");
-
-    // Add color based on status
-    if (status === "active") {
-        statusEl.classList.add("text-emerald-500");
-    } else if (status === "inactive") {
-        statusEl.classList.add("text-amber-500");
-    } else if (status === "failed") {
-        statusEl.classList.add("text-rose-500");
-    }
-
-    // Clear and repopulate controls
-    controlsEl.innerHTML = "";
-
-    const createButton = (label, action, color, iconName) => {
-        const btn = document.createElement("button");
-        btn.className = `flex items-center gap-1 bg-${color}-500 hover:bg-${color}-400 text-zinc-800 font-semibold py-1 px-2 rounded`;
-
-        const icon = document.createElement("i");
-        icon.className = "material-icons";
-        icon.textContent = iconName;
-
-        btn.appendChild(icon);
-        btn.appendChild(document.createTextNode(label));
-        btn.onclick = () => handleServiceAction(action);
-
-        return btn;
+const ServiceStatus = (() => {
+    const fetchStatus = async () => {
+        const res = await fetch("/service/status");
+        const data = await res.json();
+        updateServiceStatusUI(data.status);
     };
 
-    if (status === "inactive" || status === "failed") {
-        controlsEl.appendChild(createButton("Start", "start", "emerald", "play_arrow"));
-    } else if (status === "active") {
-        controlsEl.appendChild(createButton("Restart", "restart", "amber", "restart_alt"));
-        controlsEl.appendChild(createButton("Stop", "stop", "rose", "stop"));
-    } else {
-        controlsEl.textContent = "Unknown status.";
-    }
-}
-
-async function handleServiceAction(action) {
-    const statusEl = document.getElementById("service-status");
-
-    const statusMap = {
-        restart: { text: "restarting", color: "text-amber-500" },
-        stop:    { text: "stopping",   color: "text-rose-500" },
-        start:   { text: "starting",   color: "text-emerald-500" }
-    };
-
-    if (statusMap[action]) {
-        const { text, color } = statusMap[action];
-        statusEl.textContent = text;
+    const updateServiceStatusUI = (status) => {
+        const statusEl = document.getElementById("service-status");
+        const controlsEl = document.getElementById("service-controls");
+        statusEl.textContent = `(${status})`;
         statusEl.classList.remove("text-emerald-500", "text-amber-500", "text-rose-500");
-        statusEl.classList.add(color);
-    }
 
-    try {
-        await fetch(`/service/${action}`);
-    } catch (err) {
-        console.error(`Failed to ${action} service:`, err);
-    }
+        if (status === "active") {
+            statusEl.classList.add("text-emerald-500");
+        } else if (status === "inactive") {
+            statusEl.classList.add("text-amber-500");
+        } else if (status === "failed") {
+            statusEl.classList.add("text-rose-500");
+        }
 
-    fetchStatus();
-    fetchLogs();
-}
+        controlsEl.innerHTML = "";
+        const createButton = (label, action, color, iconName) => {
+            const btn = document.createElement("button");
+            btn.className = `flex items-center gap-1 bg-${color}-500 hover:bg-${color}-400 text-zinc-800 font-semibold py-1 px-2 rounded`;
+            const icon = document.createElement("i");
+            icon.className = "material-icons";
+            icon.textContent = iconName;
+            btn.appendChild(icon);
+            btn.appendChild(document.createTextNode(label));
+            btn.onclick = () => handleServiceAction(action);
+            return btn;
+        };
+        if (status === "inactive" || status === "failed") {
+            controlsEl.appendChild(createButton("Start", "start", "emerald", "play_arrow"));
+        } else if (status === "active") {
+            controlsEl.appendChild(createButton("Restart", "restart", "amber", "restart_alt"));
+            controlsEl.appendChild(createButton("Stop", "stop", "rose", "stop"));
+        } else {
+            controlsEl.textContent = "Unknown status.";
+        }
+    };
+
+    const handleServiceAction = async (action) => {
+        const statusEl = document.getElementById("service-status");
+        const statusMap = {
+            restart: { text: "restarting", color: "text-amber-500" },
+            stop:    { text: "stopping",   color: "text-rose-500" },
+            start:   { text: "starting",   color: "text-emerald-500" }
+        };
+
+        if (statusMap[action]) {
+            const { text, color } = statusMap[action];
+            statusEl.textContent = text;
+            statusEl.classList.remove("text-emerald-500", "text-amber-500", "text-rose-500");
+            statusEl.classList.add(color);
+        }
+        try {
+            await fetch(`/service/${action}`);
+        } catch (err) {
+            console.error(`Failed to ${action} service:`, err);
+        }
+        fetchStatus();
+        LogPanel.fetchLogs();
+    };
+
+    return { fetchStatus, updateServiceStatusUI };
+})();
 
 // ===================== SETTINGS FORM =====================
 
-function handleSettingsSave() {
-    document.getElementById("config-form").addEventListener("submit", async function (e) {
-        e.preventDefault();
+const SettingsForm = (() => {
+    const handleSettingsSave = () => {
+        document.getElementById("config-form").addEventListener("submit", async function (e) {
+            e.preventDefault();
 
-        const resStatus = await fetch("/service/status");
-        const { status: wasActive } = await resStatus.json();
+            const resStatus = await fetch("/service/status");
+            const { status: wasActive } = await resStatus.json();
 
-        const formData = new FormData(this);
-        const payload = Object.fromEntries(formData.entries());
+            const formData = new FormData(this);
+            const payload = Object.fromEntries(formData.entries());
 
-        const oldPort = parseInt(document.getElementById("FLASK_PORT").getAttribute("data-original")) || 80;
-        const newPort = parseInt(payload["FLASK_PORT"] || "80");
-        const newHostname = formData.get("hostname");
+            const flaskPortInput = document.getElementById("FLASK_PORT");
+            const oldPort = parseInt(flaskPortInput.getAttribute("data-original")) || 80;
+            const newPort = parseInt(payload["FLASK_PORT"] || "80");
 
-        let hostnameChanged = false;
+            const hostnameInput = document.getElementById("hostname");
+            const oldHostname = (hostnameInput.getAttribute("data-original") || hostnameInput.defaultValue || "").trim();
+            const newHostname = (formData.get("hostname") || "").trim();
 
-        // Save config (.env)
-        const saveResponse = await fetch("/save", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        });
-        const saveResult = await saveResponse.json();
-        let portChanged = saveResult.port_changed || (oldPort !== newPort);
+            let hostnameChanged = false;
 
-        // Save hostname
-        if (newHostname) {
-            const hostResponse = await fetch("/hostname", {
+            // Save config (.env)
+            const saveResponse = await fetch("/save", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ hostname: newHostname })
+                body: JSON.stringify(payload),
             });
+            const saveResult = await saveResponse.json();
+            let portChanged = saveResult.port_changed || (oldPort !== newPort);
 
-            const hostResult = await hostResponse.json();
-            if (hostResult.hostname) {
-                hostnameChanged = true;
-                showNotification(`Hostname updated to ${hostResult.hostname}.local`, "success", 5000);
+            // Only update hostname if it actually changed
+            if (newHostname && newHostname !== oldHostname) {
+                const hostResponse = await fetch("/hostname", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ hostname: newHostname })
+                });
+                const hostResult = await hostResponse.json();
+                if (hostResult.hostname) {
+                    hostnameChanged = true;
+                    showNotification(`Hostname updated to ${hostResult.hostname}.local`, "success", 5000);
+                }
             }
-        }
 
-        if (wasActive === "active") {
-            await fetch("/service/restart");
-            showNotification("Settings saved – Billy restarted", "success");
-        } else {
-            showNotification("Settings saved", "success");
-        }
+            if (wasActive === "active") {
+                await fetch("/service/restart");
+                showNotification("Settings saved – Billy restarted", "success");
+            } else {
+                showNotification("Settings saved", "success");
+            }
 
-        // Redirect if port or hostname changed
-        if (portChanged || hostnameChanged) {
-            const targetHost = hostnameChanged ? `${newHostname}.local` : window.location.hostname;
-            const targetPort = portChanged ? newPort : window.location.port || 80;
+            if (portChanged || hostnameChanged) {
+                const targetHost = hostnameChanged ? `${newHostname}.local` : window.location.hostname;
+                const targetPort = portChanged ? newPort : (window.location.port || 80);
 
-            showNotification(`Redirecting to http://${targetHost}:${targetPort}/...`, "warning", 5000);
+                showNotification(`Redirecting to http://${targetHost}:${targetPort}/...`, "warning", 5000);
+                setTimeout(() => {
+                    window.location.href = `http://${targetHost}:${targetPort}/`;
+                }, 3000);
+            }
+        });
+    };
 
-            setTimeout(() => {
-                window.location.href = `http://${targetHost}:${targetPort}/`;
-            }, 3000);
-        }
-    });
-}
+    // Set hostname field from server
+    fetch('/hostname')
+        .then(res => res.json())
+        .then(data => {
+            if (data.hostname) {
+                const input = document.getElementById('hostname');
+                input.value = data.hostname;
+                input.setAttribute('data-original', data.hostname);
+            }
+        });
 
-fetch('/hostname')
-    .then(res => res.json())
-    .then(data => {
-        if (data.hostname) {
-            document.getElementById('hostname').value = data.hostname;
-        }
-    });
+    // Set original port attribute for change detection
+    const flaskPortInput = document.getElementById("FLASK_PORT");
+    if (flaskPortInput) {
+        flaskPortInput.setAttribute("data-original", flaskPortInput.value);
+    }
 
-const flaskPortInput = document.getElementById("FLASK_PORT");
-if (flaskPortInput) {
-    flaskPortInput.setAttribute("data-original", flaskPortInput.value);
-}
+    return { handleSettingsSave };
+})();
 
 // ===================== PERSONA FORM =====================
 
-function addBackstoryField(key = "", value = "") {
-    const wrapper = document.createElement("div");
-    wrapper.className = "flex items-center space-x-2";
-
-    const keyInput = Object.assign(document.createElement("input"), {
-        type: "text",
-        value: key,
-        placeholder: "Key",
-        className: "w-1/3 p-1 bg-zinc-800 text-white rounded"
-    });
-
-    const valInput = Object.assign(document.createElement("input"), {
-        type: "text",
-        value: value,
-        placeholder: "Value",
-        className: "flex-1 p-1 bg-zinc-800 text-white rounded"
-    });
-
-    const removeBtn = document.createElement("button");
-    removeBtn.type = "button";
-    removeBtn.className = "text-rose-500 hover:text-rose-400 cursor-pointer";
-
-    const icon = document.createElement("span");
-    icon.className = "material-icons align-middle";
-    icon.textContent = "remove_circle_outline";
-
-    removeBtn.appendChild(icon);
-    removeBtn.onclick = () => wrapper.remove();
-
-    wrapper.append(keyInput, valInput, removeBtn);
-    document.getElementById("backstory-fields").appendChild(wrapper);
-}
-
-async function loadPersona() {
-    const res = await fetch("/persona");
-    const data = await res.json();
-
-    renderPersonalitySliders(data.PERSONALITY);
-    renderBackstoryFields(data.BACKSTORY);
-    document.getElementById("meta-text").value = data.META || "";
-}
-
-function renderPersonalitySliders(personality) {
-    const container = document.getElementById("personality-sliders");
-    container.innerHTML = "";
-
-    for (const [key, value] of Object.entries(personality)) {
+const PersonaForm = (() => {
+    const addBackstoryField = (key = "", value = "") => {
         const wrapper = document.createElement("div");
-        wrapper.className = "flex items-center space-x-4";
+        wrapper.className = "flex items-center space-x-2";
 
-        const label = document.createElement("label");
-        label.className = "w-32 font-semibold text-sm";
-        label.textContent = key;
-        label.for = key;
-
-        const input = Object.assign(document.createElement("input"), {
-            type: "range",
-            name: key,
-            min: 0,
-            max: 100,
-            value,
-            className: "flex-1"
+        const keyInput = Object.assign(document.createElement("input"), {
+            type: "text",
+            value: key,
+            placeholder: "Key",
+            className: "w-1/3 p-1 bg-zinc-800 text-white rounded"
         });
 
-        const output = document.createElement("span");
-        output.className = "w-10 text-sm text-zinc-400 text-right";
-        output.textContent = value;
-
-        input.addEventListener("input", () => {
-            output.textContent = input.value;
+        const valInput = Object.assign(document.createElement("input"), {
+            type: "text",
+            value: value,
+            placeholder: "Value",
+            className: "flex-1 p-1 bg-zinc-800 text-white rounded"
         });
 
-        wrapper.append(label, input, output);
-        container.appendChild(wrapper);
-    }
-}
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "text-rose-500 hover:text-rose-400 cursor-pointer";
+        const icon = document.createElement("span");
+        icon.className = "material-icons align-middle";
+        icon.textContent = "remove_circle_outline";
+        removeBtn.appendChild(icon);
+        removeBtn.onclick = () => wrapper.remove();
 
-function renderBackstoryFields(backstory) {
-    const container = document.getElementById("backstory-fields");
-    container.innerHTML = "";
-    Object.entries(backstory).forEach(([k, v]) => addBackstoryField(k, v));
-}
+        wrapper.append(keyInput, valInput, removeBtn);
+        document.getElementById("backstory-fields").appendChild(wrapper);
+    };
 
-function handlePersonaSave() {
-    document.getElementById("persona-form").addEventListener("submit", async (e) => {
-        e.preventDefault();
+    const renderPersonalitySliders = (personality) => {
+        const container = document.getElementById("personality-sliders");
+        container.innerHTML = "";
+        for (const [key, value] of Object.entries(personality)) {
+            const wrapper = document.createElement("div");
+            wrapper.className = "flex items-center space-x-4";
+            const label = document.createElement("label");
+            label.className = "w-32 font-semibold text-sm";
+            label.textContent = key;
+            label.for = key;
+            const input = Object.assign(document.createElement("input"), {
+                type: "range",
+                name: key,
+                min: 0,
+                max: 100,
+                value,
+                className: "flex-1"
+            });
+            const output = document.createElement("span");
+            output.className = "w-10 text-sm text-zinc-400 text-right";
+            output.textContent = value;
+            input.addEventListener("input", () => { output.textContent = input.value; });
+            wrapper.append(label, input, output);
+            container.appendChild(wrapper);
+        }
+    };
 
-        const res = await fetch("/service/status");
-        const { status: wasActive } = await res.json();
+    const renderBackstoryFields = (backstory) => {
+        const container = document.getElementById("backstory-fields");
+        container.innerHTML = "";
+        Object.entries(backstory).forEach(([k, v]) => addBackstoryField(k, v));
+    };
 
-        const personality = {};
-        document.querySelectorAll("#personality-sliders input").forEach((input) => {
-            personality[input.name] = parseInt(input.value, 10);
-        });
+    const loadPersona = async () => {
+        const res = await fetch("/persona");
+        const data = await res.json();
+        renderPersonalitySliders(data.PERSONALITY);
+        renderBackstoryFields(data.BACKSTORY);
+        document.getElementById("meta-text").value = data.META || "";
+    };
 
-        const backstory = {};
-        document.querySelectorAll("#backstory-fields > div").forEach((row) => {
-            const [keyInput, valInput] = row.querySelectorAll("input");
-            if (keyInput.value.trim() !== "") {
-                backstory[keyInput.value.trim()] = valInput.value.trim();
+    const handlePersonaSave = () => {
+        document.getElementById("persona-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            const res = await fetch("/service/status");
+            const { status: wasActive } = await res.json();
+
+            const personality = {};
+            document.querySelectorAll("#personality-sliders input").forEach((input) => {
+                personality[input.name] = parseInt(input.value, 10);
+            });
+
+            const backstory = {};
+            document.querySelectorAll("#backstory-fields > div").forEach((row) => {
+                const [keyInput, valInput] = row.querySelectorAll("input");
+                if (keyInput.value.trim() !== "") {
+                    backstory[keyInput.value.trim()] = valInput.value.trim();
+                }
+            });
+
+            const meta = document.getElementById("meta-text").value.trim();
+
+            await fetch("/persona", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ PERSONALITY: personality, BACKSTORY: backstory, META: meta })
+            });
+
+            showNotification("Persona saved", "success");
+
+            if (wasActive === "active") {
+                await fetch("/service/restart");
+                showNotification("Persona saved – service restarted", "success");
+                ServiceStatus.fetchStatus();
             }
         });
+    };
 
-        const meta = document.getElementById("meta-text").value.trim();
+    return { addBackstoryField, loadPersona, handlePersonaSave };
+})();
 
-        await fetch("/persona", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ PERSONALITY: personality, BACKSTORY: backstory, META: meta })
-        });
-
-        showNotification("Persona saved", "success");
-
-        if (wasActive === "active") {
-            await fetch("/service/restart");
-            showNotification("Persona saved – service restarted", "success");
-            fetchStatus();
-        }
-    });
-}
-
-// ===================== UI =====================
+// ===================== UI HELPERS =====================
 
 function showNotification(message, type = "info", duration = 2500) {
     const bar = document.getElementById("notification");
     bar.textContent = message;
-
-    // Remove old type classes
     bar.classList.remove("hidden", "opacity-0", "bg-cyan-500/80", "bg-emerald-500/80", "bg-amber-500/80", "bg-rose-500/80");
-
-    // Add the new type class
     const typeClass = {
         info: "bg-cyan-500/80",
         success: "bg-emerald-500/80",
         warning: "bg-amber-500/80",
         error: "bg-rose-500/80",
     }[type] || "bg-cyan-500/80";
-
     bar.classList.add(typeClass, "opacity-100");
-
-    // Hide after duration
     setTimeout(() => {
         bar.classList.remove("opacity-100");
         bar.classList.add("opacity-0");
@@ -432,309 +413,272 @@ function showNotification(message, type = "info", duration = 2500) {
     }, duration);
 }
 
+// Toggle password input visibility
 function toggleInputVisibility(inputId) {
     const input = document.getElementById(inputId);
     const icon = document.getElementById(`${inputId}_icon`);
     const isHidden = input.type === "password";
-
     input.type = isHidden ? "text" : "password";
     icon.textContent = isHidden ? "visibility_off" : "visibility";
 }
 
-fetch("/version")
-    .then(res => res.json())
-    .then(data => {
-        document.getElementById("current-version").textContent = `${data.current}`;
+// ===================== VERSION & UPDATE =====================
 
-        if (data.update_available) {
-            const latestSpan = document.getElementById("latest-version");
-            const updateBtn = document.getElementById("update-btn");
-            latestSpan.textContent = `Update to: ${data.latest}`;
-            latestSpan.classList.remove("hidden");
-            updateBtn.classList.add('flex');
-            updateBtn.classList.remove("hidden");
-        }
-    })
-    .catch(err => {
-        console.error("Failed to load version info", err);
-    });
-
-
-document.getElementById("update-btn").addEventListener("click", () => {
-    if (!confirm("Are you sure you want to update Billy to the latest version?")) return;
-
-    fetch("/update", { method: "POST" })
+(() => {
+    fetch("/version")
         .then(res => res.json())
         .then(data => {
-            showNotification(data.message || "Update started");
-
-            let attempts = 0;
-            const maxAttempts = 24; // 5s × 24 = 120s
-
-            const checkForUpdate = async () => {
-                try {
-                    const res = await fetch("/version");
-                    const data = await res.json();
-
-                    if (data.update_available === false) {
-                        showNotification("Update complete. Reloading...", "info");
-                        setTimeout(() => location.reload(), 1500);
-                        return;
-                    }
-                } catch (err) {
-                    console.error("Version check failed:", err);
-                }
-
-                attempts++;
-                if (attempts < maxAttempts) {
-                    setTimeout(checkForUpdate, 5000);
-                } else {
-                    showNotification("Update timed out after 2 minutes. Reloading");
-                    setTimeout(() => location.reload(), 1500);
-                }
-            };
-
-            setTimeout(checkForUpdate, 5000); // Start first check after 5s
+            document.getElementById("current-version").textContent = `${data.current}`;
+            if (data.update_available) {
+                const latestSpan = document.getElementById("latest-version");
+                const updateBtn = document.getElementById("update-btn");
+                latestSpan.textContent = `Update to: ${data.latest}`;
+                latestSpan.classList.remove("hidden");
+                updateBtn.classList.add('flex');
+                updateBtn.classList.remove("hidden");
+            }
         })
-        .catch(err => {
-            console.error("Failed to update:", err);
-            showNotification("Failed to update", "error");
-        });
-});
+        .catch(err => { console.error("Failed to load version info", err); });
+
+    document.getElementById("update-btn").addEventListener("click", () => {
+        if (!confirm("Are you sure you want to update Billy to the latest version?")) return;
+        fetch("/update", { method: "POST" })
+            .then(res => res.json())
+            .then(data => {
+                showNotification(data.message || "Update started");
+                let attempts = 0, maxAttempts = 24;
+                const checkForUpdate = async () => {
+                    try {
+                        const res = await fetch("/version");
+                        const data = await res.json();
+                        if (data.update_available === false) {
+                            showNotification("Update complete. Reloading...", "info");
+                            setTimeout(() => location.reload(), 1500);
+                            return;
+                        }
+                    } catch (err) {
+                        console.error("Version check failed:", err);
+                    }
+                    attempts++;
+                    if (attempts < maxAttempts) {
+                        setTimeout(checkForUpdate, 5000);
+                    } else {
+                        showNotification("Update timed out after 2 minutes. Reloading");
+                        setTimeout(() => location.reload(), 1500);
+                    }
+                };
+                setTimeout(checkForUpdate, 5000);
+            })
+            .catch(err => {
+                console.error("Failed to update:", err);
+                showNotification("Failed to update", "error");
+            });
+    });
+})();
 
 // ===================== AUDIO =====================
 
-let micCheckSource = null;
+const AudioPanel = (() => {
+    let micCheckSource = null;
 
-document.getElementById("mic-check-btn").addEventListener("click", toggleMicCheck);
+    const micCheckBtn = document.getElementById("mic-check-btn");
+    micCheckBtn.addEventListener("click", toggleMicCheck);
 
-document.getElementById("speaker-check-btn").addEventListener("click", async () => {
-    try {
-        const res = await fetch("/service/status");
-        const { status } = await res.json();
-
-        if (status === "active") {
-            showNotification("⚠️ Please stop the Billy service before running speaker test.", "warning");
-            return;
-        }
-
-        await fetch("/speaker-test", { method: "POST" });
-        showNotification("Speaker test triggered");
-
-    } catch (err) {
-        console.error("Failed to trigger speaker test:", err);
-        showNotification("Failed to trigger speaker test", "error");
-    }
-});
-
-async function toggleMicCheck() {
-    const btn = document.getElementById("mic-check-btn");
-    const isActive = btn.classList.contains("bg-emerald-600");
-
-    if (isActive) {
-        stopMicCheck();
-        btn.classList.remove("bg-emerald-600");
-        btn.classList.add("bg-zinc-800");
-        showNotification("Mic check stopped");
-    } else {
+    document.getElementById("speaker-check-btn").addEventListener("click", async () => {
         try {
             const res = await fetch("/service/status");
             const { status } = await res.json();
-
             if (status === "active") {
-                await fetch("/service/stop");
-                showNotification("Billy was stopped for mic check. You’ll need to start it again afterwards.", "warning");
+                showNotification("⚠️ Please stop the Billy service before running speaker test.", "warning");
+                return;
             }
-
-            startMicCheck();
-            btn.classList.remove("bg-zinc-800");
-            btn.classList.add("bg-emerald-600");
-            if (status !== "active") {
-                showNotification("Mic check started");
-            }
+            await fetch("/speaker-test", { method: "POST" });
+            showNotification("Speaker test triggered");
         } catch (err) {
-            console.error("Failed to toggle mic check:", err);
-            showNotification("Mic check failed", "error");
+            console.error("Failed to trigger speaker test:", err);
+            showNotification("Failed to trigger speaker test", "error");
         }
-    }
-}
+    });
 
-function stopMicCheck() {
-    micCheckSource.close();
-    fetch("/mic-check/stop");
-    micCheckSource = null;
-
-    updateMicBar(0);
-}
-
-function startMicCheck() {
-    let maxRms = 0;
-    const SCALING_FACTOR = 32768;
-
-    micCheckSource = new EventSource("/mic-check");
-
-    micCheckSource.onmessage = (e) => {
-        let data;
-        try {
-            data = JSON.parse(e.data);
-        } catch (err) {
-            console.error("Invalid JSON from /mic-check:", e.data);
-            return;
-        }
-
-        if (data.error) {
-            console.error("Mic check error:", data.error);
-            return;
-        }
-
-        const rms = data.rms * SCALING_FACTOR;
-        const threshold = data.threshold; // already a scaled int like 300, 500, etc.
-        maxRms = Math.max(maxRms, rms);
-
-        const percent = Math.min((rms / threshold) * 100, 100); // percent of threshold
-        const thresholdPercent = Math.min((threshold / SCALING_FACTOR) * 100, 100);
-
-        updateMicBar(percent, thresholdPercent);
-    };
-
-    micCheckSource.onerror = () => {
-        console.error("Mic check connection error.");
-        stopMicCheck();
-    };
-}
-
-function updateMicBar(percentage, thresholdPercent = 0) {
-    const bar = document.getElementById("mic-level-bar");
-    bar.style.width = `${percentage}%`;
-
-    bar.classList.toggle("bg-zinc-500", percentage < thresholdPercent);
-    bar.classList.toggle("bg-emerald-500", percentage < 70);
-    bar.classList.toggle("bg-amber-500", percentage >= 70 && percentage < 90);
-    bar.classList.toggle("bg-red-500", percentage >= 90);
-}
-
-async function loadMicGain() {
-    const label = document.getElementById("mic-gain-value");
-    const slider = document.getElementById("mic-gain");
-
-    try {
-        const res = await fetch("/mic-gain");
-        const data = await res.json();
-        if (data.gain !== undefined) {
-            label.textContent = data.gain;
-            slider.value = data.gain;
+    async function toggleMicCheck() {
+        const btn = micCheckBtn;
+        const isActive = btn.classList.contains("bg-emerald-600");
+        if (isActive) {
+            stopMicCheck();
+            btn.classList.remove("bg-emerald-600");
+            btn.classList.add("bg-zinc-800");
+            showNotification("Mic check stopped");
         } else {
-            label.textContent = "Unavailable";
+            try {
+                const res = await fetch("/service/status");
+                const { status } = await res.json();
+                if (status === "active") {
+                    await fetch("/service/stop");
+                    showNotification("Billy was stopped for mic check. You’ll need to start it again afterwards.", "warning");
+                }
+                startMicCheck();
+                btn.classList.remove("bg-zinc-800");
+                btn.classList.add("bg-emerald-600");
+                if (status !== "active") {
+                    showNotification("Mic check started");
+                }
+            } catch (err) {
+                console.error("Failed to toggle mic check:", err);
+                showNotification("Mic check failed", "error");
+            }
         }
-    } catch (err) {
-        label.textContent = "Error";
     }
-}
 
-document.getElementById("mic-gain").addEventListener("change", async () => {
-    const value = parseInt(document.getElementById("mic-gain").value, 10);
-    await fetch("/mic-gain", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ value })
-    });
-    document.getElementById("mic-gain-value").textContent = value;
-});
+    function stopMicCheck() {
+        micCheckSource?.close();
+        fetch("/mic-check/stop");
+        micCheckSource = null;
+        updateMicBar(0);
+    }
 
-let micBar = document.getElementById("mic-bar-container");
-let thresholdLine = document.getElementById("threshold-line");
-let silenceThresholdInput = document.getElementById("SILENCE_THRESHOLD");
+    function startMicCheck() {
+        let maxRms = 0;
+        const SCALING_FACTOR = 32768;
+        micCheckSource = new EventSource("/mic-check");
+        micCheckSource.onmessage = (e) => {
+            let data;
+            try {
+                data = JSON.parse(e.data);
+            } catch (err) {
+                console.error("Invalid JSON from /mic-check:", e.data);
+                return;
+            }
+            if (data.error) {
+                console.error("Mic check error:", data.error);
+                return;
+            }
+            const rms = data.rms * SCALING_FACTOR;
+            const threshold = data.threshold;
+            maxRms = Math.max(maxRms, rms);
+            const percent = Math.min((rms / threshold) * 100, 100);
+            const thresholdPercent = Math.min((threshold / SCALING_FACTOR) * 100, 100);
+            updateMicBar(percent, thresholdPercent);
+        };
+        micCheckSource.onerror = () => {
+            console.error("Mic check connection error.");
+            stopMicCheck();
+        };
+    }
 
-let dragging = false;
+    function updateMicBar(percentage, thresholdPercent = 0) {
+        const bar = document.getElementById("mic-level-bar");
+        bar.style.width = `${percentage}%`;
+        bar.classList.toggle("bg-zinc-500", percentage < thresholdPercent);
+        bar.classList.toggle("bg-emerald-500", percentage < 70);
+        bar.classList.toggle("bg-amber-500", percentage >= 70 && percentage < 90);
+        bar.classList.toggle("bg-red-500", percentage >= 90);
+    }
 
-thresholdLine.addEventListener("mousedown", (e) => {
-    dragging = true;
-    e.preventDefault();
-});
-
-document.addEventListener("mousemove", (e) => {
-    if (!dragging) return;
-
-    const rect = micBar.getBoundingClientRect();
-    if (rect.width === 0) return;
-
-    let offsetX = e.clientX - rect.left;
-    offsetX = Math.max(0, Math.min(offsetX, rect.width));
-
-    const percent = offsetX / rect.width;
-    const scaledThreshold = Math.round(percent * 32768); // scale and round
-
-    thresholdLine.style.left = `${percent * 100}%`;
-    silenceThresholdInput.value = scaledThreshold; // set int value
-});
-
-document.addEventListener("mouseup", () => {
-    dragging = false;
-});
-
-// Initialize threshold line position on load
-window.addEventListener("load", () => {
-    const threshold = parseInt(silenceThresholdInput.value || "1000", 10); // fallback to safe int
-    thresholdLine.style.left = `${(threshold / 32768) * 100}%`;
-});
-
-const speakerSlider = document.getElementById("speaker-volume");
-
-// Load current volume
-fetch("/volume")
-    .then(res => res.json())
-    .then(data => {
-        if (data.volume !== undefined) {
-            speakerSlider.value = data.volume;
+    // Mic gain UI
+    async function loadMicGain() {
+        const label = document.getElementById("mic-gain-value");
+        const slider = document.getElementById("mic-gain");
+        try {
+            const res = await fetch("/mic-gain");
+            const data = await res.json();
+            if (data.gain !== undefined) {
+                label.textContent = data.gain;
+                slider.value = data.gain;
+            } else {
+                label.textContent = "Unavailable";
+            }
+        } catch (err) {
+            label.textContent = "Error";
         }
-    });
-
-// Set new volume on slider change
-let volumeDebounceTimeout;
-
-speakerSlider.addEventListener("input", () => {
-    clearTimeout(volumeDebounceTimeout); // cancel previous timer
-
-    volumeDebounceTimeout = setTimeout(() => {
-        fetch("/volume", {
+    }
+    document.getElementById("mic-gain").addEventListener("change", async () => {
+        const value = parseInt(document.getElementById("mic-gain").value, 10);
+        await fetch("/mic-gain", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ volume: parseInt(speakerSlider.value) })
-        }).catch(err => console.error("Failed to set speaker volume:", err));
-    }, 500); // wait 500ms after last input
-});
+            body: JSON.stringify({ value })
+        });
+        document.getElementById("mic-gain-value").textContent = value;
+    });
 
-async function updateDeviceLabels() {
-    try {
-        const res = await fetch("/device-info");
-        const data = await res.json();
+    // Silence threshold drag interaction
+    let micBar = document.getElementById("mic-bar-container");
+    let thresholdLine = document.getElementById("threshold-line");
+    let silenceThresholdInput = document.getElementById("SILENCE_THRESHOLD");
+    let dragging = false;
 
-        const updateParentClass = (id, value) => {
-            const el = document.getElementById(id);
-            if (el && el.parentElement) {
-                el.textContent = value;
-                el.parentElement.classList.add("text-emerald-500");
-            }
-        };
+    thresholdLine.addEventListener("mousedown", (e) => {
+        dragging = true; e.preventDefault();
+    });
 
-        updateParentClass("mic-label", data.mic);
-        updateParentClass("speaker-label", data.speaker);
+    document.addEventListener("mousemove", (e) => {
+        if (!dragging) return;
+        const rect = micBar.getBoundingClientRect();
+        if (rect.width === 0) return;
+        let offsetX = e.clientX - rect.left;
+        offsetX = Math.max(0, Math.min(offsetX, rect.width));
+        const percent = offsetX / rect.width;
+        const scaledThreshold = Math.round(percent * 32768);
+        thresholdLine.style.left = `${percent * 100}%`;
+        silenceThresholdInput.value = scaledThreshold;
+    });
+    document.addEventListener("mouseup", () => { dragging = false; });
+    window.addEventListener("load", () => {
+        const threshold = parseInt(silenceThresholdInput.value || "1000", 10);
+        thresholdLine.style.left = `${(threshold / 32768) * 100}%`;
+    });
 
-    } catch (error) {
-        console.error("Failed to fetch device info:", error);
+    // Speaker volume
+    const speakerSlider = document.getElementById("speaker-volume");
+    fetch("/volume")
+        .then(res => res.json())
+        .then(data => { if (data.volume !== undefined) speakerSlider.value = data.volume; });
+    let volumeDebounceTimeout;
+    speakerSlider.addEventListener("input", () => {
+        clearTimeout(volumeDebounceTimeout);
+        volumeDebounceTimeout = setTimeout(() => {
+            fetch("/volume", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ volume: parseInt(speakerSlider.value) })
+            }).catch(err => console.error("Failed to set speaker volume:", err));
+        }, 500);
+    });
+
+    // Device labels
+    async function updateDeviceLabels() {
+        try {
+            const res = await fetch("/device-info");
+            const data = await res.json();
+            const updateParentClass = (id, value) => {
+                const el = document.getElementById(id);
+                if (el && el.parentElement) {
+                    el.textContent = value;
+                    el.parentElement.classList.add("text-emerald-500");
+                }
+            };
+            updateParentClass("mic-label", data.mic);
+            updateParentClass("speaker-label", data.speaker);
+        } catch (error) {
+            console.error("Failed to fetch device info:", error);
+        }
     }
-}
+
+    return { loadMicGain, updateDeviceLabels };
+})();
 
 // ===================== INITIALIZE =====================
 
 document.addEventListener("DOMContentLoaded", () => {
-    fetchLogs();
-    fetchStatus();
-    setInterval(fetchLogs, 5000);
-    setInterval(fetchStatus, 10000);
-    updateDeviceLabels();
-    loadPersona();
-    loadMicGain();
-    handleSettingsSave();
-    handlePersonaSave();
+    LogPanel.bindUI();
+    LogPanel.fetchLogs();
+    ServiceStatus.fetchStatus();
+    setInterval(LogPanel.fetchLogs, 5000);
+    setInterval(ServiceStatus.fetchStatus, 10000);
+    AudioPanel.updateDeviceLabels();
+    PersonaForm.loadPersona();
+    AudioPanel.loadMicGain();
+    SettingsForm.handleSettingsSave();
+    PersonaForm.handlePersonaSave();
+    window.addBackstoryField = PersonaForm.addBackstoryField;
 });
