@@ -422,6 +422,40 @@ function toggleInputVisibility(inputId) {
     icon.textContent = isHidden ? "visibility_off" : "visibility";
 }
 
+function toggleDropdown(btn) {
+    // Close all other dropdowns first
+    document.querySelectorAll('.dropdown-menu').forEach(menu => {
+        // Only close menus not related to this button
+        if (!menu.classList.contains('hidden') && !menu.parentElement.contains(btn)) {
+            menu.classList.add('hidden');
+            const arrow = menu.parentElement.querySelector('.dropdown-toggle .material-icons');
+            if (arrow) arrow.classList.remove('rotate-180');
+        }
+    });
+
+    // Find this button's dropdown menu (assumes menu is sibling or child)
+    let dropdown = btn.closest('.relative').querySelector('.dropdown-menu');
+    if (!dropdown) return;
+
+    dropdown.classList.toggle('hidden');
+
+    // Toggle arrow rotation
+    const arrow = btn.querySelector('.material-icons');
+    if (arrow) arrow.classList.toggle('rotate-180');
+}
+
+// Close on click outside
+document.addEventListener('click', (e) => {
+    document.querySelectorAll('.dropdown-menu').forEach(menu => {
+        // If the click is outside the .relative container
+        if (!menu.classList.contains('hidden') && !menu.closest('.relative').contains(e.target)) {
+            menu.classList.add('hidden');
+            const arrow = menu.parentElement.querySelector('.dropdown-toggle .material-icons');
+            if (arrow) arrow.classList.remove('rotate-180');
+        }
+    });
+});
+
 // ===================== VERSION & UPDATE =====================
 
 (() => {
@@ -760,6 +794,82 @@ const Sections = (() => {
     }
     return { collapsible };
 })();
+
+// ===================== IMPORT / EXPORT =====================
+
+function exportSettings() {
+    fetch('/get-env').then(res => res.text()).then(text => {
+        const blob = new Blob([text], {type: "application/octet-stream"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = "billy.env";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+}
+
+function importSettings(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (!file.name.endsWith('.env')) {
+        showNotification("Only .env files are allowed.", "error");
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        fetch('/save-env', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ content: e.target.result })
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "ok") {
+                    showNotification("Settings imported. Restarting...", "success");
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    showNotification(data.error || "Failed to import settings.", "error");
+                }
+            });
+    };
+    reader.readAsText(file);
+}
+
+function exportPersona() {
+    const a = document.createElement('a');
+    a.href = '/persona/export';
+    a.download = 'persona.ini';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+function importPersona(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (!file.name.endsWith('.ini')) {
+        showNotification("Only .ini files are allowed.", "error");
+        return;
+    }
+    const formData = new FormData();
+    formData.append('file', file);
+    fetch('/persona/import', {
+        method: 'POST',
+        body: formData
+    })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "ok") {
+                showNotification("Persona imported. Restarting...", "success");
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                showNotification(data.error || "Failed to import persona.", "error");
+            }
+        });
+}
 
 // ===================== INITIALIZE =====================
 

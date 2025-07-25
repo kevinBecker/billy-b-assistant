@@ -91,7 +91,7 @@
     </section>
 
     <div id="notification"
-         class="hidden w-full fixed top-0 left-0 text-center backdrop-blur-[2px] text-white font-semibold py-2 px-4 rounded shadow-lg z-50 transition-opacity duration-300"></div>
+         class="hidden w-full fixed top-0 left-0 text-center backdrop-blur-[5px] text-white font-semibold py-2 px-4 rounded shadow-lg z-50 transition-opacity duration-300"></div>
 
 </header>
 
@@ -421,13 +421,42 @@
                     </div>
                 </div>
 
-                <div class="sticky bottom-0 z-10 border-t border-black bg-black/50 backdrop-blur-[2px] shadow-[0_-4px_10px_rgba(0,0,0,0.5)] py-4 px-6">
-                    <div class="flex justify-center md:justify-start">
-                        <button type="submit"
-                                class="bg-emerald-500 hover:bg-emerald-400 text-zinc-800 font-semibold py-2 px-4 rounded shadow flex gap-1 cursor-pointer">
-                            <span class="material-icons align-middle">save</span>
-                            Save Settings
-                        </button>
+                <div class="sticky bottom-0 z-10 border-t border-black bg-black/50 backdrop-blur-[5px] shadow-[0_-4px_10px_rgba(0,0,0,0.5)] py-4 px-6">
+                    <div class="flex justify-center">
+                        <div class="relative inline-block">
+                            <!-- Split button -->
+                            <div class="flex rounded shadow overflow-hidden border border-emerald-500">
+                                <button
+                                        id="save-btn"
+                                        class="bg-emerald-500 hover:bg-emerald-400 text-zinc-800 font-semibold py-2 px-4 flex items-center gap-1 focus:outline-none"
+                                        type="submit"
+                                        form="config-form"
+                                >
+                                    <span class="material-icons align-middle">save</span>
+                                    Save Settings
+                                </button>
+                                <button
+                                        id="dropdown-btn"
+                                        type="button"
+                                        class="dropdown-toggle bg-emerald-500 hover:bg-emerald-400 text-zinc-800 px-2 flex items-center"
+                                        onclick="toggleDropdown(this)"
+                                >
+                                    <span class="material-icons align-middle transition-transform duration-200">expand_more</span>
+                                </button>
+                            </div>
+                            <!-- Dropdown -->
+                            <div class="dropdown-menu absolute bottom-0 right-0 w-full text-zinc-800 border border-emerald-500  backdrop-blur-[5px]  rounded  z-20 hidden">
+                                <button onclick="exportSettings()" class="w-full flex gap-2 items-center px-4 py-2 bg-emerald-500 hover:bg-emerald-400 cursor-pointer">
+                                    <span class="material-icons">file_download</span>
+                                    Export Settings
+                                </button>
+                                <label class="w-full flex gap-2 items-center px-4 py-2 bg-emerald-500/80relative bg-emerald-500 hover:bg-emerald-400 cursor-pointer">
+                                    <span class="material-icons">file_upload</span>
+                                    <span>Import Settings</span>
+                                    <input type="file" accept=".env" onchange="importSettings(this)" class="hidden" />
+                                </label>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </form>
@@ -478,12 +507,43 @@
             </form>
 
             <div class="sticky bottom-0 z-10 border-t border-black bg-black/50 backdrop-blur-[5px] shadow-[0_-4px_10px_rgba(0,0,0,0.5)] py-4 px-6">
-                <div class="flex justify-center md:justify-end">
-                    <button form="persona-form" type="submit"
-                            class="bg-emerald-500 hover:bg-emerald-400 text-zinc-800 font-semibold py-2 px-4 rounded shadow flex gap-1 cursor-pointer">
-                        <span class="material-icons align-middle">person</span>
-                        Save Persona
-                    </button>
+                <div class="flex justify-center">
+                    <div class="relative inline-block">
+                        <!-- Split button -->
+                        <div class="flex rounded shadow overflow-hidden border border-emerald-500">
+                            <button
+                                    id="save-persona-btn"
+                                    class="bg-emerald-500 hover:bg-emerald-400 text-zinc-800 font-semibold py-2 px-4 flex items-center gap-1 focus:outline-none"
+                                    type="submit"
+                                    form="persona-form"
+                            >
+                                <span class="material-icons align-middle">person</span>
+                                Save Persona
+                            </button>
+                            <button
+                                    id="persona-dropdown-btn"
+                                    type="button"
+                                    class="dropdown-toggle bg-emerald-500 hover:bg-emerald-400 text-zinc-800 px-2 flex items-center"
+                                    onclick="toggleDropdown(this)"
+                            >
+                                <span class="material-icons align-middle transition-transform duration-200">expand_more</span>
+                            </button>
+                        </div>
+                        <!-- Dropdown -->
+                        <div
+                                class="dropdown-menu absolute bottom-0  right-0 w-full text-zinc-800 border border-emerald-500 rounded z-20 hidden"
+                        >
+                            <button onclick="exportPersona()" class="w-full flex gap-2 items-center px-4 py-2 bg-emerald-500 hover:bg-emerald-400 cursor-pointer">
+                                <span class="material-icons">file_download</span>
+                                Export Persona
+                            </button>
+                            <label class="w-full flex gap-2 items-center px-4 py-2 bg-emerald-500 hover:bg-emerald-400 cursor-pointer">
+                                <span class="material-icons">file_upload</span>
+                                <span>Import Persona</span>
+                                <input type="file" accept=".ini" onchange="importPersona(this)" class="hidden" />
+                            </label>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
