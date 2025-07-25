@@ -21,13 +21,15 @@ FREQ = 10000  # PWM frequency
 
 # Pin mapping
 MOUTH_IN1 = 12  # PWM0_CHAN0, pin 32
-MOUTH_IN2 = 5   # pin 29
-HEAD_IN1 = 13   # PWM0_CHAN1, pin 33
-HEAD_IN2 = 6    # pin 31
+MOUTH_IN2 = 5  # pin 29
+HEAD_IN1 = 13  # PWM0_CHAN1, pin 33
+HEAD_IN2 = 6  # pin 31
 
-if USE_THIRD_MOTOR:  # Note: more than three hardware PWM channels is only a Pi5 feature!
-    TAIL_IN1 = 19    # PWM0_CHAN3, pin 35
-    TAIL_IN2 = 26    # pin 37
+if (
+    USE_THIRD_MOTOR
+):  # Note: more than three hardware PWM channels is only a Pi5 feature!
+    TAIL_IN1 = 19  # PWM0_CHAN3, pin 35
+    TAIL_IN2 = 26  # pin 37
 
 # Claim GPIOs
 motor_pins = [MOUTH_IN1, MOUTH_IN2, HEAD_IN1, HEAD_IN2]
@@ -133,8 +135,7 @@ def flap_from_pcm_chunk(
     dyn_range = peak / (rms + 1e-5)
 
     # Flap speed and duration scaling
-    speed = int(
-        np.clip(np.interp(normalized, [0.005, 0.15], [25, 100]), 25, 100))
+    speed = int(np.clip(np.interp(normalized, [0.005, 0.15], [25, 100]), 25, 100))
     duration_ms = np.interp(normalized, [0.005, 0.15], [15, 70])
 
     duration_ms = np.clip(duration_ms, 15, chunk_ms)

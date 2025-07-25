@@ -13,17 +13,18 @@ import numpy as np
 import sounddevice as sd
 from dotenv import dotenv_values, find_dotenv, set_key
 from flask import Flask, Response, jsonify, render_template, request
-from packaging.version import parse as parse_version, InvalidVersion
+from packaging.version import InvalidVersion
+from packaging.version import parse as parse_version
 
 
-# Add parent directory to sys.path to be able to import from it
+# Project setup
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from core import config as core_config
 
 
 app = Flask(__name__)
 
-# Load and cache environment variables from .env
+# ==== Constants & Paths ====
 ENV_PATH = find_dotenv()
 CONFIG_KEYS = [
     "OPENAI_API_KEY",
@@ -41,6 +42,7 @@ CONFIG_KEYS = [
     "HA_LANG",
     "MIC_PREFERENCE",
     "SPEAKER_PREFERENCE",
+    "FLASK_PORT",
 ]
 
 WEBCONFIG_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -49,11 +51,15 @@ PERSONA_PATH = os.path.join(PROJECT_ROOT, "persona.ini")
 VERSIONS_PATH = os.path.join(PROJECT_ROOT, "versions.ini")
 ALLOW_RC_TAGS = os.getenv("ALLOW_RC_TAGS", "false").lower() == "true"
 
+# ==== Globals ====
 rms_queue = queue.Queue()
 mic_check_running = False
 
+# ==== Helpers: Environment, Config, Versions ====
+
 
 def load_env():
+    """Load settings from .env file and core_config."""
     return {
         **{key: str(getattr(core_config, key, "")) for key in CONFIG_KEYS},
         "VOICE_OPTIONS": [
@@ -71,6 +77,7 @@ def load_env():
 
 
 def load_versions():
+    """Read current/latest versions from versions.ini, creating if missing."""
     config = configparser.ConfigParser()
     if not os.path.exists(VERSIONS_PATH):
         example_path = os.path.join(PROJECT_ROOT, "versions.ini.example")
@@ -84,30 +91,22 @@ def load_versions():
     return config
 
 
-def save_versions(current, latest):
+def save_versions(current: str, latest: str):
+    """Persist version info, avoiding downgrade or empty values."""
     if not current or not latest:
         print("[save_versions] Refusing to save empty version")
         return
-
     try:
         parsed_current = parse_version(current.lstrip("v"))
-    except InvalidVersion as e:
-        parsed_current = "unknown"
-        print("[save_versions] Parse of current version is invalid, skipping")
-        return
-    try:
         parsed_latest = parse_version(latest.lstrip("v"))
     except InvalidVersion as e:
-        parsed_current = "unknown"
-        print("[save_versions] Parse of latest version is invalid, skipping")
+        print("[save_versions] Invalid version: ", e)
         return
-
     if parsed_latest < parsed_current:
         print(
             f"[save_versions] Skipping downgrade from {parsed_current} to {parsed_latest}"
         )
         latest = current
-
     config = configparser.ConfigParser()
     config["version"] = {"current": current, "latest": latest}
     with open(VERSIONS_PATH, "w") as f:
@@ -115,8 +114,8 @@ def save_versions(current, latest):
 
 
 def get_current_version():
+    """Try to get current git tag, or fallback to short hash."""
     try:
-        # Check if HEAD points to a tag
         return subprocess.check_output(
             ["git", "describe", "--tags", "--exact-match"],
             cwd=PROJECT_ROOT,
@@ -124,7 +123,6 @@ def get_current_version():
             text=True,
         ).strip()
     except subprocess.CalledProcessError:
-        # Fallback: show short commit hash
         try:
             commit = subprocess.check_output(
                 ["git", "rev-parse", "--short", "HEAD"],
@@ -137,25 +135,69 @@ def get_current_version():
             return "unknown"
 
 
-def get_usb_pcm_card_index():
-    preference = (core_config.SPEAKER_PREFERENCE or "").lower()
+def fetch_latest_tag():
+    """Return the latest git tag from GitHub API, skipping RCs if not allowed."""
+    try:
+        show_rc = dotenv_values().get("SHOW_RC_VERSIONS", "false").lower() == "true"
+        output = subprocess.check_output(
+            [
+                "curl",
+                "-s",
+                "https://api.github.com/repos/Thokoop/Billy-B-assistant/tags",
+            ],
+            text=True,
+        )
+        data = json.loads(output)
+        if isinstance(data, dict) and data.get("message"):
+            print(f"[fetch_latest_tag] GitHub error: {data['message']}")
+            return None
+        if not isinstance(data, list):
+            print("[fetch_latest_tag] Unexpected response format")
+            return None
+        filtered = [
+            tag["name"]
+            for tag in data
+            if "name" in tag
+            and (show_rc or not re.search(r"-?rc\d*$", tag["name"], re.IGNORECASE))
+        ]
+        if filtered:
+            return max(filtered, key=lambda v: parse_version(v.lstrip("v")))
+        print("[fetch_latest_tag] No tags found")
+        return None
+    except Exception as e:
+        print("[fetch_latest_tag] Exception:", e)
+        return None
 
+
+def restart_services():
+    """Restart both Billy and webconfig systemd services."""
+    subprocess.run(["sudo", "systemctl", "restart", "billy-webconfig.service"])
+    subprocess.run(["sudo", "systemctl", "restart", "billy.service"])
+
+
+def delayed_restart():
+    time.sleep(1.5)
+    restart_services()
+
+
+# ==== Helpers: ALSA / Devices ====
+
+
+def get_usb_pcm_card_index():
+    """Find playback (speaker) card index."""
+    preference = (core_config.SPEAKER_PREFERENCE or "").lower()
     try:
         output = subprocess.check_output(["aplay", "-l"], text=True)
         cards = re.findall(
             r"card (\d+): ([^\s]+) \[(.*?)\], device (\d+): (.*?) \[", output
         )
-
         for card_index, shortname, longname, device_index, desc in cards:
             name_combined = f"{shortname} {longname} {desc}".lower()
             if preference in name_combined:
                 return int(card_index)
-
-        # Fallback to any USB Audio device if no match
         for card_index, _, longname, _, _ in cards:
             if "usb" in longname.lower():
                 return int(card_index)
-
         return None
     except Exception as e:
         print("Failed to detect speaker card:", e)
@@ -163,24 +205,20 @@ def get_usb_pcm_card_index():
 
 
 def get_usb_capture_card_index():
+    """Find capture (mic) card index."""
     preference = (core_config.MIC_PREFERENCE or "").lower()
-
     try:
         output = subprocess.check_output(["arecord", "-l"], text=True)
         cards = re.findall(
             r"card (\d+): ([^\s]+) \[(.*?)\], device (\d+): (.*?) \[", output
         )
-
         for card_index, shortname, longname, device_index, desc in cards:
             name_combined = f"{shortname} {longname} {desc}".lower()
             if preference in name_combined:
                 return int(card_index)
-
-        # Fallback to any USB Audio device if no match
         for card_index, _, longname, _, _ in cards:
             if "usb" in longname.lower():
                 return int(card_index)
-
         return None
     except Exception as e:
         print("Failed to detect mic card:", e)
@@ -188,6 +226,7 @@ def get_usb_capture_card_index():
 
 
 def get_mic_gain_numid(card_index):
+    """Find the numid for mic gain on the specified card."""
     try:
         output = subprocess.check_output(
             ["amixer", "-c", str(card_index), "controls"], text=True
@@ -202,6 +241,9 @@ def get_mic_gain_numid(card_index):
     return None
 
 
+# ==== Audio RMS stream for mic check ====
+
+
 def audio_callback(indata, frames, time_info, status):
     if not mic_check_running:
         raise sd.CallbackStop()
@@ -209,59 +251,13 @@ def audio_callback(indata, frames, time_info, status):
     rms_queue.put(rms)
 
 
-def restart_services():
-    subprocess.run(["sudo", "systemctl", "restart", "billy-webconfig.service"])
-    subprocess.run(["sudo", "systemctl", "restart", "billy.service"])
-
-
-def delayed_restart():
-    time.sleep(1.5)
-    restart_services()
-
-
-def fetch_latest_tag():
-    try:
-        show_rc = dotenv_values().get("SHOW_RC_VERSIONS", "false").lower() == "true"
-        output = subprocess.check_output(
-            [
-                "curl",
-                "-s",
-                "https://api.github.com/repos/Thokoop/Billy-B-assistant/tags",
-            ],
-            text=True,
-        )
-        data = json.loads(output)
-
-        # Check for GitHub rate limit or error response
-        if isinstance(data, dict) and data.get("message"):
-            print(f"[fetch_latest_tag] GitHub error: {data['message']}")
-            return None
-
-        if not isinstance(data, list):
-            print("[fetch_latest_tag] Unexpected response format")
-            return None
-
-        filtered = [
-            tag["name"]
-            for tag in data
-            if "name" in tag
-            and (show_rc or not re.search(r"-?rc\d*$", tag["name"], re.IGNORECASE))
-        ]
-
-        if filtered:
-            return max(filtered, key=lambda v: parse_version(v.lstrip("v")))
-
-        print("[fetch_latest_tag] No tags found")
-        return None
-
-    except Exception as e:
-        print("[fetch_latest_tag] Exception:", e)
-        return None
-
+# ==== Version Bootstrap ====
 
 latest = fetch_latest_tag()
 current = get_current_version()
 save_versions(current, latest)
+
+# ==== ROUTES ====
 
 
 @app.route("/")
@@ -274,7 +270,6 @@ def version_info():
     versions = load_versions()
     current = versions["version"].get("current", "unknown")
     latest = versions["version"].get("latest", "unknown")
-
     try:
         update_available = (
             current != "unknown"
@@ -284,7 +279,6 @@ def version_info():
     except Exception as e:
         print("[/version] version parse error:", e)
         update_available = False
-
     return jsonify({
         "current": current,
         "latest": latest,
@@ -297,35 +291,17 @@ def perform_update():
     versions = load_versions()
     current = versions["version"].get("current", "unknown")
     latest = versions["version"].get("latest", "unknown")
-
     if current == latest or latest == "unknown":
         return jsonify({"status": "up-to-date", "version": current})
-
     try:
-        remotes = subprocess.check_output(
-            ["git", "remote", "-v"], cwd=PROJECT_ROOT, text=True
-        )
-        print("Git remotes:\n", remotes)
-
+        subprocess.check_output(["git", "remote", "-v"], cwd=PROJECT_ROOT, text=True)
         subprocess.check_call(["git", "fetch", "--tags"], cwd=PROJECT_ROOT)
         subprocess.check_call(
             ["git", "checkout", "--force", f"tags/{latest}"], cwd=PROJECT_ROOT
         )
-
         save_versions(latest, latest)
-
-        def restart_later():
-            time.sleep(2)  # Give time to flush response
-            restart_services()
-
-        threading.Thread(target=restart_later).start()
-
-        return Response(
-            '{"status": "updated", "version": "' + latest + '"}',
-            status=200,
-            mimetype="application/json",
-        )
-
+        threading.Thread(target=lambda: (time.sleep(2), restart_services())).start()
+        return jsonify({"status": "updated", "version": latest})
     except subprocess.CalledProcessError as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 
@@ -333,10 +309,18 @@ def perform_update():
 @app.route("/save", methods=["POST"])
 def save():
     data = request.json
+    old_port = os.getenv("FLASK_PORT", "80")
+    changed_port = False
     for key, value in data.items():
         if key in CONFIG_KEYS:
             set_key(ENV_PATH, key, value)
-    return jsonify({"status": "ok"})
+            if key == "FLASK_PORT" and str(value) != str(old_port):
+                changed_port = True
+    response = {"status": "ok"}
+    if changed_port:
+        response["port_changed"] = True
+        threading.Thread(target=delayed_restart).start()
+    return jsonify(response)
 
 
 @app.route("/config")
@@ -359,7 +343,6 @@ def save_env():
     try:
         with open('.env', 'w') as f:
             f.write(content)
-
         return jsonify({"status": "ok", "message": ".env saved"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -413,6 +396,9 @@ def service_status():
         return jsonify({"status": e.output.decode("utf-8").strip()})
 
 
+# ==== Persona ====
+
+
 @app.route("/persona", methods=["GET"])
 def get_persona():
     config = configparser.ConfigParser()
@@ -428,13 +414,15 @@ def get_persona():
 def save_persona():
     data = request.json
     config = configparser.ConfigParser()
-    config["PERSONALITY"] = {k: str(v)
-                             for k, v in data.get("PERSONALITY", {}).items()}
+    config["PERSONALITY"] = {k: str(v) for k, v in data.get("PERSONALITY", {}).items()}
     config["BACKSTORY"] = data.get("BACKSTORY", {})
     config["META"] = {"instructions": data.get("META", "")}
     with open(PERSONA_PATH, "w") as f:
         config.write(f)
     return jsonify({"status": "ok"})
+
+
+# ==== Audio: Speaker/Mic Tests ====
 
 
 @app.route("/speaker-test", methods=["POST"])
@@ -443,18 +431,10 @@ def speaker_test():
         card_index = get_usb_pcm_card_index()
         if card_index is None:
             return jsonify({"error": "No matching speaker card found"}), 404
-
         device = f"plughw:{card_index},0"
         sound_path = os.path.join(PROJECT_ROOT, "sounds", "speakertest.wav")
-        subprocess.Popen([
-            "aplay",
-            "-D",
-            device,
-            sound_path,
-        ])
-
+        subprocess.Popen(["aplay", "-D", device, sound_path])
         return jsonify({"status": f"playing on {device}"})
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -492,13 +472,10 @@ def mic_check_stop():
 
 @app.route("/mic-gain", methods=["GET", "POST"])
 def mic_gain():
-    card_index = (
-        get_usb_capture_card_index()
-    )  # You’ll need to write this if it doesn’t exist yet
+    card_index = get_usb_capture_card_index()
     numid = get_mic_gain_numid(card_index)
     if card_index is None or numid is None:
         return jsonify({"error": "Could not determine mic card or control ID"}), 500
-
     if request.method == "GET":
         try:
             output = subprocess.check_output(
@@ -509,12 +486,11 @@ def mic_gain():
             return jsonify({"gain": gain})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
-
     if request.method == "POST":
         try:
             data = request.get_json()
             value = int(data.get("value", 8))
-            if 0 <= value <= 16:  # or the correct max based on `amixer` output
+            if 0 <= value <= 16:
                 subprocess.check_call([
                     "amixer",
                     "-c",
@@ -527,7 +503,6 @@ def mic_gain():
             return jsonify({"error": "Mic gain must be between 0 and 16"}), 400
         except Exception as e:
             return jsonify({"error": str(e)}), 500
-
     return jsonify({"error": "Unsupported method"}), 405
 
 
@@ -536,7 +511,6 @@ def volume():
     card_index = get_usb_pcm_card_index()
     if card_index is None:
         return jsonify({"error": "Could not determine speaker card"}), 500
-
     try:
         if request.method == "GET":
             output = subprocess.check_output(
@@ -546,13 +520,11 @@ def volume():
             if match:
                 return jsonify({"volume": int(match.group(1))})
             return jsonify({"error": "Could not parse volume"}), 500
-
         if request.method == "POST":
             data = request.get_json()
             value = data.get("volume")
             if value is None:
                 return jsonify({"error": "Missing volume"}), 400
-
             value = int(value)
             if 0 <= value <= 100:
                 subprocess.check_call([
@@ -565,7 +537,6 @@ def volume():
                 ])
                 return jsonify({"volume": value})
             return jsonify({"error": "Volume must be 0–100"}), 400
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -600,5 +571,27 @@ def device_info():
         return jsonify({"mic": "Unknown", "speaker": "Unknown", "error": str(e)}), 500
 
 
+# ==== Hostname ====
+
+
+@app.route("/hostname", methods=["GET", "POST"])
+def hostname():
+    if request.method == "GET":
+        return jsonify({"hostname": os.uname().nodename})
+    if request.method == "POST":
+        data = request.get_json()
+        new_hostname = data.get("hostname", "").strip()
+        if not new_hostname:
+            return jsonify({"error": "Invalid hostname"}), 400
+        try:
+            subprocess.check_call(["sudo", "hostnamectl", "set-hostname", new_hostname])
+            subprocess.run(["sudo", "systemctl", "restart", "avahi-daemon"])
+            return jsonify({"status": "ok", "hostname": new_hostname})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    return jsonify({"error": "Unsupported method"}), 405
+
+
+# ==== MAIN ====
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=80, debug=True)
+    app.run(host="0.0.0.0", port=int(core_config.FLASK_PORT), debug=True)

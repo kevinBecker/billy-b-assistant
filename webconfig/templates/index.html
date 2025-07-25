@@ -171,6 +171,33 @@
                             </option>
                         </select>
                     </div>
+
+                    <div class="mb-4">
+                        <label for="hostname" class="block font-semibold text-sm text-slate-300">Device Hostname</label>
+                        <input
+                                id="hostname"
+                                name="hostname"
+                                type="text"
+                                data-original=""
+                                data-default="raspberrypi"
+                                class="w-full p-3 mt-1 pr-10 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                value=""
+                        >
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="FLASK_PORT" class="block font-semibold text-sm text-slate-300">Web UI Port</label>
+                        <input
+                                id="FLASK_PORT"
+                                name="FLASK_PORT"
+                                type="number"
+                                min="1"
+                                max="65535"
+                                data-default="80"
+                                class="w-full p-3 mt-1 pr-10 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                value="{{ config.get('FLASK_PORT', '80') }}"
+                        >
+                    </div>
                 </div>
 
                 <!-- Audio -->
