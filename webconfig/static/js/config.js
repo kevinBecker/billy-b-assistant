@@ -110,7 +110,6 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 if (data.status !== "ok") {
                     showNotification(data.error || "Unknown error", "error");
-                    return;
                 }
             }
         } catch (err) {
@@ -213,25 +212,74 @@ function handleSettingsSave() {
     document.getElementById("config-form").addEventListener("submit", async function (e) {
         e.preventDefault();
 
-        const res = await fetch("/service/status");
-        const { status: wasActive } = await res.json();
+        const resStatus = await fetch("/service/status");
+        const { status: wasActive } = await resStatus.json();
 
         const formData = new FormData(this);
         const payload = Object.fromEntries(formData.entries());
 
-        await fetch("/save", {
+        const oldPort = parseInt(document.getElementById("FLASK_PORT").getAttribute("data-original")) || 80;
+        const newPort = parseInt(payload["FLASK_PORT"] || "80");
+        const newHostname = formData.get("hostname");
+
+        let hostnameChanged = false;
+
+        // Save config (.env)
+        const saveResponse = await fetch("/save", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
         });
+        const saveResult = await saveResponse.json();
+        let portChanged = saveResult.port_changed || (oldPort !== newPort);
 
-        showNotification("Settings saved", "success");
+        // Save hostname
+        if (newHostname) {
+            const hostResponse = await fetch("/hostname", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ hostname: newHostname })
+            });
+
+            const hostResult = await hostResponse.json();
+            if (hostResult.hostname) {
+                hostnameChanged = true;
+                showNotification(`Hostname updated to ${hostResult.hostname}.local`, "success", 5000);
+            }
+        }
 
         if (wasActive === "active") {
             await fetch("/service/restart");
             showNotification("Settings saved – Billy restarted", "success");
+        } else {
+            showNotification("Settings saved", "success");
+        }
+
+        // Redirect if port or hostname changed
+        if (portChanged || hostnameChanged) {
+            const targetHost = hostnameChanged ? `${newHostname}.local` : window.location.hostname;
+            const targetPort = portChanged ? newPort : window.location.port || 80;
+
+            showNotification(`Redirecting to http://${targetHost}:${targetPort}/...`, "warning", 5000);
+
+            setTimeout(() => {
+                window.location.href = `http://${targetHost}:${targetPort}/`;
+            }, 3000);
         }
     });
+}
+
+fetch('/hostname')
+    .then(res => res.json())
+    .then(data => {
+        if (data.hostname) {
+            document.getElementById('hostname').value = data.hostname;
+        }
+    });
+
+const flaskPortInput = document.getElementById("FLASK_PORT");
+if (flaskPortInput) {
+    flaskPortInput.setAttribute("data-original", flaskPortInput.value);
 }
 
 // ===================== PERSONA FORM =====================

@@ -109,6 +109,9 @@ ALLOW_UPDATE_PERSONALITY_INI = (
     os.getenv("ALLOW_UPDATE_PERSONALITY_INI", "true").lower() == "true"
 )
 
+# === Software Config ===
+FLASK_PORT = int(os.getenv("FLASK_PORT", "80"))
+
 
 def is_classic_billy():
     return os.getenv("BILLY_MODEL", "modern").strip().lower() == "classic"

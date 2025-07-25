@@ -13,7 +13,8 @@ import numpy as np
 import sounddevice as sd
 from dotenv import dotenv_values, find_dotenv, set_key
 from flask import Flask, Response, jsonify, render_template, request
-from packaging.version import parse as parse_version, InvalidVersion
+from packaging.version import InvalidVersion
+from packaging.version import parse as parse_version
 
 
 # Add parent directory to sys.path to be able to import from it
@@ -41,6 +42,7 @@ CONFIG_KEYS = [
     "HA_LANG",
     "MIC_PREFERENCE",
     "SPEAKER_PREFERENCE",
+    "FLASK_PORT",
 ]
 
 WEBCONFIG_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -333,10 +335,21 @@ def perform_update():
 @app.route("/save", methods=["POST"])
 def save():
     data = request.json
+    old_port = os.getenv("FLASK_PORT", "80")
+    changed_port = False
+
     for key, value in data.items():
         if key in CONFIG_KEYS:
             set_key(ENV_PATH, key, value)
-    return jsonify({"status": "ok"})
+            if key == "FLASK_PORT" and str(value) != str(old_port):
+                changed_port = True
+
+    response = {"status": "ok"}
+    if changed_port:
+        response["port_changed"] = True
+        threading.Thread(target=delayed_restart).start()
+
+    return jsonify(response)
 
 
 @app.route("/config")
@@ -428,8 +441,7 @@ def get_persona():
 def save_persona():
     data = request.json
     config = configparser.ConfigParser()
-    config["PERSONALITY"] = {k: str(v)
-                             for k, v in data.get("PERSONALITY", {}).items()}
+    config["PERSONALITY"] = {k: str(v) for k, v in data.get("PERSONALITY", {}).items()}
     config["BACKSTORY"] = data.get("BACKSTORY", {})
     config["META"] = {"instructions": data.get("META", "")}
     with open(PERSONA_PATH, "w") as f:
@@ -600,5 +612,26 @@ def device_info():
         return jsonify({"mic": "Unknown", "speaker": "Unknown", "error": str(e)}), 500
 
 
+@app.route("/hostname", methods=["GET", "POST"])
+def hostname():
+    if request.method == "GET":
+        return jsonify({"hostname": os.uname().nodename})
+
+    if request.method == "POST":
+        data = request.get_json()
+        new_hostname = data.get("hostname", "").strip()
+        if not new_hostname:
+            return jsonify({"error": "Invalid hostname"}), 400
+
+        try:
+            subprocess.check_call(["sudo", "hostnamectl", "set-hostname", new_hostname])
+            subprocess.run(["sudo", "systemctl", "restart", "avahi-daemon"])
+            return jsonify({"status": "ok", "hostname": new_hostname})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    return jsonify({"error": "Unsupported method"}), 405
+
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=80, debug=True)
+    app.run(host="0.0.0.0", port=core_config.FLASK_PORT, debug=True)
