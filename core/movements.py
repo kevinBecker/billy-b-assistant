@@ -80,7 +80,7 @@ def move_head(state="on"):
     def _move_head_on():
         lgpio.gpio_write(h, HEAD_IN2, 0)
         lgpio.tx_pwm(h, HEAD_IN1, FREQ, 80)
-        time.sleep(1)
+        time.sleep(0.5)
         lgpio.tx_pwm(h, HEAD_IN1, FREQ, 100)  # Stay extended
 
     if state == "on":

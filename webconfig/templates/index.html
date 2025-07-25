@@ -7,10 +7,10 @@
     <link href="../static/css/styles.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
-<body class="bg-black text-white font-sans">
+<body class="text-white font-sans">
 
 <!-- 🐟 Billy Header with Controls & Log Buttons -->
-<header class="px-6 py-4 z-20 space-y-2 max-w-6xl mx-auto sticky top-0 border-b border-black bg-black/50 backdrop-blur-[4px] shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
+<header class="px-6 py-4 z-20 space-y-2 sticky top-0 border-b border-black bg-zinc-900/80 backdrop-blur-[5px] shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
     <div class="flex flex-row flex-wrap md:items-center justify-between gap-2">
         <h1 class="text-2xl font-bold flex-shrink-0 w-full md:w-auto">🐟 Billy Bassistant
             <span id="service-status" class="text-sm font-normal">(Loading...)</span>
@@ -91,20 +91,23 @@
     </section>
 
     <div id="notification"
-         class="hidden w-full fixed top-0 left-0 text-center bg-emerald-600/80 backdrop-blur-[2px] text-white font-semibold py-2 px-4 rounded shadow-lg z-50 transition-opacity duration-300"></div>
+         class="hidden w-full fixed top-0 left-0 text-center backdrop-blur-[2px] text-white font-semibold py-2 px-4 rounded shadow-lg z-50 transition-opacity duration-300"></div>
 
 </header>
 
 <!-- Section 2–4 in responsive grid layout -->
-<main id="main-content" class="p-6 max-w-6xl mx-auto">
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+<main id="main-content" class="p-4 md:p-6 max-w-6xl mx-auto">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:p-6">
         <!-- Settings Form -->
         <section>
-            <form id="config-form" class="space-y-6">
+            <form id="config-form" class="space-y-4 md:space-y-6">
 
-                <!-- OpenAI Settings -->
-                <div class="bg-zinc-900 border border-zinc-700 p-6 rounded-lg shadow-sm">
-                    <h3 class="text-lg font-bold mb-4 text-slate-200">General Settings</h3>
+                <!-- Software Settings -->
+                <div class="bg-zinc-900/80 backdrop-blur-[5px] border border-zinc-700 p-4 md:p-6 rounded-lg shadow-sm mb-6 collapsible-section" id="section-software">
+                    <h3 class="flex items-center gap-2 cursor-pointer group text-lg grow justify-between font-bold mb-4 text-slate-200">
+                        Software Settings
+                        <span class="material-icons transition-transform duration-200 ml-2 rotate-0">expand_more</span>
+                    </h3>
 
                     <div class="mb-4">
                         <label for="OPENAI_API_KEY" class="block font-semibold text-sm text-slate-300">
@@ -158,21 +161,6 @@
                     </div>
 
                     <div class="mb-4">
-                        <label for="BILLY_MODEL" class="block font-semibold text-sm text-slate-300">
-                            Billy Version
-                        </label>
-                        <select id="BILLY_MODEL" name="BILLY_MODEL"
-                                class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                            <option value="modern" {% if config.get('BILLY_MODEL', 'modern') == 'modern' %}selected{% endif %}>
-                            Modern (2 motors)
-                            </option>
-                            <option value="classic" {% if config.get('BILLY_MODEL') == 'classic' %}selected{% endif %}>
-                            Classic (3 motors)
-                            </option>
-                        </select>
-                    </div>
-
-                    <div class="mb-4">
                         <label for="hostname" class="block font-semibold text-sm text-slate-300">Device Hostname</label>
                         <input
                                 id="hostname"
@@ -200,9 +188,51 @@
                     </div>
                 </div>
 
+                <!-- Hardware Settings -->
+                <div class="bg-zinc-900/80 backdrop-blur-[5px] border border-zinc-700 p-4 md:p-6 rounded-lg shadow-sm mb-6 collapsible-section" id="section-hardware">
+                    <h3 class="flex items-center gap-2 cursor-pointer group text-lg grow justify-between font-bold mb-4 text-slate-200">
+                        Hardware Settings
+                        <span class="material-icons transition-transform duration-200 ml-2 rotate-0">expand_more</span>
+                    </h3>
+                    <div class="mb-4">
+                        <label for="BILLY_MODEL" class="block font-semibold text-sm text-slate-300">
+                            Billy Version
+                        </label>
+                        <select id="BILLY_MODEL" name="BILLY_MODEL"
+                                class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                            <option value="modern" {% if config.get('BILLY_MODEL', 'modern') == 'modern' %}selected{% endif %}>
+                            Modern (2 motors)
+                            </option>
+                            <option value="classic" {% if config.get('BILLY_MODEL') == 'classic' %}selected{% endif %}>
+                            Classic (3 motors)
+                            </option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <h3 class="block font-semibold text-sm text-slate-300 mb-1">Motor Test</h3>
+                        <div class="flex flex-wrap gap-4">
+                            <button type="button" id="test-mouth-btn"
+                                    class="motor-test-btn bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded">
+                                Test Mouth
+                            </button>
+                            <button type="button" id="test-head-btn"
+                                    class="motor-test-btn bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded">
+                                Test Head
+                            </button>
+                            <button type="button" id="test-tail-btn"
+                                    class="motor-test-btn bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded">
+                                Test Tail
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Audio -->
-                <div class="bg-zinc-900 border border-zinc-700 p-6 rounded-lg shadow-sm">
-                    <h3 class="text-lg font-bold mb-4 text-slate-200">Audio Settings</h3>
+                <div class="bg-zinc-900/80 backdrop-blur-[5px] border border-zinc-700 p-4 md:p-6 rounded-lg shadow-sm mb-6 collapsible-section" id="section-audio">
+                    <h3 class="flex items-center gap-2 cursor-pointer group text-lg grow justify-between font-bold mb-4 text-slate-200">
+                        Audio Settings
+                        <span class="material-icons transition-transform duration-200 ml-2 rotate-0">expand_more</span>
+                    </h3>
 
                     <div class="flex items-center gap-2 mb-4">
                         <span class="material-icons">settings_voice</span>
@@ -284,8 +314,11 @@
                 </div>
 
                 <!-- MQTT Settings -->
-                <div class="bg-zinc-900 border border-zinc-700 p-6 rounded-lg shadow-sm">
-                    <h3 class="text-lg font-bold mb-4 text-slate-200">MQTT Settings</h3>
+                <div class="bg-zinc-900/80 backdrop-blur-[5px] border border-zinc-700 p-4 md:p-6 rounded-lg shadow-sm mb-6 collapsible-section" id="section-mqtt">
+                    <h3 class="flex items-center gap-2 cursor-pointer group text-lg grow justify-between font-bold mb-4 text-slate-200">
+                        MQTT Settings
+                        <span class="material-icons transition-transform duration-200 ml-2 rotate-0">expand_more</span>
+                    </h3>
 
                     <div class="mb-4">
                         <label for="MQTT_HOST" class="block font-semibold text-sm text-slate-300">MQTT Host</label>
@@ -331,9 +364,11 @@
                 </div>
 
                 <!-- Home Assistant -->
-                <div class="bg-zinc-900 border border-zinc-700 p-6 rounded-lg shadow-sm">
-                    <h3 class="text-lg font-bold mb-4 text-slate-200">Home Assistant</h3>
-
+                <div class="bg-zinc-900/80 backdrop-blur-[5px] border border-zinc-700 p-4 md:p-6 rounded-lg shadow-sm mb-6 collapsible-section" id="section-ha">
+                    <h3 class="flex items-center gap-2 cursor-pointer group text-lg grow justify-between font-bold mb-4 text-slate-200">
+                        Home Assistant
+                        <span class="material-icons transition-transform duration-200 ml-2 rotate-0">expand_more</span>
+                    </h3>
                     <div class="mb-4">
                         <label for="HA_HOST" class="block font-semibold text-sm text-slate-300">Home Assistant Host</label>
                         <input
@@ -399,42 +434,50 @@
         </section>
 
         <!-- Persona Column (consistent with Settings) -->
-        <section class="space-y-6">
+        <section class="space-y-4 md:space-y-6">
 
             <!-- Persona Traits -->
-            <div class="bg-zinc-900 border border-zinc-700 p-6 rounded-lg shadow-sm">
-                <h3 class="text-lg font-bold mb-4 text-slate-200">Persona Traits</h3>
+            <div class="bg-zinc-900/80 backdrop-blur-[5px] border border-zinc-700 p-4 md:p-6 rounded-lg shadow-sm mb-6 collapsible-section" id="section-persona-traits">
+                <h3 class="flex items-center gap-2 cursor-pointer group text-lg grow justify-between font-bold mb-4 text-slate-200">
+                    Persona Traits
+                    <span class="material-icons transition-transform duration-200 ml-2 rotate-0">expand_more</span>
+                </h3>
                 <div id="personality-sliders" class="space-y-4">
                     <!-- JS will populate this -->
                 </div>
             </div>
 
-            <!-- Backstory & Instructions -->
-            <div class="bg-zinc-900 border border-zinc-700 p-6 rounded-lg shadow-sm">
-                <h3 class="text-lg font-bold mb-4 text-slate-200">Backstory & Instructions</h3>
-                <form id="persona-form" class="space-y-6">
-
-                    <!-- Backstory Fields -->
+            <!-- Backstory -->
+            <form id="persona-form">
+                <div class="bg-zinc-900/80 backdrop-blur-[5px] border border-zinc-700 p-4 md:p-6 rounded-lg shadow-sm mb-6 collapsible-section" id="section-backstory-instructions">
+                    <h3 class="flex items-center gap-2 cursor-pointer group text-lg grow justify-between font-bold mb-4 text-slate-200">
+                        Backstory
+                        <span class="material-icons transition-transform duration-200 ml-2 rotate-0">expand_more</span>
+                    </h3>
                     <div>
-                        <span class="block font-semibold text-sm text-slate-300 mb-1">Backstory</span>
                         <div id="backstory-fields" class="space-y-2"></div>
                         <button type="button" onclick="addBackstoryField()" class="text-sm text-emerald-500 hover:text-emerald-400 mt-2 flex items-center cursor-pointer">
                             <span class="material-icons align-middle mr-1 ">add_circle_outline</span>
                             Add Field
                         </button>
                     </div>
+                </div>
 
-                    <!-- Meta Instructions -->
+                <!-- Meta Instructions -->
+                <div class="bg-zinc-900/80 backdrop-blur-[5px] border border-zinc-700 p-4 md:p-6 rounded-lg shadow-sm mb-6 collapsible-section" id="section-instructions">
+                    <h3 class="flex items-center gap-2 cursor-pointer group text-lg grow justify-between font-bold mb-4 text-slate-200">
+                        Additional Instructions
+                        <span class="material-icons transition-transform duration-200 ml-2 rotate-0">expand_more</span>
+                    </h3>
                     <div>
-                        <span class="block font-semibold text-sm text-slate-300 mb-1">Additional Instructions</span>
                         <textarea name="META" id="meta-text" rows="16"
                                   class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
                                   spellcheck="false"></textarea>
                     </div>
-                </form>
-            </div>
+                </div>
+            </form>
 
-            <div class="sticky bottom-0 z-10 border-t border-black bg-black/50 backdrop-blur-[4px] shadow-[0_-4px_10px_rgba(0,0,0,0.5)] py-4 px-6">
+            <div class="sticky bottom-0 z-10 border-t border-black bg-black/50 backdrop-blur-[5px] shadow-[0_-4px_10px_rgba(0,0,0,0.5)] py-4 px-6">
                 <div class="flex justify-center md:justify-end">
                     <button form="persona-form" type="submit"
                             class="bg-emerald-500 hover:bg-emerald-400 text-zinc-800 font-semibold py-2 px-4 rounded shadow flex gap-1 cursor-pointer">

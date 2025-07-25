@@ -592,6 +592,44 @@ def hostname():
     return jsonify({"error": "Unsupported method"}), 405
 
 
+# ==== Test Motor  ====
+@app.route("/test-motor", methods=["POST"])
+def test_motor():
+    import core.movements as movements
+
+    try:
+        # Stop Billy service if running (to release GPIO)
+        was_active = False
+        try:
+            output = subprocess.check_output(
+                ["systemctl", "is-active", "billy.service"], stderr=subprocess.STDOUT
+            )
+            was_active = output.decode().strip() == "active"
+        except subprocess.CalledProcessError:
+            was_active = False
+
+        if was_active:
+            subprocess.check_call(["sudo", "systemctl", "stop", "billy.service"])
+
+        data = request.get_json()
+        motor = data.get("motor")
+
+        if motor == "mouth":
+            movements.move_mouth(100, 1, brake=True)
+        elif motor == "head":
+            movements.move_head("on")
+            time.sleep(1)
+            movements.move_head("off")
+        elif motor == "tail":
+            movements.move_tail_async(duration=1)
+        else:
+            return jsonify({"error": "Invalid motor"}), 400
+
+        return jsonify({"status": f"{motor} tested", "service_was_active": was_active})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ==== MAIN ====
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(core_config.FLASK_PORT), debug=True)
