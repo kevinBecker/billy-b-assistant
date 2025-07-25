@@ -26,3 +26,25 @@
     height: 100vh;
     overflow-y: auto !important;
 }
+
+body {
+    min-height: 100vh;
+    background: linear-gradient(-30deg,
+    #0e7490,  /* cyan-800: deep teal blue */
+    #0369a1,  /* sky-800: dark blue */
+    #164e63,  /* cyan-900: almost navy */
+    #0ea5e9,  /* sky-500: lighter blue pop */
+    #155e75,  /* cyan-700: blue-teal */
+    #1e293b   /* slate-800: deep slate for depth */
+    );
+    background-size: 800% 800%;
+    animation: gradient-ocean 60s ease-in-out infinite;
+}
+
+@keyframes gradient-ocean {
+    0%   { background-position: 0% 50%; }
+    25%  { background-position: 50% 75%; }
+    50%  { background-position: 100% 50%; }
+    75%  { background-position: 50% 25%; }
+    100% { background-position: 0% 50%; }
+}
