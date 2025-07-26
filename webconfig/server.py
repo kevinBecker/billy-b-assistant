@@ -370,10 +370,12 @@ def control_service(action):
     if action not in ["start", "stop", "restart"]:
         return jsonify({"error": "Invalid action"}), 400
     try:
+        if action in ["start", "restart"]:
+            threading.Thread(target=delayed_restart).start()
         subprocess.check_call(["sudo", "systemctl", action, "billy.service"])
         return jsonify({"status": "success", "action": action})
-    except subprocess.CalledProcessError:
-        return jsonify({"error": "Failed to run systemctl"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/restart', methods=['POST'])
@@ -595,8 +597,6 @@ def hostname():
 # ==== Test Motor  ====
 @app.route("/test-motor", methods=["POST"])
 def test_motor():
-    import core.movements as movements
-
     try:
         # Stop Billy service if running (to release GPIO)
         was_active = False
@@ -614,6 +614,9 @@ def test_motor():
         data = request.get_json()
         motor = data.get("motor")
 
+        import core.movements as movements
+
+        # Perform the requested test
         if motor == "mouth":
             movements.move_mouth(100, 1, brake=True)
         elif motor == "head":
@@ -621,10 +624,9 @@ def test_motor():
             time.sleep(1)
             movements.move_head("off")
         elif motor == "tail":
-            movements.move_tail_async(duration=1)
+            movements.move_tail(duration=1)
         else:
             return jsonify({"error": "Invalid motor"}), 400
-
         return jsonify({"status": f"{motor} tested", "service_was_active": was_active})
     except Exception as e:
         return jsonify({"error": str(e)}), 500

@@ -718,7 +718,7 @@ const MotorPanel = (() => {
                     showNotification(`Tested ${motor}`, "success", 1500);
                     if (data.service_was_active) {
                         showNotification(
-                            "Billy was stopped for hardware test. Please start the service again when done.",
+                            "Billy was stopped for hardware test. Please restart Billy again when done.",
                             "warning",
                             7000
                         );
