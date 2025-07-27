@@ -6,7 +6,7 @@ The **Billy Bass Assistant** is a Raspberry Pi–powered voice assistant embedde
 
 ![Billy Bathroom](./docs/images/billy_bathroom.jpeg)
 ![Billy UI](./docs/images/web-UI.png)
-<img src="./docs/images/web-UI-mobile.png" alt="Billy UI Mobile" style="width: 33%;" />
+<img src="./docs/images/web-UI-Mobile.png" alt="Billy UI Mobile" style="width: 33%;" />
 ---
 
 ## Features
