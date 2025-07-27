@@ -78,6 +78,7 @@ DEBUG_MODE_INCLUDE_DELTA = (
     os.getenv("DEBUG_MODE_INCLUDE_DELTA", "false").lower() == "true"
 )
 TEXT_ONLY_MODE = os.getenv("TEXT_ONLY_MODE", "false").lower() == "true"
+RUN_MODE = os.getenv("RUN_MODE", "normal").lower()
 
 # === Billy Hardware ===
 BILLY_MODEL = os.getenv("BILLY_MODEL", "modern").strip().lower()

@@ -43,6 +43,7 @@ CONFIG_KEYS = [
     "MIC_PREFERENCE",
     "SPEAKER_PREFERENCE",
     "FLASK_PORT",
+    "RUN_MODE",
 ]
 
 WEBCONFIG_DIR = os.path.abspath(os.path.dirname(__file__))

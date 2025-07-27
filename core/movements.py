@@ -174,6 +174,7 @@ def interlude():
 # === Motor Watchdog ===
 def stop_all_motors():
     print("🛑 Stopping all motors")
+    move_head("off")
     for pin in motor_pins:
         lgpio.tx_pwm(h, pin, FREQ, 0)
         lgpio.gpio_write(h, pin, 0)

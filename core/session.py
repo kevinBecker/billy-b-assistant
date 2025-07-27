@@ -18,6 +18,7 @@ from .config import (
     OPENAI_API_KEY,
     OPENAI_MODEL,
     PERSONALITY,
+    RUN_MODE,
     SILENCE_THRESHOLD,
     TEXT_ONLY_MODE,
     VOICE,
@@ -91,6 +92,7 @@ class BillySession:
         # Track whenever a session is updated after creation, and OpenAI is ready to
         # receive voice.
         self.session_initialized = False
+        self.run_mode = RUN_MODE
 
     async def start(self):
         self.loop = asyncio.get_running_loop()
@@ -378,6 +380,11 @@ class BillySession:
                 audio.playback_done_event.set()
                 self.last_activity[0] = time.time()
 
+            if self.run_mode == "dory":
+                print("🎣 Dory mode active. Ending session after single response.")
+                await self.stop_session()
+                return
+
         elif data["type"] == "error":
             error: dict[str, Any] = data.get('error') or {}
             print(
@@ -434,7 +441,7 @@ class BillySession:
                     self.ws = None
             return
 
-        if (
+        if not self.RUN_MODE and (
             re.search(r"[a-zA-Z]\?\s*$", self.full_response_text.strip())
             and self.user_spoke_after_assistant
         ):
