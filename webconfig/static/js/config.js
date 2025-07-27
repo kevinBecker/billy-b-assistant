@@ -140,7 +140,7 @@ const LogPanel = (() => {
 
             const btn = elements.toggleMotionBtn;
             const icon = btn.querySelector(".material-icons");
-            btn.toggleMotionBtn.classList.remove("bg-zinc-700");
+            btn.classList.remove("bg-zinc-700");
 
             if (icon) {
                 icon.textContent = "blur_off";
@@ -178,11 +178,17 @@ const ServiceStatus = (() => {
         const createButton = (label, action, color, iconName) => {
             const btn = document.createElement("button");
             btn.className = `flex items-center gap-1 bg-${color}-500 hover:bg-${color}-400 text-zinc-800 font-semibold py-1 px-2 rounded`;
+
             const icon = document.createElement("i");
             icon.className = "material-icons";
             icon.textContent = iconName;
             btn.appendChild(icon);
-            btn.appendChild(document.createTextNode(label));
+
+            const labelSpan = document.createElement("span");
+            labelSpan.className = "hidden md:inline";
+            labelSpan.textContent = label;
+            btn.appendChild(labelSpan);
+
             btn.onclick = () => handleServiceAction(action);
             return btn;
         };

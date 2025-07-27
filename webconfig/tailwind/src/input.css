@@ -95,7 +95,7 @@ button {
 }
 
 [data-tooltip] {
-    @apply hidden absolute font-normal top-0 right-0 max-w-[350px] z-10 p-2 text-xs bg-cyan-400/50 backdrop-blur-[5px] rounded shadow-lg text-slate-300;
+    @apply hidden absolute font-normal top-0 right-0 max-w-[350px] z-10 p-2 text-xs bg-cyan-400/70 backdrop-blur-[5px] rounded shadow-lg text-zinc-800;
 }
 [data-tooltip][data-visible="true"] {
     @apply block;

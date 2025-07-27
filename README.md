@@ -5,16 +5,23 @@ The **Billy Bass Assistant** is a Raspberry Pi–powered voice assistant embedde
 > **This project is still in BETA.** Things might crash, get stuck or make Billy scream uncontrollably (ok that last part maybe not literally but you get the point). Proceed with fishy caution.
 
 ![Billy Bathroom](./docs/images/billy_bathroom.jpeg)
+![Billy UI](./docs/images/web-UI.png)
+<img src="./docs/images/web-UI-mobile.png" alt="Billy UI Mobile" style="width: 33%;" />
 ---
 
 ## Features
 
 - Realtime conversations using OpenAI GPT-4o-mini
-- 3D-printable backplate for housing USB microphone and speaker
-- Lightweight web UI for editing configuration, logs, and systemd service control
-- Support for the Modern Billy hardware version with 2 motors as well as the Classic Billy hardware version (3 motors)
-- Physical button to start/interact/intervene
 - Personality system with configurable traits (e.g., snark, charm)
+- Physical button to start/interact/intervene
+- 3D-printable backplate for housing USB microphone and speaker
+- Support for the Modern Billy hardware version with 2 motors as well as the Classic Billy hardware version (3 motors)
+- Lightweight web UI:
+  - Adjust settings and persona of Billy
+  - View debug logs
+  - Start/stop/restart Billy
+  - Export/Import of settings and persona
+  - Hostname and Port configuration
 - MQTT support:
   - sensor with status updates of Billy (idle, speaking, listening)
   - `billy/say` topic for triggering spoken messages remotely (feature in beta)

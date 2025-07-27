@@ -12,10 +12,10 @@
 <!-- 🐟 Billy Header with Controls & Log Buttons -->
 <header class="px-6 py-4 z-20 sticky top-0 backdrop-blur-sm shadow-[0_4px_10px_rgba(0,0,0,0.25)]">
     <div class="flex flex-row flex-wrap md:items-center justify-between gap-2">
-        <h1 class="text-2xl font-bold flex-shrink-0">🐟 Billy Bassistant
+        <h1 class="text-2xl font-bold flex-shrink-0">Billy Bassistant
             <span id="service-status" class="text-lg font-bold">(Loading...)</span>
         </h1>
-        <div id="service-controls" class="flex gap-2 grow md:mx-10">
+        <div id="service-controls" class="flex gap-2 grow md:mx-10 justify-end md:justify-start">
             <!-- Service buttons inserted via JS -->
         </div>
         <div class="flex items-center gap-2 grow justify-end">
@@ -32,19 +32,19 @@
             </div>
 
             <button id="toggle-log-btn"
-                    class="bg-zinc-700 hover:bg-zinc-600 text-white text-sm py-1 px-3 rounded flex gap-1.5 items-center cursor-pointer"
+                    class="bg-zinc-700 hover:bg-zinc-600 text-white text-sm py-1 px-2 rounded flex gap-1.5 items-center cursor-pointer"
                     title="Show debug log">
                 <span class="material-icons bug_report">bug_report</span>
             </button>
 
             <button id="toggle-env-btn"
-                    class="bg-zinc-700 hover:bg-zinc-600 text-white text-sm py-1 px-3 rounded flex gap-1.5 items-center cursor-pointer"
+                    class="bg-zinc-700 hover:bg-zinc-600 text-white text-sm py-1 px-2 rounded flex gap-1.5 items-center cursor-pointer"
                     title="Show .env file editor">
                 <span class="material-icons">admin_panel_settings</span>
             </button>
 
             <button id="toggle-motion-btn"
-                    class="bg-zinc-700 hover:bg-zinc-600 text-white text-sm py-1 px-3 rounded flex gap-1.5 items-center cursor-pointer"
+                    class="bg-zinc-700 hover:bg-zinc-600 text-white text-sm py-1 px-2 rounded flex gap-1.5 items-center cursor-pointer"
                     title="Toggle UI animations">
                 <span class="material-icons">blur_on</span>
             </button>
@@ -59,7 +59,7 @@
 
             <!-- Fullscreen Button (top right) -->
             <button id="toggle-fullscreen-btn"
-                    class="sticky top-2 left-full mr-3 bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-1 rounded z-10 shadow flex items-center justify-center"
+                    class="sticky top-2 left-full mr-3 bg-zinc-800 hover:bg-zinc-700 text-white px-2 py-1 rounded z-10 shadow flex items-center justify-center"
                     title="Toggle Fullscreen Log">
                 <span class="material-icons" id="fullscreen-icon">fullscreen</span>
             </button>
@@ -70,7 +70,7 @@
             <!-- Scroll-to-bottom Button (bottom right) -->
             <button id="scroll-bottom-btn"
                     title="Auto-scroll"
-                    class="sticky bottom-2 left-full mr-3 ml-auto bg-zinc-800 hover:bg-zinc-700 text-white px-3 py-1 rounded z-10 shadow flex items-center justify-center cursor-pointer">
+                    class="sticky bottom-2 left-full mr-3 ml-auto bg-zinc-800 hover:bg-zinc-700 text-white px-2 py-1 rounded z-10 shadow flex items-center justify-center cursor-pointer">
                 <span class="material-icons">arrow_downward</span>
             </button>
         </div>
@@ -121,7 +121,7 @@
 
                     <div class="mb-4 relative">
                         <label for="OPENAI_API_KEY"
-                               class="flex justify-between font-semibold text-sm text-slate-300 relative">
+                               class="flex justify-between items-center font-semibold text-sm text-slate-300 relative">
                             OpenAI API Key
                             <span class="material-icons align-middle hover:text-cyan-400 cursor-pointer ml-1"
                                   onclick="toggleTooltip(this)">
@@ -157,36 +157,36 @@
                     </div>
 
                     <label class="block mb-4">
-                        <label for="OPENAI_MODEL" class="block font-semibold text-sm text-slate-300">OpenAI Model
+                        <label for="OPENAI_MODEL" class="flex justify-between items-center font-semibold text-sm text-slate-300 relative">
+                            OpenAI Realtime API Model
+                            <span class="material-icons align-middle hover:text-cyan-400 cursor-pointer ml-1"
+                                  onclick="toggleTooltip(this)">
+                                help_outline
+                            </span>
                         </label>
-                        <select id="OPENAI_MODEL" name="OPENAI_MODEL"
-                                class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                            <option value="gpt-4o-mini-realtime-preview"
-                                    {% if config.get(
-                            'OPENAI_MODEL') == 'gpt-4o-mini-realtime-preview' %}selected{% endif %}>
-                            gpt-4o-mini-realtime-preview (default)
-                            </option>
-                            <option value="gpt-4o-realtime-preview"
-                                    {% if config.get(
-                            'OPENAI_MODEL') == 'gpt-4o-realtime-preview' %}selected{% endif %}>
-                            gpt-4o-realtime-preview (more expensive)
-                            </option>
-                        </select>
-                    </label>
+                        <div class="relative">
+                            <div data-tooltip>
+                                Choose between the two GPT-4o streaming models that are currently available:<br>
+                                <strong>gpt-4o-mini-realtime-preview</strong> is cheaper and the default.<br>
+                                <strong>gpt-4o-realtime-preview</strong> is higher performance, more expensive.<br>
+                                See <a href="https://openai.com/api/pricing/" target="_blank" class="underline hover:text-cyan-400">OpenAI Realtime API Pricing</a> for details .
+                            </div>
 
-                    <div class="mb-4 relative">
-                        <label for="VOICE" class="block font-semibold text-sm text-slate-300">Voice
-                        </label>
-                        <select id="VOICE" name="VOICE"
-                                class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                            {% for v in config.get('VOICE_OPTIONS',[]) %}
-                            <option value="{{ v }}" {% if config.get(
-                            'VOICE') == v %}selected{% endif %}>
-                            {{ v|capitalize }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
+                            <select id="OPENAI_MODEL" name="OPENAI_MODEL"
+                                    class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                                <option value="gpt-4o-mini-realtime-preview"
+                                        {% if config.get(
+                                'OPENAI_MODEL') == 'gpt-4o-mini-realtime-preview' %}selected{% endif %}>
+                                gpt-4o-mini-realtime-preview (default)
+                                </option>
+                                <option value="gpt-4o-realtime-preview"
+                                        {% if config.get(
+                                'OPENAI_MODEL') == 'gpt-4o-realtime-preview' %}selected{% endif %}>
+                                gpt-4o-realtime-preview (more expensive)
+                                </option>
+                            </select>
+                        </div>
+                    </label>
 
                     <div class="flex gap-2">
                         <div class="mb-4 grow flex flex-col justify-between">
@@ -220,9 +220,10 @@
                             >
                         </div>
                     </div>
-                    <div class="mb-4 ">
+
+                    <div class="mb-4">
                         <label for="RUN_MODE"
-                               class="flex justify-between font-semibold text-sm text-slate-300 relative">
+                               class="flex justify-between items-center font-semibold text-sm text-slate-300 relative">
                             Mode
                             <span class="material-icons align-middle hover:text-cyan-400 cursor-pointer ml-1"
                                   onclick="toggleTooltip(this)">help_outline</span>
@@ -243,7 +244,20 @@
                                 'RUN_MODE') == 'dory' %}selected{% endif %}>Dory</option>
                             </select>
                         </div>
+                    </div>
 
+                    <div class="mb-4 relative">
+                        <label for="VOICE" class="block font-semibold text-sm text-slate-300">Voice
+                        </label>
+                        <select id="VOICE" name="VOICE"
+                                class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                            {% for v in config.get('VOICE_OPTIONS',[]) %}
+                            <option value="{{ v }}" {% if config.get(
+                            'VOICE') == v %}selected{% endif %}>
+                            {{ v|capitalize }}
+                            </option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
 
@@ -270,21 +284,34 @@
                             </option>
                         </select>
                     </div>
+
                     <div class="mb-4">
-                        <h3 class="block font-semibold text-sm text-slate-300 mb-1">Motor Test</h3>
-                        <div class="flex flex-wrap gap-4">
-                            <button type="button" id="test-mouth-btn"
-                                    class="motor-test-btn bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded">
-                                Mouth
-                            </button>
-                            <button type="button" id="test-head-btn"
-                                    class="motor-test-btn bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded">
-                                Head
-                            </button>
-                            <button type="button" id="test-tail-btn"
-                                    class="motor-test-btn bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded">
-                                Tail
-                            </button>
+                        <label for="RUN_MODE"
+                               class="flex justify-between items-center font-semibold text-sm text-slate-300 relative">
+                            Motor test
+                            <span class="material-icons align-middle hover:text-cyan-400 cursor-pointer ml-1"
+                                  onclick="toggleTooltip(this)">help_outline</span>
+                        </label>
+
+                        <div class="relative">
+                            <div data-tooltip>
+                                Use these buttons to test the motors individually.<br>
+                                Each button will activate the corresponding motor for ~1 second.  Restart Billy when completed.
+                        </div>
+                            <div class="flex flex-wrap mt-1 gap-4">
+                                <button type="button" id="test-mouth-btn"
+                                        class="motor-test-btn bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded">
+                                    Mouth
+                                </button>
+                                <button type="button" id="test-head-btn"
+                                        class="motor-test-btn bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded">
+                                    Head
+                                </button>
+                                <button type="button" id="test-tail-btn"
+                                        class="motor-test-btn bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded">
+                                    Tail
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -304,13 +331,23 @@
 
                     <div class="flex mb-4 gap-4">
                         <div class="flex-1/2 flex flex-col justify-between">
-                            <label for="MIC_TIMEOUT_SECONDS" class="block font-semibold text-sm text-slate-300">Mic
-                                Timeout (s)
+                            <label for="MIC_TIMEOUT_SECONDS" class="flex justify-between items-center font-semibold text-sm text-slate-300">
+                                Mic Timeout (s)
+                                <span class="material-icons align-middle hover:text-cyan-400 cursor-pointer ml-1"
+                                      onclick="toggleTooltip(this)">
+                                   help_outline
+                                </span>
                             </label>
-                            <input type="number"
-                                   class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                                   name="MIC_TIMEOUT_SECONDS" id="MIC_TIMEOUT_SECONDS"
-                                   value="{{ config.get('MIC_TIMEOUT_SECONDS', '6') }}">
+                            <div class="relative">
+                                <div data-tooltip>
+                                    How many seconds of silence Billy should wait after you stop talking before ending your turn.
+                                    Lower = quicker response, higher = more forgiving.
+                                </div>
+                                <input type="number"
+                                       class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                       name="MIC_TIMEOUT_SECONDS" id="MIC_TIMEOUT_SECONDS"
+                                       value="{{ config.get('MIC_TIMEOUT_SECONDS', '6') }}">
+                            </div>
                         </div>
 
                         <div class="flex-1/2 flex flex-col justify-between">
@@ -324,9 +361,23 @@
                     </div>
 
                     <div class="mb-4">
-                        <span class="block font-semibold text-sm text-slate-300 mb-1">Microphone level & Silence Threshold</span>
+                        <label class="flex items-center justify-between font-semibold text-sm text-slate-300 mb-1">
+                            Microphone level & Silence Threshold
+                            <span class="material-icons align-middle hover:text-cyan-400 cursor-pointer ml-1"
+                                  onclick="toggleTooltip(this)">
+                                help_outline
+                            </span>
+                        </label>
 
-                        <div class="flex gap-2">
+                        <div class="flex gap-2 mb-4 relative">
+                            <div data-tooltip>
+                                Click “Test” to start a live microphone level preview.<br/>
+                                You can drag the red line to adjust the <b>silence threshold</b>.<br/>
+                                Billy will only consider audio as "speaking" when the bar crosses this threshold. <br/>
+                                Adjust the <b>silence threshold</b> and/or <b>gain</b> so that in your normal environment,
+                                the volume bar stays below the red line while idle (background noise) but
+                                jumps above it when you speak. Restart Billy after completion.
+                            </div>
 
                             <!-- Mic level bar container -->
                             <div id="mic-bar-container"
@@ -349,27 +400,26 @@
                                 <span class="material-icons align-middle">mic</span>
                                 Test
                             </button>
-
                         </div>
-                    </div>
 
-                    <!-- Mic Gain Slider -->
-                    <div class="mb-8 flex gap-2 items-center">
-                        <div class="w-20 text-sm font-medium text-gray-200">
-                            Gain: <span id="mic-gain-value">8</span>
-                        </div>
-                        <input type="range" id="mic-gain" min="0" max="16" step="1" value="8" class="hidden">
-                        <div
-                                class="relative w-full rounded-full bg-zinc-700 overflow-hidden cursor-pointer h-4"
-                                id="mic-gain-bar"
-                                style="user-select: none;"
-                        >
+                        <!-- Mic Gain Slider -->
+                        <div class="mb-8 flex gap-2 items-center">
+                            <div class="w-20 text-sm font-medium text-gray-200">
+                                Gain: <span id="mic-gain-value">8</span>
+                            </div>
+                            <input type="range" id="mic-gain" min="0" max="16" step="1" value="8" class="hidden">
                             <div
-                                    class="absolute left-0 top-0 h-full bg-emerald-500 transition-all duration-100"
-                                    id="mic-gain-fill"
-                                    style="width: 50%;"
-                                    data-value="8"
-                            ></div>
+                                    class="relative w-full rounded-full bg-zinc-700 overflow-hidden cursor-pointer h-4"
+                                    id="mic-gain-bar"
+                                    style="user-select: none;"
+                            >
+                                <div
+                                        class="absolute left-0 top-0 h-full bg-emerald-500 transition-all duration-100"
+                                        id="mic-gain-fill"
+                                        style="width: 50%;"
+                                        data-value="8"
+                                ></div>
+                            </div>
                         </div>
                     </div>
 
