@@ -109,11 +109,17 @@
                         <span class="material-icons transition-transform duration-200 ml-2 rotate-0">expand_more</span>
                     </h3>
 
-                    <div class="mb-4">
-                        <label for="OPENAI_API_KEY" class="block font-semibold text-sm text-slate-300">
+                    <div class="mb-4 relative">
+                        <label for="OPENAI_API_KEY" class="flex justify-between font-semibold text-sm text-slate-300 relative">
                             OpenAI API Key
+                            <span class="material-icons align-middle hover:text-cyan-400 cursor-pointer ml-1" onclick="toggleTooltip(this)">
+                                help_outline
+                            </span>
                         </label>
                         <div class="relative">
+                            <div data-tooltip>
+                                You need a <a href="https://platform.openai.com/account/api-keys" class="underline hover:text-cyan-400" target="_blank">secret API key</a> with an available credit. In the <a href="https://platform.openai.com/account/billing/overview" class="underline hover:text-cyan-400" target="_blank">billing panel</a>, add a payment method (under Payment Methods). After adding a payment method, add credits to your organization by clicking 'Buy credits'.
+                            </div>
                             <input
                                     type="password"
                                     class="w-full p-3 mt-1 pr-10 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
@@ -160,31 +166,55 @@
                         </select>
                     </div>
 
-                    <div class="mb-4">
-                        <label for="hostname" class="block font-semibold text-sm text-slate-300">Device Hostname</label>
-                        <input
-                                id="hostname"
-                                name="hostname"
-                                type="text"
-                                data-original=""
-                                data-default="raspberrypi"
-                                class="w-full p-3 mt-1 pr-10 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                                value=""
-                        >
+                    <div class="flex gap-2">
+                        <div class="mb-4 grow">
+                            <label for="hostname" class="block font-semibold text-sm text-slate-300">Device Hostname</label>
+                            <div class="flex items-center mt-1 gap-2">
+                                <input
+                                        id="hostname"
+                                        name="hostname"
+                                        type="text"
+                                        data-original=""
+                                        data-default="raspberrypi"
+                                        class="w-full p-3 pr-10 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                        value=""
+                                >
+                                <span>.local:</span>
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label for="FLASK_PORT" class="block font-semibold text-sm text-slate-300">Web UI Port</label>
+                            <input
+                                    id="FLASK_PORT"
+                                    name="FLASK_PORT"
+                                    type="number"
+                                    min="1"
+                                    max="65535"
+                                    data-default="80"
+                                    class="w-full p-3 mt-1 pr-10 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                    value="{{ config.get('FLASK_PORT', '80') }}"
+                            >
+                        </div>
                     </div>
+                    <div class="mb-4 ">
+                        <label for="RUN_MODE" class="flex justify-between font-semibold text-sm text-slate-300 relative">
+                            Mode
+                            <span class="material-icons align-middle hover:text-cyan-400 cursor-pointer ml-1" onclick="toggleTooltip(this)">help_outline</span>
+                        </label>
 
-                    <div class="mb-4">
-                        <label for="FLASK_PORT" class="block font-semibold text-sm text-slate-300">Web UI Port</label>
-                        <input
-                                id="FLASK_PORT"
-                                name="FLASK_PORT"
-                                type="number"
-                                min="1"
-                                max="65535"
-                                data-default="80"
-                                class="w-full p-3 mt-1 pr-10 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                                value="{{ config.get('FLASK_PORT', '80') }}"
-                        >
+                        <div class="relative">
+                            <div data-tooltip>
+                                After pressing the red button, Billy: </br>
+                                <b>Normal:</b> tries to keep the conversation going until the mic silence timeout is reached (see Audio Settings).<br>
+                                <b>Dory:</b> responds only once, then ends and forgets the conversation.
+                            </div>
+                            <select id="RUN_MODE" name="RUN_MODE"
+                                    class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                                <option value="normal" {% if config.get('RUN_MODE', 'normal') == 'normal' %}selected{% endif %}>Normal</option>
+                                <option value="dory" {% if config.get('RUN_MODE') == 'dory' %}selected{% endif %}>Dory</option>
+                            </select>
+                        </div>
+
                     </div>
                 </div>
 
@@ -213,15 +243,15 @@
                         <div class="flex flex-wrap gap-4">
                             <button type="button" id="test-mouth-btn"
                                     class="motor-test-btn bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded">
-                                Test Mouth
+                                Mouth
                             </button>
                             <button type="button" id="test-head-btn"
                                     class="motor-test-btn bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded">
-                                Test Head
+                                Head
                             </button>
                             <button type="button" id="test-tail-btn"
                                     class="motor-test-btn bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded">
-                                Test Tail
+                                Tail
                             </button>
                         </div>
                     </div>
@@ -239,20 +269,22 @@
                         <span id="mic-label" class="grow">Loading...</span>
                     </div>
 
-                    <div class="mb-4">
-                        <label for="MIC_TIMEOUT_SECONDS" class="block font-semibold text-sm text-slate-300">Mic Timeout (seconds)
-                        </label>
-                        <input type="number"
-                               class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                               name="MIC_TIMEOUT_SECONDS" id="MIC_TIMEOUT_SECONDS" value="{{ config.get('MIC_TIMEOUT_SECONDS', '6') }}">
-                    </div>
+                    <div class="flex mb-4 gap-2">
+                        <div class="flex-1/2 flex flex-col justify-between">
+                            <label for="MIC_TIMEOUT_SECONDS" class="block font-semibold text-sm text-slate-300">Mic Timeout (s)
+                            </label>
+                            <input type="number"
+                                   class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                   name="MIC_TIMEOUT_SECONDS" id="MIC_TIMEOUT_SECONDS" value="{{ config.get('MIC_TIMEOUT_SECONDS', '6') }}">
+                        </div>
 
-                    <div class="mb-4 hidden">
-                        <label for="SILENCE_THRESHOLD" class="block font-semibold text-sm text-slate-300">Silence Threshold
-                        </label>
-                        <input type="number" step="1" id="SILENCE_THRESHOLD"
-                               class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                               name="SILENCE_THRESHOLD" value="{{ config.get('SILENCE_THRESHOLD', '1') }}">
+                        <div class="flex-1/2 flex flex-col justify-between">
+                            <label for="SILENCE_THRESHOLD" class="block font-semibold text-sm text-slate-300">Silence Threshold (RMS)
+                            </label>
+                            <input type="number" step="1" id="SILENCE_THRESHOLD"
+                                   class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                   name="SILENCE_THRESHOLD" value="{{ config.get('SILENCE_THRESHOLD', '1') }}">
+                        </div>
                     </div>
 
                     <div class="mb-4">
@@ -284,28 +316,57 @@
                         </div>
                     </div>
 
-                    <div class="mb-8 flex gap-2">
-                        <label for="mic-gain" class="block text-sm font-medium text-gray-200 w-20">
-                            Gain: <span id="mic-gain-value">?</span>
-                        </label>
-                        <input type="range" id="mic-gain" min="0" max="16" step="1" value="8" class="w-full">
+                    <!-- Mic Gain Slider -->
+                    <div class="mb-8 flex gap-2 items-center">
+                        <div class="w-20 text-sm font-medium text-gray-200">
+                            Gain: <span id="mic-gain-value">8</span>
+                        </div>
+                        <input type="range" id="mic-gain" min="0" max="16" step="1" value="8" class="hidden">
+                        <div
+                                class="relative w-full rounded-full bg-zinc-700 overflow-hidden cursor-pointer h-4"
+                                id="mic-gain-bar"
+                                style="user-select: none;"
+                        >
+                            <div
+                                    class="absolute left-0 top-0 h-full bg-emerald-500 transition-all duration-100"
+                                    id="mic-gain-fill"
+                                    style="width: 50%;"
+                                    data-value="8"
+                            ></div>
+                        </div>
                     </div>
+
 
                     <div class="flex items-center gap-2 mb-4">
                         <span class="material-icons">speaker</span>
                         <span id="speaker-label" class="grow">Loading...</span>
                     </div>
 
+                    <!-- Speaker Volume Slider -->
                     <div class="mb-4">
                         <label for="speaker-volume" class="block font-semibold text-sm text-slate-300 mb-1">
                             Speaker Volume
                         </label>
                         <div class="flex gap-2 items-center">
                             <input type="range" id="speaker-volume" min="0" max="100" value="50"
-                                   class="w-full h-2 bg-zinc-700 rounded-lg appearance-none cursor-pointer">
-
-                            <button type="button" id="speaker-check-btn"
-                                    class="bg-zinc-800 hover:bg-zinc-700 text-white text-sm items-center px-2 py-1 rounded shadow w-20 flex gap-1.5 cursor-pointer">
+                                   class="hidden">
+                            <div
+                                    class="relative w-full rounded-full bg-zinc-700 overflow-hidden cursor-pointer h-4"
+                                    id="speaker-volume-bar"
+                                    style="user-select: none;"
+                            >
+                                <div
+                                        class="absolute left-0 top-0 h-full bg-emerald-500 transition-all duration-100"
+                                        id="speaker-volume-fill"
+                                        style="width: 50%;"
+                                        data-value="50"
+                                ></div>
+                            </div>
+                            <button
+                                    type="button"
+                                    id="speaker-check-btn"
+                                    class="bg-zinc-800 hover:bg-zinc-700 text-white text-sm items-center px-2 py-1 rounded shadow w-20 flex gap-1.5 cursor-pointer"
+                            >
                                 <span class="material-icons align-middle">volume_up</span>
                                 Test
                             </button>

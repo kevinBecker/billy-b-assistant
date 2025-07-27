@@ -70,13 +70,13 @@ const LogPanel = (() => {
         try {
             const res = await fetch('/save-env', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: elements.envTextarea.value })
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({content: elements.envTextarea.value})
             });
             const data = await res.json();
 
             if (data.status === "ok") {
-                fetch('/restart', { method: 'POST' })
+                fetch('/restart', {method: 'POST'})
                     .then(res => res.json())
                     .then(data => {
                         if (data.status === "ok") {
@@ -118,7 +118,7 @@ const LogPanel = (() => {
         elements.saveEnvBtn.addEventListener("click", saveEnv);
     };
 
-    return { fetchLogs, bindUI };
+    return {fetchLogs, bindUI};
 })();
 
 // ===================== SERVICE STATUS =====================
@@ -169,13 +169,13 @@ const ServiceStatus = (() => {
     const handleServiceAction = async (action) => {
         const statusEl = document.getElementById("service-status");
         const statusMap = {
-            restart: { text: "restarting", color: "text-amber-500" },
-            stop:    { text: "stopping",   color: "text-rose-500" },
-            start:   { text: "starting",   color: "text-emerald-500" }
+            restart: {text: "restarting", color: "text-amber-500"},
+            stop: {text: "stopping", color: "text-rose-500"},
+            start: {text: "starting", color: "text-emerald-500"}
         };
 
         if (statusMap[action]) {
-            const { text, color } = statusMap[action];
+            const {text, color} = statusMap[action];
             statusEl.textContent = text;
             statusEl.classList.remove("text-emerald-500", "text-amber-500", "text-rose-500");
             statusEl.classList.add(color);
@@ -189,7 +189,7 @@ const ServiceStatus = (() => {
         LogPanel.fetchLogs();
     };
 
-    return { fetchStatus, updateServiceStatusUI };
+    return {fetchStatus, updateServiceStatusUI};
 })();
 
 // ===================== SETTINGS FORM =====================
@@ -200,7 +200,7 @@ const SettingsForm = (() => {
             e.preventDefault();
 
             const resStatus = await fetch("/service/status");
-            const { status: wasActive } = await resStatus.json();
+            const {status: wasActive} = await resStatus.json();
 
             const formData = new FormData(this);
             const payload = Object.fromEntries(formData.entries());
@@ -218,7 +218,7 @@ const SettingsForm = (() => {
             // Save config (.env)
             const saveResponse = await fetch("/save", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {"Content-Type": "application/json"},
                 body: JSON.stringify(payload),
             });
             const saveResult = await saveResponse.json();
@@ -228,8 +228,8 @@ const SettingsForm = (() => {
             if (newHostname && newHostname !== oldHostname) {
                 const hostResponse = await fetch("/hostname", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ hostname: newHostname })
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({hostname: newHostname})
                 });
                 const hostResult = await hostResponse.json();
                 if (hostResult.hostname) {
@@ -274,7 +274,7 @@ const SettingsForm = (() => {
         flaskPortInput.setAttribute("data-original", flaskPortInput.value);
     }
 
-    return { handleSettingsSave };
+    return {handleSettingsSave};
 })();
 
 // ===================== PERSONA FORM =====================
@@ -314,29 +314,111 @@ const PersonaForm = (() => {
     const renderPersonalitySliders = (personality) => {
         const container = document.getElementById("personality-sliders");
         container.innerHTML = "";
+
         for (const [key, value] of Object.entries(personality)) {
             const wrapper = document.createElement("div");
-            wrapper.className = "flex items-center space-x-4";
-            const label = document.createElement("label");
-            label.className = "w-32 font-semibold text-sm";
-            label.textContent = key;
-            label.for = key;
-            const input = Object.assign(document.createElement("input"), {
-                type: "range",
-                name: key,
-                min: 0,
-                max: 100,
-                value,
-                className: "flex-1"
+            wrapper.className = "flex gap-2 space-y-1";
+
+            // Label column
+            const label = document.createElement("div");
+            label.className = "flex w-36 justify-between items-center text-sm text-slate-300 font-semibold";
+            label.innerHTML = `<span>${key}</span>`;
+
+            // Bar container
+            const barContainer = document.createElement("div");
+            barContainer.className = "relative w-full rounded-full bg-zinc-700 overflow-hidden cursor-pointer";
+            barContainer.style.userSelect = "none";
+
+            // Fill bar
+            const fillBar = document.createElement("div");
+            fillBar.className = "absolute left-0 top-0 h-full bg-emerald-500 transition-all duration-100";
+            fillBar.style.width = `${value}%`;
+            fillBar.dataset.fillFor = key;
+
+            barContainer.appendChild(fillBar);
+
+            // Output value
+            const valueLabel = document.createElement("span");
+            valueLabel.id = `${key}-value`;
+            valueLabel.className = "text-zinc-400";
+            valueLabel.textContent = value;
+
+            // Drag interaction
+            let isDragging = false;
+
+            const updateValue = (e) => {
+                const rect = barContainer.getBoundingClientRect();
+                const percent = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
+                const newVal = Math.round(percent * 100);
+                fillBar.style.width = `${newVal}%`;
+                valueLabel.textContent = newVal;
+                fillBar.setAttribute("data-value", newVal);
+            };
+
+            barContainer.addEventListener("mousedown", (e) => {
+                isDragging = true;
+                updateValue(e);
             });
-            const output = document.createElement("span");
-            output.className = "w-10 text-sm text-zinc-400 text-right";
-            output.textContent = value;
-            input.addEventListener("input", () => { output.textContent = input.value; });
-            wrapper.append(label, input, output);
+
+            document.addEventListener("mousemove", (e) => {
+                if (isDragging) updateValue(e);
+            });
+
+            document.addEventListener("mouseup", () => {
+                isDragging = false;
+            });
+
+            wrapper.appendChild(label);
+            wrapper.appendChild(barContainer);
+            wrapper.appendChild(valueLabel);
+
             container.appendChild(wrapper);
         }
     };
+
+    function setupSlider(barId, fillId, inputId, min, max) {
+        const bar = document.getElementById(barId);
+        const fill = document.getElementById(fillId);
+        const input = document.getElementById(inputId);
+
+        let isDragging = false;
+
+        const updateUI = (val) => {
+            const percent = ((val - min) / (max - min)) * 100;
+            fill.style.width = `${percent}%`;
+            fill.dataset.value = val;
+        };
+
+        const updateFromMouse = (e) => {
+            const rect = bar.getBoundingClientRect();
+            const percent = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
+            const val = Math.round(min + percent * (max - min));
+            input.value = val;
+            input.dispatchEvent(new Event("input", {bubbles: true}));
+            updateUI(val);
+        };
+
+        // Allow dragging
+        bar.addEventListener("mousedown", (e) => {
+            isDragging = true;
+            updateFromMouse(e);
+        });
+
+        document.addEventListener("mousemove", (e) => {
+            if (isDragging) updateFromMouse(e);
+        });
+
+        document.addEventListener("mouseup", () => {
+            isDragging = false;
+        });
+
+        // Sync with input on load/change (just in case)
+        input.addEventListener("input", () => updateUI(Number(input.value)));
+        updateUI(Number(input.value));
+    }
+
+    setupSlider("mic-gain-bar", "mic-gain-fill", "mic-gain", 0, 16);
+    setupSlider("speaker-volume-bar", "speaker-volume-fill",  "speaker-volume", 0, 100);
 
     const renderBackstoryFields = (backstory) => {
         const container = document.getElementById("backstory-fields");
@@ -357,11 +439,13 @@ const PersonaForm = (() => {
             e.preventDefault();
 
             const res = await fetch("/service/status");
-            const { status: wasActive } = await res.json();
+            const {status: wasActive} = await res.json();
 
             const personality = {};
-            document.querySelectorAll("#personality-sliders input").forEach((input) => {
-                personality[input.name] = parseInt(input.value, 10);
+            document.querySelectorAll("#personality-sliders div[data-fill-for]").forEach((bar) => {
+                const trait = bar.dataset.fillFor;
+                const value = parseInt(bar.style.width); // or from a data-value attr if you prefer
+                personality[trait] = value;
             });
 
             const backstory = {};
@@ -376,8 +460,8 @@ const PersonaForm = (() => {
 
             await fetch("/persona", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ PERSONALITY: personality, BACKSTORY: backstory, META: meta })
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({PERSONALITY: personality, BACKSTORY: backstory, META: meta})
             });
 
             showNotification("Persona saved", "success");
@@ -390,7 +474,7 @@ const PersonaForm = (() => {
         });
     };
 
-    return { addBackstoryField, loadPersona, handlePersonaSave };
+    return {addBackstoryField, loadPersona, handlePersonaSave};
 })();
 
 // ===================== UI HELPERS =====================
@@ -444,6 +528,19 @@ function toggleDropdown(btn) {
     if (arrow) arrow.classList.toggle('rotate-180');
 }
 
+function toggleTooltip(el) {
+    el.classList.toggle("text-cyan-400")
+    const container = el.closest("label")?.parentElement;
+    if (!container) return;
+
+    const tooltip = container.querySelector("[data-tooltip]");
+    if (tooltip) {
+        const visible = tooltip.getAttribute("data-visible") === "true";
+        tooltip.setAttribute("data-visible", visible ? "false" : "true");
+    }
+}
+
+
 // Close on click outside
 document.addEventListener('click', (e) => {
     document.querySelectorAll('.dropdown-menu').forEach(menu => {
@@ -472,11 +569,13 @@ document.addEventListener('click', (e) => {
                 updateBtn.classList.remove("hidden");
             }
         })
-        .catch(err => { console.error("Failed to load version info", err); });
+        .catch(err => {
+            console.error("Failed to load version info", err);
+        });
 
     document.getElementById("update-btn").addEventListener("click", () => {
         if (!confirm("Are you sure you want to update Billy to the latest version?")) return;
-        fetch("/update", { method: "POST" })
+        fetch("/update", {method: "POST"})
             .then(res => res.json())
             .then(data => {
                 showNotification(data.message || "Update started");
@@ -521,12 +620,12 @@ const AudioPanel = (() => {
     document.getElementById("speaker-check-btn").addEventListener("click", async () => {
         try {
             const res = await fetch("/service/status");
-            const { status } = await res.json();
+            const {status} = await res.json();
             if (status === "active") {
                 showNotification("⚠️ Please stop the Billy service before running speaker test.", "warning");
                 return;
             }
-            await fetch("/speaker-test", { method: "POST" });
+            await fetch("/speaker-test", {method: "POST"});
             showNotification("Speaker test triggered");
         } catch (err) {
             console.error("Failed to trigger speaker test:", err);
@@ -545,7 +644,7 @@ const AudioPanel = (() => {
         } else {
             try {
                 const res = await fetch("/service/status");
-                const { status } = await res.json();
+                const {status} = await res.json();
                 if (status === "active") {
                     await fetch("/service/stop");
                     showNotification("Billy was stopped for mic check. You’ll need to start it again afterwards.", "warning");
@@ -612,12 +711,18 @@ const AudioPanel = (() => {
     async function loadMicGain() {
         const label = document.getElementById("mic-gain-value");
         const slider = document.getElementById("mic-gain");
+        const fill = document.getElementById("mic-gain-fill");
+
         try {
             const res = await fetch("/mic-gain");
             const data = await res.json();
             if (data.gain !== undefined) {
-                label.textContent = data.gain;
                 slider.value = data.gain;
+                label.textContent = data.gain;
+
+                const percent = (data.gain / 16) * 100;
+                fill.style.width = `${percent}%`;
+                fill.dataset.value = data.gain;
             } else {
                 label.textContent = "Unavailable";
             }
@@ -625,12 +730,13 @@ const AudioPanel = (() => {
             label.textContent = "Error";
         }
     }
-    document.getElementById("mic-gain").addEventListener("change", async () => {
+
+    document.getElementById("mic-gain").addEventListener("input", async () => {
         const value = parseInt(document.getElementById("mic-gain").value, 10);
         await fetch("/mic-gain", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ value })
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({value})
         });
         document.getElementById("mic-gain-value").textContent = value;
     });
@@ -642,7 +748,8 @@ const AudioPanel = (() => {
     let dragging = false;
 
     thresholdLine.addEventListener("mousedown", (e) => {
-        dragging = true; e.preventDefault();
+        dragging = true;
+        e.preventDefault();
     });
 
     document.addEventListener("mousemove", (e) => {
@@ -656,7 +763,11 @@ const AudioPanel = (() => {
         thresholdLine.style.left = `${percent * 100}%`;
         silenceThresholdInput.value = scaledThreshold;
     });
-    document.addEventListener("mouseup", () => { dragging = false; });
+
+    document.addEventListener("mouseup", () => {
+        dragging = false;
+    });
+
     window.addEventListener("load", () => {
         const threshold = parseInt(silenceThresholdInput.value || "1000", 10);
         thresholdLine.style.left = `${(threshold / 32768) * 100}%`;
@@ -666,15 +777,24 @@ const AudioPanel = (() => {
     const speakerSlider = document.getElementById("speaker-volume");
     fetch("/volume")
         .then(res => res.json())
-        .then(data => { if (data.volume !== undefined) speakerSlider.value = data.volume; });
+        .then(data => {
+            if (data.volume !== undefined) {
+                speakerSlider.value = data.volume;
+                const fill = document.getElementById("speaker-volume-fill");
+                const percent = (data.volume / 100) * 100;
+                fill.style.width = `${percent}%`;
+                fill.dataset.value = data.volume;
+            }
+        });
     let volumeDebounceTimeout;
+
     speakerSlider.addEventListener("input", () => {
         clearTimeout(volumeDebounceTimeout);
         volumeDebounceTimeout = setTimeout(() => {
             fetch("/volume", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ volume: parseInt(speakerSlider.value) })
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({volume: parseInt(speakerSlider.value)})
             }).catch(err => console.error("Failed to set speaker volume:", err));
         }, 500);
     });
@@ -698,7 +818,7 @@ const AudioPanel = (() => {
         }
     }
 
-    return { loadMicGain, updateDeviceLabels };
+    return {loadMicGain, updateDeviceLabels};
 })();
 
 // ===================== MOTOR TEST PANEL =====================
@@ -707,8 +827,8 @@ const MotorPanel = (() => {
     function sendMotorTest(motor) {
         fetch("/test-motor", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ motor })
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({motor})
         })
             .then(res => res.json())
             .then(data => {
@@ -741,7 +861,7 @@ const MotorPanel = (() => {
         });
     }
 
-    return { bindUI };
+    return {bindUI};
 })();
 
 // ===================== COLLAPSIBLE SECTIONS =====================
@@ -792,7 +912,8 @@ const Sections = (() => {
             });
         });
     }
-    return { collapsible };
+
+    return {collapsible};
 })();
 
 // ===================== IMPORT / EXPORT =====================
@@ -819,11 +940,11 @@ function importSettings(input) {
         return;
     }
     const reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = function (e) {
         fetch('/save-env', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ content: e.target.result })
+            body: JSON.stringify({content: e.target.result})
         })
             .then(res => res.json())
             .then(data => {

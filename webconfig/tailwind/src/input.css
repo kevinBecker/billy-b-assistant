@@ -16,6 +16,33 @@
     border: 2px solid #1a1a1a;
 }
 
+/* Stylize slider thumb and track */
+input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    height: 1rem;
+    width: 1rem;
+    border-radius: 9999px;
+    background-color: #22d3ee; /* cyan-400 */
+    cursor: pointer;
+    border: none;
+    margin-top: -0.25rem; /* align with track */
+}
+
+input[type="range"]::-moz-range-thumb {
+    height: 1rem;
+    width: 1rem;
+    border-radius: 9999px;
+    background-color: #22d3ee;
+    cursor: pointer;
+    border: none;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+    background-color: #334155; /* zinc-700 */
+    height: 0.5rem;
+    border-radius: 0.25rem;
+}
+
 .log-fullscreen {
     position: fixed !important;
     inset: 0;
@@ -41,10 +68,21 @@ body {
     animation: gradient-ocean 60s ease-in-out infinite;
 }
 
+button {
+    cursor: pointer;
+}
+
 @keyframes gradient-ocean {
     0%   { background-position: 0% 50%; }
     25%  { background-position: 50% 75%; }
     50%  { background-position: 100% 50%; }
     75%  { background-position: 50% 25%; }
     100% { background-position: 0% 50%; }
+}
+
+[data-tooltip] {
+    @apply hidden absolute font-normal top-0 right-0 max-w-[350px] z-10 p-2 text-xs bg-cyan-400/50 backdrop-blur-[5px] rounded shadow-lg text-slate-300;
+}
+[data-tooltip][data-visible="true"] {
+    @apply block;
 }
