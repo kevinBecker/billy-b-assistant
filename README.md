@@ -602,19 +602,14 @@ Behind the scenes:
 
 ---
 
-# Known Issues
+# Future Ideas & Bug report
 
-- Restarting the mic input stream after interruption sometimes doesn't work.
+Have a feature request or found a bug?  
+Please check the [existing issues](https://github.com/Thokoop/billy-b-assistant/issues) and open a new [issue](https://github.com/Thokoop/billy-b-assistant/issues/new) if it doesn't exists yet.
 
----
-
-# Future Ideas
-
-Here are some ideas that I have for features in upcoming releases:
-
-- Work in Progress: **Install script / easier software updates**
-- **Local TTS and STT fallback**
-- **Local custom wake-word detection**
+- Use the **Bug report** template if something isn’t working as expected
+- Use the **Feature request** template if you’ve got an idea or suggestion
+- You can also use issues to ask questions, share feedback, or start discussions
 
 ---
 
