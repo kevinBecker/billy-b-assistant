@@ -68,9 +68,23 @@ body {
     animation: gradient-ocean 60s ease-in-out infinite;
 }
 
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+}
+.reduce-motion .backdrop-blur-xs,
+.reduce-motion .backdrop-blur-sm {
+    backdrop-filter: none !important;
+    @apply bg-zinc-900
+}
+
 button {
     cursor: pointer;
 }
+
 
 @keyframes gradient-ocean {
     0%   { background-position: 0% 50%; }

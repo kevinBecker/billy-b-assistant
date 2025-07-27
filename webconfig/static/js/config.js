@@ -1,4 +1,4 @@
-// ===================== LOGS =====================
+// ===================== Header Secondary Actions =====================
 
 const LogPanel = (() => {
     let autoScrollEnabled = false;
@@ -41,6 +41,22 @@ const LogPanel = (() => {
                 .then(res => res.text())
                 .then(text => elements.envTextarea.value = text.trim())
                 .catch(() => showNotification("An error occurred while loading .env", "error"));
+        }
+    };
+
+    const toggleMotion = () => {
+        const btn = elements.toggleMotionBtn;
+        const icon = btn.querySelector(".material-icons");
+
+        btn.classList.toggle("bg-zinc-700");
+        document.documentElement.classList.toggle("reduce-motion");
+
+        const isReduced = document.documentElement.classList.contains("reduce-motion");
+        localStorage.setItem("reduceMotion", isReduced ? "1" : "0");
+
+        // Toggle icon
+        if (icon) {
+            icon.textContent = isReduced ? "blur_off" : "blur_on";
         }
     };
 
@@ -109,13 +125,27 @@ const LogPanel = (() => {
             envPanel: document.getElementById("env-panel"),
             envTextarea: document.getElementById("env-textarea"),
             saveEnvBtn: document.getElementById("save-env-btn"),
+            toggleMotionBtn: document.getElementById("toggle-motion-btn"),
         };
 
         elements.toggleBtn.addEventListener("click", toggleLogPanel);
         elements.toggleFullscreenBtn.addEventListener("click", toggleFullscreenLog);
         elements.scrollBtn.addEventListener("click", toggleAutoScroll);
         elements.toggleEnvBtn.addEventListener("click", toggleEnvPanel);
+        elements.toggleMotionBtn.addEventListener("click", toggleMotion);
         elements.saveEnvBtn.addEventListener("click", saveEnv);
+
+        if (localStorage.getItem("reduceMotion") === "1") {
+            document.documentElement.classList.add("reduce-motion");
+
+            const btn = elements.toggleMotionBtn;
+            const icon = btn.querySelector(".material-icons");
+            btn.toggleMotionBtn.classList.remove("bg-zinc-700");
+
+            if (icon) {
+                icon.textContent = "blur_off";
+            }
+        }
     };
 
     return {fetchLogs, bindUI};
@@ -340,7 +370,7 @@ const PersonaForm = (() => {
             // Output value
             const valueLabel = document.createElement("span");
             valueLabel.id = `${key}-value`;
-            valueLabel.className = "text-zinc-400";
+            valueLabel.className = "text-zinc-400 w-4";
             valueLabel.textContent = value;
 
             // Drag interaction
@@ -444,8 +474,7 @@ const PersonaForm = (() => {
             const personality = {};
             document.querySelectorAll("#personality-sliders div[data-fill-for]").forEach((bar) => {
                 const trait = bar.dataset.fillFor;
-                const value = parseInt(bar.style.width); // or from a data-value attr if you prefer
-                personality[trait] = value;
+                personality[trait] = parseInt(bar.style.width);
             });
 
             const backstory = {};
