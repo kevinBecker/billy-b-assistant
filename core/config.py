@@ -78,6 +78,7 @@ DEBUG_MODE_INCLUDE_DELTA = (
     os.getenv("DEBUG_MODE_INCLUDE_DELTA", "false").lower() == "true"
 )
 TEXT_ONLY_MODE = os.getenv("TEXT_ONLY_MODE", "false").lower() == "true"
+RUN_MODE = os.getenv("RUN_MODE", "normal").lower()
 
 # === Billy Hardware ===
 BILLY_MODEL = os.getenv("BILLY_MODEL", "modern").strip().lower()
@@ -108,6 +109,9 @@ HA_LANG = os.getenv("HA_LANG", "en")
 ALLOW_UPDATE_PERSONALITY_INI = (
     os.getenv("ALLOW_UPDATE_PERSONALITY_INI", "true").lower() == "true"
 )
+
+# === Software Config ===
+FLASK_PORT = int(os.getenv("FLASK_PORT", "80"))
 
 
 def is_classic_billy():

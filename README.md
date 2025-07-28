@@ -5,16 +5,23 @@ The **Billy Bass Assistant** is a Raspberry Pi–powered voice assistant embedde
 > **This project is still in BETA.** Things might crash, get stuck or make Billy scream uncontrollably (ok that last part maybe not literally but you get the point). Proceed with fishy caution.
 
 ![Billy Bathroom](./docs/images/billy_bathroom.jpeg)
+![Billy UI](./docs/images/web-UI.png)
+<img src="./docs/images/web-UI-Mobile.png" alt="Billy UI Mobile" style="width: 33%;" />
 ---
 
 ## Features
 
 - Realtime conversations using OpenAI GPT-4o-mini
-- 3D-printable backplate for housing USB microphone and speaker
-- Lightweight web UI for editing configuration, logs, and systemd service control
-- Support for the Modern Billy hardware version with 2 motors as well as the Classic Billy hardware version (3 motors)
-- Physical button to start/interact/intervene
 - Personality system with configurable traits (e.g., snark, charm)
+- Physical button to start/interact/intervene
+- 3D-printable backplate for housing USB microphone and speaker
+- Support for the Modern Billy hardware version with 2 motors as well as the Classic Billy hardware version (3 motors)
+- Lightweight web UI:
+  - Adjust settings and persona of Billy
+  - View debug logs
+  - Start/stop/restart Billy
+  - Export/Import of settings and persona
+  - Hostname and Port configuration
 - MQTT support:
   - sensor with status updates of Billy (idle, speaking, listening)
   - `billy/say` topic for triggering spoken messages remotely (feature in beta)
@@ -236,7 +243,7 @@ python3 -m venv venv
 Activate the Python virtual environment:
 
 ```bash
-source .venv/bin/activate
+source ./venv/bin/activate
 ```
 
 To confirm the virtual environment is activated, check the location of your Python interpreter:
@@ -595,19 +602,14 @@ Behind the scenes:
 
 ---
 
-# Known Issues
+# Future Ideas & Bug report
 
-- Restarting the mic input stream after interruption sometimes doesn't work.
+Have a feature request or found a bug?  
+Please check the [existing issues](https://github.com/Thokoop/billy-b-assistant/issues) and open a new [issue](https://github.com/Thokoop/billy-b-assistant/issues/new) if it doesn't exists yet.
 
----
-
-# Future Ideas
-
-Here are some ideas that I have for features in upcoming releases:
-
-- Work in Progress: **Install script / easier software updates**
-- **Local TTS and STT fallback**
-- **Local custom wake-word detection**
+- Use the **Bug report** template if something isn’t working as expected
+- Use the **Feature request** template if you’ve got an idea or suggestion
+- You can also use issues to ask questions, share feedback, or start discussions
 
 ---
 
@@ -637,3 +639,5 @@ Pull requests are welcome! If you have an idea for a new feature, bug fix, or im
 Enjoying the project? Feel free to leave a small tip, totally optional, but much appreciated!
 
 ![Paypal](./docs/images/qrcode.png)
+
+https://paypal.me/thomkoopman050

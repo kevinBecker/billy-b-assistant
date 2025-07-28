@@ -73,7 +73,7 @@ All notable changes to this project will be documented in this file.
 - Fixed usage of legacy `websockets` API.
 - Added missing dependencies: `aiohttp`, `lgpio`.
 
-## [1.2.0] — 2025-07-??
+## [1.2.0] — 2025-07-24
 
 ### Web UI 
 
@@ -97,3 +97,25 @@ All notable changes to this project will be documented in this file.
 - MQTT "say" command integration for announcing messages
 - Systemd service install process.
 - Wi-Fi onboarding form (captive portal)
+
+## [1.3.0] — 2025-07-28
+
+### Added
+
+- **'Dory' Mode**: Optional single-response mode where Billy answers only once before ending the session. (requested by @kenway33 )
+- **Motor Test UI**: New motor test buttons in the Hardware tab allow triggering mouth and head/tail motion directly from the web interface. (requested by @henrym9)
+- **Hostname + Port Configuration**: Added settings for customizing the device's hostname and Flask web port via UI. (requested by @cprasmu)
+- **Import/Export**: Added ability to upload/download both `.env` and `persona.ini` files from the web UI.
+
+### Changed
+
+- Improved internal JS structure and modularization.
+- Minor refinements to input label styling.
+- Improved UX:
+  - Added collapsible UI sections
+  - **Reduced Motion Mode**: New UI toggle to disable animations and backdrop blur for accessibility or preference. Setting persists in local storage.
+  - **Tooltips**: Informational tooltips added to multiple UI elements for better user guidance.
+
+### Fixed
+
+- **Motor Retract Fix**: Ensures Billy's head reliably returns to neutral after session ends.
