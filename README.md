@@ -243,7 +243,7 @@ python3 -m venv venv
 Activate the Python virtual environment:
 
 ```bash
-source .venv/bin/activate
+source ./venv/bin/activate
 ```
 
 To confirm the virtual environment is activated, check the location of your Python interpreter:
