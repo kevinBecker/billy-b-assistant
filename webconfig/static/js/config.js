@@ -5,6 +5,27 @@ const LogPanel = (() => {
     let isLogHidden = true;
     let isEnvHidden = true;
 
+    // Shutdown Billy service
+    const shutdownBilly = async () => {
+        if (!confirm("Are you sure you want to shutdown Billy? This will stop the service.")) return;
+        try {
+            const res = await fetch('/shutdown', {method: 'POST'});
+            const data = await res.json();
+            if (data.status === "ok") {
+                showNotification("Billy is shutting down", "success");
+                setTimeout(() => {
+                    location.reload();
+                }, 3000);
+            }
+            else {
+                showNotification(data.error || "Shutdown failed", "error");
+            }
+        } catch (err) {
+            console.error("Failed to shutdown Billy:", err);
+            showNotification("Failed to shutdown Billy", "error");
+        }
+    };
+
     // Fetch logs and update UI
     const fetchLogs = async () => {
         const res = await fetch("/logs");
@@ -126,6 +147,7 @@ const LogPanel = (() => {
             envTextarea: document.getElementById("env-textarea"),
             saveEnvBtn: document.getElementById("save-env-btn"),
             toggleMotionBtn: document.getElementById("toggle-motion-btn"),
+            shutdownBillyBtn: document.getElementById("shutdown-billy-btn")
         };
 
         elements.toggleBtn.addEventListener("click", toggleLogPanel);
@@ -134,6 +156,7 @@ const LogPanel = (() => {
         elements.toggleEnvBtn.addEventListener("click", toggleEnvPanel);
         elements.toggleMotionBtn.addEventListener("click", toggleMotion);
         elements.saveEnvBtn.addEventListener("click", saveEnv);
+        elements.shutdownBillyBtn.addEventListener("click", shutdownBilly);
 
         if (localStorage.getItem("reduceMotion") === "1") {
             document.documentElement.classList.add("reduce-motion");
