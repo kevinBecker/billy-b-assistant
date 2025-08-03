@@ -399,8 +399,8 @@ def service_status():
         return jsonify({"status": e.output.decode("utf-8").strip()})
 
 
-@app.route("/shutdown", methods=["POST"])
-def shutdown_billy():
+@app.route("/reboot", methods=["POST"])
+def reboot_billy():
     """Shutdown Billy and webconfig services."""
     try:
         subprocess.call(["sudo", "shutdown", "-r", "now"])
@@ -408,6 +408,14 @@ def shutdown_billy():
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 
+@app.route("/shutdown", methods=["POST"])
+def shutdown_billy():
+    """Shutdown Billy and webconfig services."""
+    try:
+        subprocess.call(["sudo", "shutdown", "-h", "now"])
+        return jsonify({"status": "ok", "message": "Billy shuttingdown"})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
 # ==== Persona ====
 
 
