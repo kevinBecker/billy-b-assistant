@@ -404,7 +404,7 @@ def reboot_billy():
     """Shutdown Billy and webconfig services."""
     try:
         subprocess.call(["sudo", "shutdown", "-r", "now"])
-        return jsonify({"status": "ok", "message": "Billy shuttingdown"})
+        return jsonify({"status": "ok", "message": "Billy rebooting"})
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 
@@ -413,7 +413,7 @@ def shutdown_billy():
     """Shutdown Billy and webconfig services."""
     try:
         subprocess.call(["sudo", "shutdown", "-h", "now"])
-        return jsonify({"status": "ok", "message": "Billy shuttingdown"})
+        return jsonify({"status": "ok", "message": "Billy shutting down"})
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 # ==== Persona ====
