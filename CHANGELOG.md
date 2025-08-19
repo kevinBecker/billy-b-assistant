@@ -119,3 +119,10 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - **Motor Retract Fix**: Ensures Billy's head reliably returns to neutral after session ends.
+
+## [1.3.1] — 2025-08-19
+
+### Added
+
+- **Shutdown and restart**: Added raspberry pi shutdown and restart buttons in the UI (contribution by @cprasmu )
+
