@@ -28,7 +28,8 @@ const LogPanel = (() => {
 
     // Shutdown Billy
     const shutdownBilly = async () => {
-        if (!confirm("Are you sure you want to shutdown Billy? This will completely shutdown the system!")) return;
+        if (!confirm("Are you sure you want to shutdown Billy?\n\nThis will power off the Raspberry Pi but one or more of the motors may remain engaged.\n" +
+            "To fully power down, make sure to also switch off or unplug the power supply after shutdown.")) return;
         try {
             const res = await fetch('/shutdown', {method: 'POST'});
             const data = await res.json();
