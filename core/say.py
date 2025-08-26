@@ -4,16 +4,17 @@ import json
 
 import websockets.legacy.client
 
-from core.audio import (
+from .audio import (
     ensure_playback_worker_started,
     playback_queue,
     rotate_and_save_response_audio,
 )
-from core.config import CHUNK_MS, INSTRUCTIONS, OPENAI_API_KEY, VOICE
+from .config import CHUNK_MS, INSTRUCTIONS, OPENAI_API_KEY, VOICE
+from .movements import move_head
 
 
-async def say(text: str, literal: bool = True):
-    print(f"🗣️ say() called with text={text!r} | literal={literal}")
+async def say(text: str):
+    print(f"🗣️ say() called with text={text!r}")
 
     uri = "wss://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview"
     headers = {
@@ -21,12 +22,7 @@ async def say(text: str, literal: bool = True):
         "openai-beta": "realtime=v1",
     }
 
-    instructions = (
-        INSTRUCTIONS + "\n\n"
-        "If the user message begins with anything other than [[PROMPT]], Override for this turn while maintaining your tone and accent:"
-        "say the user's message **verbatim**, word for word, with no additions or reinterpretation. "
-        "Maintain personality, but do NOT rephrase or expand."
-    )
+    instructions = INSTRUCTIONS
 
     try:
         async with websockets.legacy.client.connect(uri, extra_headers=headers) as ws:
@@ -46,13 +42,26 @@ async def say(text: str, literal: bool = True):
             print("🛰️ Session started")
 
             # Step 2: Send text
+            if text.strip().startswith("{{") and text.strip().endswith("}}"):
+                stripped_text = text.strip()[2:-2].strip()
+                print("💬 Detected prompt message, sending as-is")
+                user_message = stripped_text
+            else:
+                print("💬 Detected literal message")
+                user_message = (
+                    "Override for this turn while maintaining your tone and accent:\n"
+                    "Say the user's message **verbatim**, word for word, with no additions or reinterpretation.\n"
+                    "Maintain personality, but do NOT rephrase or expand.\n\n"
+                    f"Repeat this literal message sent via MQTT: {text}"
+                )
+
             await ws.send(
                 json.dumps({
                     "type": "conversation.item.create",
                     "item": {
                         "type": "message",
                         "role": "user",
-                        "content": [{"type": "input_text", "text": f"{text}"}],
+                        "content": [{"type": "input_text", "text": user_message}],
                     },
                 })
             )
@@ -71,6 +80,8 @@ async def say(text: str, literal: bool = True):
 
             # Ensure playback thread is running BEFORE putting anything in the queue
             ensure_playback_worker_started(CHUNK_MS)
+
+            move_head("on")
 
             async for message in ws:
                 parsed = json.loads(message)
@@ -107,6 +118,11 @@ async def say(text: str, literal: bool = True):
 
             # Wait for playback to complete
             await asyncio.to_thread(playback_queue.join)
+
+            try:
+                move_head("off")
+            except Exception as e:
+                print(f"\n⚠️ Error head motor: {e}")
 
     except Exception as e:
         print(f"❌ say() failed: {e}")

@@ -126,3 +126,8 @@ All notable changes to this project will be documented in this file.
 
 - **Shutdown and restart**: Added raspberry pi shutdown and restart buttons in the UI (contribution by @cprasmu )
 
+## [1.4.0] — 2025-08-26
+
+### Added
+
+- **Say command**: Added a MQTT command to let billy announce messages, either as literal sentences or as prompts.
