@@ -213,6 +213,7 @@ On the Raspberry Pi:
 
 ```bash
 cd ~
+sudo apt install git
 git clone https://github.com/Thokoop/billy-b-assistant.git
 ```
 
@@ -267,13 +268,13 @@ pip3 install -r ./requirements.txt
 To run Billy as a background service at boot, copy the service file from the repository to the `/etc/systemd/system` directory:
 
 ```bash
-cp setup/system/billy.service /etc/systemd/system/billy.service
+sudo cp setup/system/billy.service /etc/systemd/system/billy.service
 ```
 
 Adjust the username/paths if needed:
 
 ```bash
-nano /etc/systemd/system/billy.service
+sudo nano /etc/systemd/system/billy.service
 ```
 
 ```ini
@@ -312,13 +313,13 @@ journalctl -u billy-b-assistant.service -f
 If you want the web interface to always be available, copy the service file from the repository to the `/etc/systemd/system` directory:
 
 ```bash
-cp setup/system/billy-webconfig.service /etc/systemd/system/billy-webconfig.service
+sudo cp setup/system/billy-webconfig.service /etc/systemd/system/billy-webconfig.service
 ```
 
 Adjust the username/paths if needed:
 
 ```bash
-nano /etc/systemd/system/billy-webconfig.service
+sudo nano /etc/systemd/system/billy-webconfig.service
 ```
 
 ```ini
