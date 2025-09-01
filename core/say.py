@@ -9,14 +9,14 @@ from .audio import (
     playback_queue,
     rotate_and_save_response_audio,
 )
-from .config import CHUNK_MS, INSTRUCTIONS, OPENAI_API_KEY, VOICE
+from .config import CHUNK_MS, INSTRUCTIONS, OPENAI_API_KEY, OPENAI_MODEL, VOICE
 from .movements import move_head
 
 
 async def say(text: str):
     print(f"🗣️ say() called with text={text!r}")
 
-    uri = "wss://api.openai.com/v1/realtime?model=gpt-4o-mini-realtime-preview"
+    uri = f"wss://api.openai.com/v1/realtime?model={OPENAI_MODEL}"
     headers = {
         "Authorization": f"Bearer {OPENAI_API_KEY}",
         "openai-beta": "realtime=v1",

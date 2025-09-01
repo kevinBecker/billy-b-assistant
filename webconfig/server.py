@@ -300,6 +300,23 @@ def perform_update():
         subprocess.check_call(
             ["git", "checkout", "--force", f"tags/{latest}"], cwd=PROJECT_ROOT
         )
+
+        venv_pip = os.path.join(PROJECT_ROOT, "venv", "bin", "pip")
+
+        subprocess.check_call(
+            [venv_pip, "install", "--upgrade", "-r", "requirements.txt"],
+            cwd=PROJECT_ROOT,
+        )
+
+        output = subprocess.check_output(
+            [venv_pip, "install", "--upgrade", "-r", "requirements.txt"],
+            cwd=PROJECT_ROOT,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+
+        print("📦 Pip install output:\n", output)
+
         save_versions(latest, latest)
         threading.Thread(target=lambda: (time.sleep(2), restart_services())).start()
         return jsonify({"status": "updated", "version": latest})
@@ -408,6 +425,7 @@ def reboot_billy():
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 
+
 @app.route("/shutdown", methods=["POST"])
 def shutdown_billy():
     """Shutdown Billy and webconfig services."""
@@ -416,6 +434,8 @@ def shutdown_billy():
         return jsonify({"status": "ok", "message": "Billy shutting down"})
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
+
+
 # ==== Persona ====
 
 
@@ -686,4 +706,9 @@ def export_persona():
 
 # ==== MAIN ====
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(core_config.FLASK_PORT), debug=True)
+    app.run(
+        host="0.0.0.0",
+        port=int(core_config.FLASK_PORT),
+        debug=False,
+        use_reloader=False,
+    )

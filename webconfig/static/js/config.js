@@ -657,10 +657,13 @@ document.addEventListener('click', (e) => {
 
     document.getElementById("update-btn").addEventListener("click", () => {
         if (!confirm("Are you sure you want to update Billy to the latest version?")) return;
+        showNotification("Update started");
         fetch("/update", {method: "POST"})
             .then(res => res.json())
             .then(data => {
-                showNotification(data.message || "Update started");
+                if (data.message) {
+                    showNotification(data.message);
+                }
                 let attempts = 0, maxAttempts = 24;
                 const checkForUpdate = async () => {
                     try {

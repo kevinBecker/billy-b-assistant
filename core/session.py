@@ -441,7 +441,7 @@ class BillySession:
                     self.ws = None
             return
 
-        if not self.RUN_MODE and (
+        if not self.run_mode and (
             re.search(r"[a-zA-Z]\?\s*$", self.full_response_text.strip())
             and self.user_spoke_after_assistant
         ):
