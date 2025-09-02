@@ -105,6 +105,7 @@ class BillySession:
         self.last_activity[0] = time.time()
         self.session_active.set()
         self.user_spoke_after_assistant = False
+        self.allow_mic_input = True
 
         async with self.ws_lock:
             if self.ws is None:
@@ -249,6 +250,7 @@ class BillySession:
                 mqtt_publish("billy/state", "speaking")
                 print("\n🐟 Billy: ", end='', flush=True)
                 self.first_text = False
+                self.user_spoke_after_assistant = False
             print(data["delta"], end='', flush=True)
             self.full_response_text += data["delta"]
 
@@ -369,16 +371,21 @@ class BillySession:
             if not TEXT_ONLY_MODE:
                 await asyncio.to_thread(audio.playback_queue.join)
 
+                # Let the last audio chunk finish playing
+                await asyncio.sleep(1)
+
                 if len(self.audio_buffer) > 0:
                     print(f"💾 Saving audio buffer ({len(self.audio_buffer)} bytes)")
                     audio.rotate_and_save_response_audio(self.audio_buffer)
                 else:
                     print("⚠️ Audio buffer was empty, skipping save.")
 
-                self.allow_mic_input = True
                 self.audio_buffer.clear()
                 audio.playback_done_event.set()
                 self.last_activity[0] = time.time()
+
+                # Allow mic input only after a short delay
+                self.allow_mic_input = True
 
             if self.run_mode == "dory":
                 print("🎣 Dory mode active. Ending session after single response.")

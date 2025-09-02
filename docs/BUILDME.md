@@ -15,35 +15,15 @@ This guide explains how to physically build and wire your Raspberry Pi–powered
 |----------------------------------------------|--------|
 | Big Mouth Billy Bass                         | [Amazon NL](https://amzn.eu/d/gzyNRsg) |
 | MicroSD card (for Raspberry OS Lite)         | [Kiwi Electronics](https://www.kiwi-electronics.com/nl/transcend-64gb-microsd-met-adapter-uhs-i-u3-a2-ultra-performance-160-80-mb-s-11632 ) |
+| Raspberry Pi 5 (4gb RAM or more recommended) | [Kiwi Electronics](https://www.kiwi-electronics.com/nl/raspberry-pi-5-computers-accessoires-415/raspberry-pi-5-4gb-11579) |
+| Raspberry Pi Power Supply 27W                | [Kiwi Electronics](https://www.kiwi-electronics.com/nl/raspberry-pi-27w-usb-c-power-supply-wit-eu-11581) |
+| MicroSD card (for Raspberry OS Lite)         | [Kiwi Electronics](https://www.kiwi-electronics.com/nl/transcend-64gb-microsd-met-adapter-uhs-i-u3-a2-ultra-performance-160-80-mb-s-11632 ) |
+| Raspberry Pi Active Cooler                   | [Kiwi Electronics](https://www.kiwi-electronics.com/nl/raspberry-pi-active-cooler-11585) |
 | 1x USB Speaker                               | [Amazon NL](https://amzn.eu/d/2yklfno), [Amazon US](https://www.amazon.com/dp/B075M7FHM1), [AliExpress](https://aliexpress.com/item/1005007168026736.html) |
 | 1x USB Microphone                            | [Amazon NL](https://amzn.eu/d/7Y9GhoL), [Amazon US](https://www.amazon.com/dp/B08M37224H), [AliExpress](https://aliexpress.com/item/1005007211513791.html) |
 | 1x L298N Motor Driver                        | [Amazon NL](https://amzn.eu/d/g9yBNVg), [Amazon US](https://www.amazon.com/dp/B0B82GZVT5), [AliExpress](https://aliexpress.com/item/1005006890733953.html) |
 | Jumper Wires / Dupont Cables                 | [Amazon NL](https://amzn.eu/d/i4kyXG2), [AliExpress](https://aliexpress.com/item/1005003641187997.html) |
 | JST 2.54 4 pin connector (female) \*         | [Amazon NL](https://amzn.eu/d/cDqHgNv), [AliExpress](https://aliexpress.com/item/1005007460897865.html) |
-
-### Pick a Raspberry Pi
-
-Both the **Zero 2W** and **Pi 4/5** will work— since most of the AI processing is cloud-based (as of now).
-Go with the Pi 4/5 (recommended) if you want quicker boot-up times, better responsiveness and headroom for future features and/or if you want to run other software on the Pi as well.
-
-If you don't need the flexibility, the Pi Zero 2W is a more budget-friendly option that will suffice for now.
-Keep in mind that future updates may introduce features requiring more processing power or memory, which could make a hardware upgrade necessary.
-
-#### Performance:
-
-| Raspberry Pi 5 (or 4)                        | Source |
-|----------------------------------------------|--------|
-| Raspberry Pi 5 (4gb RAM or more recommended) | [Kiwi Electronics](https://www.kiwi-electronics.com/nl/raspberry-pi-5-computers-accessoires-415/raspberry-pi-5-4gb-11579) |
-| Raspberry Pi Power Supply 27W                | [Kiwi Electronics](https://www.kiwi-electronics.com/nl/raspberry-pi-27w-usb-c-power-supply-wit-eu-11581) |
-| Raspberry Pi 5 Active Cooler                 | [Kiwi Electronics](https://www.kiwi-electronics.com/nl/raspberry-pi-active-cooler-11585) |
-
-#### Budget: 
-
-| Raspberry Pi Zero 2W                     | Source |
-|------------------------------------------|--------|
-| Raspberry Pi Zero 2W                     | [Kiwi Electronics](https://www.kiwi-electronics.com/nl/raspberry-pi-zero-2-w-10770) |
-| Raspberry Pi Power Supply 2.5A           | [Kiwi Electronics](https://www.kiwi-electronics.com/nl/raspberry-pi-psu-5-1v-2-5a-microusb-eu-plug-10809) |
-| MicroUSB OTG Hub (2 USB A ports or more) | [Kiwi Electronics](https://www.kiwi-electronics.com/nl/usb-mini-hub-met-power-switch-otg-microusb-3191) |
 
 
 \* Recommended to be able to easily (un)plug the motor cables.

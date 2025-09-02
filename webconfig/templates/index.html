@@ -677,6 +677,26 @@
                                   spellcheck="false"></textarea>
                     </div>
                 </div>
+
+                <!-- Wake-up Sounds -->
+                <div class="bg-zinc-900/50 backdrop-blur-xs border border-zinc-700 p-4 md:p-6 rounded-lg shadow-sm mb-6 collapsible-section"
+                     id="section-wakeup-sounds">
+                    <h3 class="flex items-center gap-2 cursor-pointer group text-lg grow justify-between font-bold mb-4 text-slate-200">
+                        Wake-up Sounds
+                        <span class="material-icons transition-transform duration-200 ml-2 rotate-0">expand_more</span>
+                    </h3>
+
+                    <div id="wakeup-sound-list" class="space-y-2">
+                        <!-- JS will populate rows here -->
+                    </div>
+
+                    <button type="button" onclick="addWakeupSound()"
+                            class="text-sm text-emerald-500 hover:text-emerald-400 mt-2 flex items-center cursor-pointer">
+                        <span class="material-icons align-middle mr-1">add_circle_outline</span>
+                        Add Wake-up Sound
+                    </button>
+                </div>
+
             </form>
 
             <div class="sticky bottom-0 z-10 p-4">

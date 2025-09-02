@@ -38,7 +38,8 @@ OUTPUT_DEVICE_INDEX = None
 OUTPUT_CHANNELS = 2
 OUTPUT_RATE = None
 CHUNK_SIZE = None
-WAKE_UP_DIR = "sounds/wake-up"
+WAKE_UP_DIR = "sounds/wake-up/custom"
+WAKE_UP_DIR_DEFAULT = "sounds/wake-up/default"
 RESPONSE_HISTORY_DIR = "sounds/response-history"
 os.makedirs(RESPONSE_HISTORY_DIR, exist_ok=True)
 
@@ -316,9 +317,15 @@ def enqueue_wav_to_playback(filepath):
 
 def play_random_wake_up_clip():
     """Select and enqueue a random wake-up WAV file with mouth movement."""
+    # Check custom folder first
     clips = glob.glob(os.path.join(WAKE_UP_DIR, "*.wav"))
+
     if not clips:
-        print("⚠️ No wake-up clips found.")
+        print("🔁 No custom clips found, falling back to default.")
+        clips = glob.glob(os.path.join(WAKE_UP_DIR_DEFAULT, "*.wav"))
+
+    if not clips:
+        print("⚠️ No wake-up clips found in either custom or default.")
         return None
 
     clip = random.choice(clips)
