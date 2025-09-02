@@ -519,7 +519,7 @@ def save_single_wakeup_phrase():
 def list_wakeup_clips():
     config = configparser.ConfigParser()
     config.read(PERSONA_PATH)
-    wakeup_data = config.get("WAKEUP", {})
+    wakeup_data = dict(config["WAKEUP"]) if "WAKEUP" in config else {}
 
     print("🧠 Loaded WAKEUP phrases from persona.ini:")
     for k in sorted(wakeup_data.keys(), key=lambda x: int(x)):
