@@ -582,6 +582,22 @@ async function loadWakeupClips() {
         const res = await fetch("/wakeup");
         const { clips } = await res.json();
 
+        if (clips.length === 0) {
+            const message = document.createElement("div");
+            message.className = "text-sm text-zinc-400 italic py-2";
+            message.textContent = "No custom wake-up clips added. Using the default sounds.";
+            container.appendChild(message);
+            return;
+        }
+        else {
+            label.innerHtml = `<label class="flex items-center justify-between font-semibold text-sm text-slate-300 mb-1">
+                        Words or phrases that Billy will randomly say on activation:
+                    </label>
+            `;
+
+            container.appendChild(label);
+        }
+
         clips.sort((a, b) => a.index - b.index).forEach(({ index, phrase, has_audio }) => {
             const row = document.createElement("div");
             row.className = "flex items-center space-x-2";
