@@ -590,11 +590,9 @@ async function loadWakeupClips() {
             return;
         }
         else {
-            label.innerHtml = `<label class="flex items-center justify-between font-semibold text-sm text-slate-300 mb-1">
-                        Words or phrases that Billy will randomly say on activation:
-                    </label>
-            `;
-
+            const label = document.createElement("label");
+            label.className = "flex items-center justify-between font-semibold text-sm text-slate-300 mb-1"
+            label.innerHtml = `Words or phrases that Billy will randomly say on activation:`;
             container.appendChild(label);
         }
 
