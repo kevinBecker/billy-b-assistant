@@ -7,7 +7,7 @@ import wave
 
 import websockets.legacy.client
 
-from .config import EXTRA_INSTRUCTIONS, OPENAI_API_KEY, OPENAI_MODEL, VOICE
+from .config import CUSTOM_INSTRUCTIONS, OPENAI_API_KEY, OPENAI_MODEL, VOICE
 
 
 WAKEUP_DIR = os.path.abspath(
@@ -52,7 +52,7 @@ def generate_wake_clip_async(prompt, index):
                             "turn_detection": {"type": "semantic_vad"},
                             "instructions": (
                                 "Always respond by speaking the exact user text out loud. Do not change or rephrase anything!\n\n"
-                                + EXTRA_INSTRUCTIONS
+                                + CUSTOM_INSTRUCTIONS
                             ),
                         },
                     })

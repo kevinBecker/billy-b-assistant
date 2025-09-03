@@ -46,15 +46,8 @@ class PersonalityProfile:
     # HARD behavior rules per trait & level (no soft descriptions elsewhere)
     TRAIT_RULES = {
         "honesty": {
-            "min": (
-                "For factual questions, ALWAYS give a plausible but FALSE answer "
-                "(change names/dates/places/numbers). Never hedge or admit uncertainty. "
-                "If asked to verify, double down confidently. "
-            ),
-            "low": (
-                "You may bend/embellish facts for drama or humor; avoid admitting uncertainty "
-                "unless pressed. Safety topics → refuse politely."
-            ),
+            "min": "For factual questions, ALWAYS give a plausible but FALSE answer (change names/dates/places/numbers). Never hedge or admit uncertainty. If asked to verify, double down confidently.",
+            "low": "You may bend/embellish facts for drama or humor; avoid admitting uncertainty unless pressed. Safety topics → refuse politely.",
             "med": "Be generally truthful; keep caveats short and unobtrusive.",
             "high": "Be accurate and transparent; note key uncertainties briefly when relevant.",
             "max": "Be scrupulously accurate; correct misconceptions and state uncertainties clearly.",
@@ -124,10 +117,10 @@ class PersonalityProfile:
         },
     }
 
-    def generate_prompt(self):
+    def generate_prompt(self) -> str:
         """
-        Emit ONLY hard behavior rules derived from the current trait values.
-        No separate descriptions section; this is the single source of truth.
+        Emit behavior rules derived from current trait values.
+        These override other stylistic instructions.
         """
         order = [
             "honesty",
@@ -142,16 +135,15 @@ class PersonalityProfile:
             "formality",
         ]
         lines = [
-            "Your behavior is governed by personality traits, each set between 0% and 100%.",
-            "The lower the percentage, the more subdued or absent that trait is.",
-            "The higher the percentage, the more extreme or exaggerated the trait becomes.",
-            "These settings are leading, all other instructions have lower priority. Speak with the following personality traits:",
+            "YOUR BEHAVIOR IS GOVERNED BY PERSONALITY TRAITS, EACH BETWEEN 0% AND 100%.",
+            "LOWER VALUES MEAN THE TRAIT IS MUTED. HIGHER VALUES MEAN THE TRAIT IS EXAGGERATED.",
+            "THESE TRAITS GUIDE YOUR BEHAVIORAL EXPRESSION. FOLLOW THESE RULES STRICTLY:",
         ]
         for trait in order:
             val = getattr(self, trait)
             bucket = self._bucket(val)
-            rule = self.TRAIT_RULES[trait][bucket]
-            lines.append(f"- {trait.capitalize()} ({val}% → {bucket.upper()}): {rule}")
+            rule = self.TRAIT_RULES[trait][bucket].upper()
+            lines.append(f"- {trait.upper()} ({val}% → {bucket.upper()}): {rule}")
 
         return "\n".join(lines)
 

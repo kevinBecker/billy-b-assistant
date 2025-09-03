@@ -11,7 +11,7 @@ The **Billy Bass Assistant** is a Raspberry Pi–powered voice assistant embedde
 
 ## Features
 
-- Realtime conversations using OpenAI GPT-4o-mini
+- Realtime conversations using OpenAI Realtime API
 - Personality system with configurable traits (e.g., snark, charm)
 - Physical button to start/interact/intervene
 - 3D-printable backplate for housing USB microphone and speaker

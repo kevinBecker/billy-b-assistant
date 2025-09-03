@@ -132,6 +132,8 @@ All notable changes to this project will be documented in this file.
 
 - **Say command**: Added a MQTT command to let billy announce messages, either as literal sentences or as prompts.
 - **Custom Wake-up Sounds**: Custom Wake-up sounds can now be customised and generated via the UI
+- **New gpt-realtime model**: Added Support for the new stable release of the openAI Realtime API model.
+- **Favicon**: No more 404
 
 ### Changed
 
