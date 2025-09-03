@@ -612,33 +612,41 @@ def remove_wakeup_clip():
 
     wakeup = dict(config["WAKEUP"])
 
-    # Remove the clip by index
     if index_to_remove not in wakeup:
         return jsonify({"error": f"Clip {index_to_remove} not found"}), 404
 
-    del wakeup[index_to_remove]
+    # Remove the phrase
+    removed_phrase = wakeup.pop(index_to_remove)
 
-    # Save updated and reindexed WAKEUP section
+    # Rebuild wakeup section with new indices
     new_wakeup = {}
-    for i, phrase in enumerate(wakeup.values(), start=1):
+    old_to_new_index = {}
+    for i, (old_k, phrase) in enumerate(wakeup.items(), start=1):
         new_wakeup[str(i)] = phrase
+        old_to_new_index[old_k] = str(i)
 
     config["WAKEUP"] = new_wakeup
-
     with open(PERSONA_PATH, "w") as f:
         config.write(f)
 
-    # Delete corresponding audio file if exists
+    # Delete the removed audio file (by number or slug)
     audio_path_num = WAKE_UP_DIR / f"{index_to_remove}.wav"
     audio_path_slug = (
         WAKE_UP_DIR
-        / f"{re.sub(r'[^a-zA-Z0-9_-]+', '_', data.get('phrase', '')).strip('_').lower()}.wav"
+        / f"{re.sub(r'[^a-zA-Z0-9_-]+', '_', removed_phrase).strip('_').lower()}.wav"
     )
     for p in (audio_path_num, audio_path_slug):
         if p.exists():
             p.unlink()
 
-    return jsonify({"status": "removed"})
+    # 🔄 Rename remaining files to match new indices
+    for old_k, new_k in old_to_new_index.items():
+        old_path = WAKE_UP_DIR / f"{old_k}.wav"
+        new_path = WAKE_UP_DIR / f"{new_k}.wav"
+        if old_path.exists() and old_path != new_path:
+            old_path.rename(new_path)
+
+    return jsonify({"status": "removed and reindexed"})
 
 
 # ==== Audio: Speaker/Mic Tests ====

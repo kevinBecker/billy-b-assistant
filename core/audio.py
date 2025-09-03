@@ -336,12 +336,12 @@ def play_random_wake_up_clip():
     # Enqueue the WAV file
     enqueue_wav_to_playback(clip)
 
-    # Once done, set the event
-    playback_done_event.set()
-
     # Wait for exactly those new chunks to finish
     while playback_queue.unfinished_tasks > already_pending:
         time.sleep(0.01)
+
+    # Once done, set the event
+    playback_done_event.set()
 
     return clip
 

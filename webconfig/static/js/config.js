@@ -555,7 +555,7 @@ const PersonaForm = (() => {
             await fetch("/persona", {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({PERSONALITY: personality, BACKSTORY: backstory, META: meta})
+                body: JSON.stringify({PERSONALITY: personality, BACKSTORY: backstory, META: meta, WAKEUP: wakeup })
             });
 
             showNotification("Persona saved", "success");
@@ -619,7 +619,7 @@ function addWakeupSound(index = null, phrase = "", hasAudio = false) {
     row.dataset.index = nextIndex;
 
     row.innerHTML = `
-        <input type="text" class="text-input w-full rounded bg-zinc-800 border border-zinc-700 px-2 py-1" value="${phrase}">
+        <input type="text" class="text-input w-full rounded bg-zinc-800 border border-zinc-700 px-2 py-1" value="${phrase}" placeholder="word or phrase">
         <button type="button" class="wakeup-generate-btn text-white hover:text-amber-400" title="Generate .wav">
             <i class="material-icons align-middle">auto_fix_high</i>
         </button>
@@ -641,11 +641,6 @@ document.getElementById("wakeup-sound-list").addEventListener("click", async (e)
     const clipIndex = row.dataset.index;
     const input = row.querySelector("input[type='text']");
     const phrase = input?.value?.trim();
-
-    if (!phrase) {
-        showNotification("Please enter a phrase", "warning");
-        return;
-    }
 
     // === Play button ===
     if (e.target.closest(".wakeup-play-btn")) {
@@ -689,6 +684,11 @@ document.getElementById("wakeup-sound-list").addEventListener("click", async (e)
         generateBtn.disabled = true;
         generateBtn.classList.add("opacity-50");
         generateBtn.querySelector("i").textContent = "hourglass_empty";
+
+        if (!phrase) {
+            showNotification("Please enter a phrase", "warning");
+            return;
+        }
 
         try {
             const res = await fetch("/wakeup/generate", {
