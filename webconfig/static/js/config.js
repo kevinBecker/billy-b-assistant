@@ -729,7 +729,7 @@ document.getElementById("wakeup-sound-list").addEventListener("click", async (e)
                 throw new Error(err.error || "Failed to update persona");
             }
 
-            showNotification(`🔊 Clip ${clipIndex} generated and saved!`, "success");
+            showNotification(`Clip ${clipIndex} generated and saved!`, "success");
 
             await loadWakeupClips();
 
@@ -762,7 +762,7 @@ document.getElementById("wakeup-sound-list").addEventListener("click", async (e)
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Failed to remove clip");
 
-            showNotification(`🗑️ Clip ${clipIndex} removed`, "success");
+            showNotification(`Clip ${clipIndex} removed`, "success");
 
             await loadWakeupClips();
         } catch (err) {
