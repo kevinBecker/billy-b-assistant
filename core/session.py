@@ -1,12 +1,15 @@
 import asyncio
 import base64
 import json
+import os
 import re
+import socket
 import time
 from typing import Any
 
 import numpy as np
 import websockets.asyncio.client
+import websockets.exceptions
 
 from . import audio
 from .config import (
@@ -114,25 +117,41 @@ class BillySession:
                     "Authorization": f"Bearer {OPENAI_API_KEY}",
                     "openai-beta": "realtime=v1",
                 }
-                self.ws = await websockets.asyncio.client.connect(
-                    uri, additional_headers=headers
-                )
-                await self.ws.send(
-                    json.dumps({
-                        "type": "session.update",
-                        "session": {
-                            "voice": VOICE,
-                            "modalities": ["text"]
-                            if TEXT_ONLY_MODE
-                            else ["audio", "text"],
-                            "input_audio_format": "pcm16",
-                            "output_audio_format": "pcm16",
-                            "turn_detection": {"type": "server_vad"},
-                            "instructions": INSTRUCTIONS,
-                            "tools": TOOLS,
-                        },
-                    })
-                )
+
+                try:
+                    self.ws = await websockets.asyncio.client.connect(
+                        uri, additional_headers=headers
+                    )
+                    await self.ws.send(
+                        json.dumps({
+                            "type": "session.update",
+                            "session": {
+                                "voice": VOICE,
+                                "modalities": ["text"]
+                                if TEXT_ONLY_MODE
+                                else ["audio", "text"],
+                                "input_audio_format": "pcm16",
+                                "output_audio_format": "pcm16",
+                                "turn_detection": {"type": "server_vad"},
+                                "instructions": INSTRUCTIONS,
+                                "tools": TOOLS,
+                            },
+                        })
+                    )
+
+                except socket.gaierror:
+                    print("📡 Network unreachable or DNS failed. Playing nowifi.wav...")
+                    path = "sounds/nowifi.wav"
+                    if os.path.exists(path):
+                        await asyncio.to_thread(audio.enqueue_wav_to_playback, path)
+                        await asyncio.to_thread(audio.playback_queue.join)
+                    else:
+                        print("⚠️ nowifi.wav not found, skipping.")
+                    return
+
+                except Exception as e:
+                    print(f"❌ Unexpected error during WebSocket setup: {e}")
+                    raise
 
         if not TEXT_ONLY_MODE:
             audio.playback_done_event.clear()
@@ -394,10 +413,24 @@ class BillySession:
 
         elif data["type"] == "error":
             error: dict[str, Any] = data.get('error') or {}
+            stop_all_motors()
             print(
                 f"\n🛑 Error response (code='{error.get('code') or '<unknown>'}'): "
                 f"{error.get('message') or '<unknown>'}"
             )
+
+            if error.get("code") == "invalid_api_key":
+                path = "sounds/noapikey.wav"
+                if os.path.exists(path):
+                    print(
+                        "🔐 Invalid API key detected during session. Playing noapikey.wav..."
+                    )
+                    await asyncio.to_thread(audio.enqueue_wav_to_playback, path)
+                    await asyncio.to_thread(audio.playback_queue.join)
+                else:
+                    print("⚠️ noapikey.wav not found, skipping audio.")
+                await self.stop_session()
+                return
 
     async def mic_timeout_checker(self):
         print("🛡️ Mic timeout checker active")
