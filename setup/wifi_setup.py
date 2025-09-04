@@ -1,12 +1,15 @@
 import subprocess
+import threading
 import time
 
-from flask import Flask, render_template_string, request
+from flask import Flask, redirect, render_template_string, request
 
 
 app = Flask(__name__)
 
-FORM = """
+wifi_request = {}
+
+FORM_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -55,6 +58,11 @@ FORM = """
       text-align: center;
     }
   </style>
+  <script>
+    if (location.protocol === "https:") {
+      location.href = "http://" + location.hostname + location.pathname;
+    }
+  </script>
 </head>
 <body>
 <h2>Connect Billy to Wi-Fi</h2>
@@ -86,9 +94,50 @@ FORM = """
   </label>
   <button type="submit">Connect</button>
 </form>
-{% if message %}
-  <p><strong>{{ message }}</strong></p>
-{% endif %}
+</body>
+</html>
+"""
+
+CONNECTING_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Connecting...</title>
+  <style>
+    body {
+      background-color: #111;
+      color: #eee;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 1rem;
+      text-align: center;
+    }
+    p {
+      font-size: 1.2rem;
+      margin-top: 1rem;
+    }
+  </style>
+  <script>
+    setTimeout(() => {
+      fetch("/", { method: "HEAD", cache: "no-store" }).catch(() => {
+        document.body.innerHTML = `
+          <h2>✅ Wi-Fi connected!</h2>
+          <p>Billy is now online and the hotspot is turned off.</p>
+          <p>You may now return to the main app at <code>billy.local</code>.</p>
+        `;
+      });
+    }, 3000);
+  </script>
+</head>
+<body>
+  <h2>✅ Billy is connecting to <code>{{ ssid }}</code></h2>
+  <p>You may lose connection shortly. Please reconnect to your Wi-Fi and visit <code>billy.local</code>.</p>
 </body>
 </html>
 """
@@ -96,22 +145,46 @@ FORM = """
 
 @app.route("/", methods=["GET", "POST"])
 def onboarding():
-    message = None
     if request.method == "POST":
         ssid = request.form["ssid"]
         password = request.form["password"]
         country = request.form["country"]
 
-        success = save_wifi_credentials(ssid, password, country)
+        wifi_request["ssid"] = ssid
+        wifi_request["password"] = password
+        wifi_request["country"] = country
 
-        if success:
-            message = f"✅ Connected to {ssid}! Billy will now reboot or switch to normal mode."
-            stop_hotspot_services()
-            shutdown_flask_soon()
-        else:
-            message = f"❌ Failed to connect to {ssid}. Please check your credentials."
+        return redirect("http://192.168.4.1:8080/connecting")
 
-    return render_template_string(FORM, message=message)
+    return render_template_string(FORM_TEMPLATE)
+
+
+@app.route("/connecting")
+def connecting():
+    ssid = wifi_request.get("ssid")
+    if not ssid:
+        return redirect("/")
+
+    threading.Thread(target=handle_connection, daemon=True).start()
+    return render_template_string(CONNECTING_TEMPLATE, ssid=ssid)
+
+
+def handle_connection():
+    ssid = wifi_request.get("ssid")
+    password = wifi_request.get("password")
+    country = wifi_request.get("country")
+
+    success = save_wifi_credentials(ssid, password, country)
+
+    if success:
+        print(f"✅ Connected to {ssid}")
+    else:
+        print(f"❌ Failed to connect to {ssid}")
+
+    time.sleep(5)
+    stop_hotspot_services()
+    subprocess.run(["sudo", "systemctl", "stop", "billy-wifi-setup.service"])
+    shutdown_flask_soon()
 
 
 def save_wifi_credentials(ssid, password, country):

@@ -155,33 +155,20 @@ def on_message(client, userdata, msg):
     elif msg.topic == "billy/say":
         print(f"📩 Received SAY command: {msg.payload.decode()}")
 
+        import asyncio
+        import threading
+
+        from core.say import say
+
         try:
-            import asyncio
-
-            from core.say import say
-
-            try:
-                data = json.loads(msg.payload.decode())
-                if isinstance(data, dict):
-                    text = data.get("text", "").strip()
-                    literal = bool(data.get("literal", True))
-                else:
-                    text = str(data).strip()
-                    literal = False
-            except json.JSONDecodeError:
-                text = msg.payload.decode().strip()
-                literal = True
-
+            text = msg.payload.decode().strip()
             if text:
 
                 def run_say():
-                    asyncio.run(say(text=text, literal=literal))
-
-                import threading
+                    asyncio.run(say(text=text))
 
                 threading.Thread(target=run_say, daemon=True).start()
             else:
                 print("⚠️ SAY command received, but text was empty")
-
         except Exception as e:
             print(f"❌ Failed to run say(): {e}")

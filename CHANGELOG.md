@@ -126,3 +126,17 @@ All notable changes to this project will be documented in this file.
 
 - **Shutdown and restart**: Added raspberry pi shutdown and restart buttons in the UI (contribution by @cprasmu )
 
+## [1.4.0] — 2025-09-04
+
+### Added
+
+- **Say command**: Added a MQTT command to let billy announce messages, either as literal sentences or as prompts.
+- **Custom Wake-up Sounds**: Custom Wake-up sounds can now be customised and generated via the UI
+- **New gpt-realtime model**: Added Support for the new stable release of the openAI Realtime API model.
+- **Favicon**: No more 404
+
+### Changed
+
+- Improved update process by re-installing python requirements on software update
+- Updated personality traits prompt to be more descriptive and more distinct.
+- Disabled Flask debug mode by default.

@@ -11,7 +11,7 @@ The **Billy Bass Assistant** is a Raspberry Pi–powered voice assistant embedde
 
 ## Features
 
-- Realtime conversations using OpenAI GPT-4o-mini
+- Realtime conversations using OpenAI Realtime API
 - Personality system with configurable traits (e.g., snark, charm)
 - Physical button to start/interact/intervene
 - 3D-printable backplate for housing USB microphone and speaker
@@ -24,7 +24,7 @@ The **Billy Bass Assistant** is a Raspberry Pi–powered voice assistant embedde
   - Hostname and Port configuration
 - MQTT support:
   - sensor with status updates of Billy (idle, speaking, listening)
-  - `billy/say` topic for triggering spoken messages remotely (feature in beta)
+  - `billy/say` topic for triggering spoken messages remotely
   - Raspberry Pi Safe Shutdown command
 - Home Assistant command passthrough using the Conversation API
 - Custom Song Singing and animation mode
@@ -481,20 +481,7 @@ You can tweak this to reflect a different vibe: poetic, mystical, overly formal,
 
 ---
 
-## K. (Optional) Wake-up Sounds and Custom Songs
-
-### Wake-up Sounds
-
-Billy plays a short randomized wake-up clip before every voice session when the button is pressed.
-These audio files live in the folder `./sounds/wake-up/`.
-
-If you'd like to generate your own wake-up sounds, adjust the lines in the `CLIPS` object and then run the script:
-
-```bash
-cd ./sounds
-nano generate_clips.py
-python3 generate_clips.py
-```
+## K. (Optional) Custom Songs
 
 ### Custom Songs
 

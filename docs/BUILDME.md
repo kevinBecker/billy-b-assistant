@@ -14,8 +14,9 @@ This guide explains how to physically build and wire your Raspberry Pi–powered
 | Part                                         | Source |
 |----------------------------------------------|--------|
 | Big Mouth Billy Bass                         | [Amazon NL](https://amzn.eu/d/gzyNRsg) |
+| MicroSD card (for Raspberry OS Lite)         | [Kiwi Electronics](https://www.kiwi-electronics.com/nl/transcend-64gb-microsd-met-adapter-uhs-i-u3-a2-ultra-performance-160-80-mb-s-11632 ) |
 | Raspberry Pi 5 (4gb RAM or more recommended) | [Kiwi Electronics](https://www.kiwi-electronics.com/nl/raspberry-pi-5-computers-accessoires-415/raspberry-pi-5-4gb-11579) |
-| Raspberry Pi Power Supply 45W                | [Kiwi Electronics](https://www.kiwi-electronics.com/nl/raspberry-pi-45w-usb-c-power-supply-wit-eu-20344) |
+| Raspberry Pi Power Supply 27W                | [Kiwi Electronics](https://www.kiwi-electronics.com/nl/raspberry-pi-27w-usb-c-power-supply-wit-eu-11581) |
 | MicroSD card (for Raspberry OS Lite)         | [Kiwi Electronics](https://www.kiwi-electronics.com/nl/transcend-64gb-microsd-met-adapter-uhs-i-u3-a2-ultra-performance-160-80-mb-s-11632 ) |
 | Raspberry Pi Active Cooler                   | [Kiwi Electronics](https://www.kiwi-electronics.com/nl/raspberry-pi-active-cooler-11585) |
 | 1x USB Speaker                               | [Amazon NL](https://amzn.eu/d/2yklfno), [Amazon US](https://www.amazon.com/dp/B075M7FHM1), [AliExpress](https://aliexpress.com/item/1005007168026736.html) |
@@ -23,6 +24,7 @@ This guide explains how to physically build and wire your Raspberry Pi–powered
 | 1x L298N Motor Driver                        | [Amazon NL](https://amzn.eu/d/g9yBNVg), [Amazon US](https://www.amazon.com/dp/B0B82GZVT5), [AliExpress](https://aliexpress.com/item/1005006890733953.html) |
 | Jumper Wires / Dupont Cables                 | [Amazon NL](https://amzn.eu/d/i4kyXG2), [AliExpress](https://aliexpress.com/item/1005003641187997.html) |
 | JST 2.54 4 pin connector (female) \*         | [Amazon NL](https://amzn.eu/d/cDqHgNv), [AliExpress](https://aliexpress.com/item/1005007460897865.html) |
+
 
 \* Recommended to be able to easily (un)plug the motor cables.
 

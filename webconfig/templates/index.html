@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Billy B-Assistant</title>
+    <title>Billy Bassistant</title>
     <link href="../static/css/styles.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="icon" href="../static/favicon.ico" type="image/x-icon">
 </head>
 <body class="text-white font-sans">
 
@@ -178,9 +179,11 @@
                         </label>
                         <div class="relative">
                             <div data-tooltip>
-                                Choose between the two GPT-4o streaming models that are currently available:<br>
+                                Choose between the two realtime models that are currently available:<br>
                                 <strong>gpt-4o-mini-realtime-preview</strong> is cheaper and the default.<br>
-                                <strong>gpt-4o-realtime-preview</strong> is higher performance, more expensive.<br>
+                                <strong>gpt-realtime</strong> is higher performance but also more expensive in token usage (~ ×6.66 compared to mini).
+                                <br><br>
+                                <strong>gpt-4o-realtime-preview</strong> is deprecated (and most expensive).<br><br>
                                 See <a href="https://openai.com/api/pricing/" target="_blank" class="underline hover:text-cyan-400">OpenAI Realtime API Pricing</a> for details .
                             </div>
 
@@ -191,10 +194,15 @@
                                 'OPENAI_MODEL') == 'gpt-4o-mini-realtime-preview' %}selected{% endif %}>
                                 gpt-4o-mini-realtime-preview (default)
                                 </option>
-                                <option value="gpt-4o-realtime-preview"
+                                <option value="gpt-realtime"
+                                        {% if config.get(
+                                'OPENAI_MODEL') == 'gpt-realtime' %}selected{% endif %}>
+                                gpt-realtime (better but more expensive)
+                                </option>
+                                <option value="gpt-4o-realtime-preview" disabled
                                         {% if config.get(
                                 'OPENAI_MODEL') == 'gpt-4o-realtime-preview' %}selected{% endif %}>
-                                gpt-4o-realtime-preview (more expensive)
+                                gpt-4o-realtime-preview (deprecated)
                                 </option>
                             </select>
                         </div>
@@ -677,6 +685,26 @@
                                   spellcheck="false"></textarea>
                     </div>
                 </div>
+
+                <!-- Wake-up Sounds -->
+                <div class="bg-zinc-900/50 backdrop-blur-xs border border-zinc-700 p-4 md:p-6 rounded-lg shadow-sm mb-6 collapsible-section"
+                     id="section-wakeup-sounds">
+                    <h3 class="flex items-center gap-2 cursor-pointer group text-lg grow justify-between font-bold mb-4 text-slate-200">
+                        Wake-up Sounds
+                        <span class="material-icons transition-transform duration-200 ml-2 rotate-0">expand_more</span>
+                    </h3>
+
+                    <div id="wakeup-sound-list" class="space-y-2">
+
+                    </div>
+
+                    <button type="button" onclick="addWakeupSound()"
+                            class="text-sm text-emerald-500 hover:text-emerald-400 mt-2 flex items-center cursor-pointer">
+                        <span class="material-icons align-middle mr-1">add_circle_outline</span>
+                        Add Wake-up Sound
+                    </button>
+                </div>
+
             </form>
 
             <div class="sticky bottom-0 z-10 p-4">

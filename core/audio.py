@@ -26,6 +26,7 @@ from .movements import (
     interlude,
     move_head,
     move_tail_async,
+    stop_all_motors,
 )
 
 
@@ -37,7 +38,8 @@ OUTPUT_DEVICE_INDEX = None
 OUTPUT_CHANNELS = 2
 OUTPUT_RATE = None
 CHUNK_SIZE = None
-WAKE_UP_DIR = "sounds/wake-up"
+WAKE_UP_DIR = "sounds/wake-up/custom"
+WAKE_UP_DIR_DEFAULT = "sounds/wake-up/default"
 RESPONSE_HISTORY_DIR = "sounds/response-history"
 os.makedirs(RESPONSE_HISTORY_DIR, exist_ok=True)
 
@@ -135,12 +137,6 @@ def playback_worker(chunk_ms):
 
                 if item is None:
                     print("🧵 Received stop signal, cleaning up.")
-                    try:
-                        from .movements import stop_all_motors
-
-                        stop_all_motors()
-                    except Exception as e:
-                        print(f"❌ Failed to stop motors: {e}")
                     playback_queue.task_done()
                     break
 
@@ -236,6 +232,7 @@ def playback_worker(chunk_ms):
         print(f"❌ Playback stream failed: {e}")
     finally:
         playback_done_event.set()
+        stop_all_motors()
 
 
 def ensure_playback_worker_started(chunk_ms):
@@ -320,9 +317,15 @@ def enqueue_wav_to_playback(filepath):
 
 def play_random_wake_up_clip():
     """Select and enqueue a random wake-up WAV file with mouth movement."""
+    # Check custom folder first
     clips = glob.glob(os.path.join(WAKE_UP_DIR, "*.wav"))
+
     if not clips:
-        print("⚠️ No wake-up clips found.")
+        print("🔁 No custom clips found, falling back to default.")
+        clips = glob.glob(os.path.join(WAKE_UP_DIR_DEFAULT, "*.wav"))
+
+    if not clips:
+        print("⚠️ No wake-up clips found in either custom or default.")
         return None
 
     clip = random.choice(clips)
@@ -333,12 +336,12 @@ def play_random_wake_up_clip():
     # Enqueue the WAV file
     enqueue_wav_to_playback(clip)
 
-    # Once done, set the event
-    playback_done_event.set()
-
     # Wait for exactly those new chunks to finish
     while playback_queue.unfinished_tasks > already_pending:
         time.sleep(0.01)
+
+    # Once done, set the event
+    playback_done_event.set()
 
     return clip
 

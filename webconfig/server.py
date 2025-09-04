@@ -1,4 +1,5 @@
 import configparser
+import glob
 import json
 import os
 import queue
@@ -8,11 +9,21 @@ import subprocess
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
 from dotenv import dotenv_values, find_dotenv, set_key
-from flask import Flask, Response, jsonify, render_template, request, send_file
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    render_template,
+    request,
+    send_file,
+    send_from_directory,
+)
 from packaging.version import InvalidVersion
 from packaging.version import parse as parse_version
 
@@ -20,7 +31,10 @@ from packaging.version import parse as parse_version
 # Project setup
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from core import config as core_config
+from core.wakeup import generate_wake_clip_async
 
+
+executor = ThreadPoolExecutor(max_workers=2)
 
 app = Flask(__name__)
 
@@ -45,12 +59,13 @@ CONFIG_KEYS = [
     "FLASK_PORT",
     "RUN_MODE",
 ]
-
-WEBCONFIG_DIR = os.path.abspath(os.path.dirname(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(WEBCONFIG_DIR, ".."))
-PERSONA_PATH = os.path.join(PROJECT_ROOT, "persona.ini")
-VERSIONS_PATH = os.path.join(PROJECT_ROOT, "versions.ini")
 ALLOW_RC_TAGS = os.getenv("ALLOW_RC_TAGS", "false").lower() == "true"
+WEBCONFIG_DIR = os.path.abspath(os.path.dirname(__file__))
+PROJECT_ROOT = Path(os.path.abspath(os.path.join(WEBCONFIG_DIR, "..")))  # ✅ Now a Path
+PERSONA_PATH = PROJECT_ROOT / "persona.ini"
+VERSIONS_PATH = PROJECT_ROOT / "versions.ini"
+WAKE_UP_DIR = PROJECT_ROOT / "sounds" / "wake-up" / "custom"
+WAKE_UP_DIR_DEFAULT = PROJECT_ROOT / "sounds" / "wake-up" / "default"
 
 # ==== Globals ====
 rms_queue = queue.Queue()
@@ -300,6 +315,23 @@ def perform_update():
         subprocess.check_call(
             ["git", "checkout", "--force", f"tags/{latest}"], cwd=PROJECT_ROOT
         )
+
+        venv_pip = os.path.join(PROJECT_ROOT, "venv", "bin", "pip")
+
+        subprocess.check_call(
+            [venv_pip, "install", "--upgrade", "-r", "requirements.txt"],
+            cwd=PROJECT_ROOT,
+        )
+
+        output = subprocess.check_output(
+            [venv_pip, "install", "--upgrade", "-r", "requirements.txt"],
+            cwd=PROJECT_ROOT,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+
+        print("📦 Pip install output:\n", output)
+
         save_versions(latest, latest)
         threading.Thread(target=lambda: (time.sleep(2), restart_services())).start()
         return jsonify({"status": "updated", "version": latest})
@@ -408,6 +440,7 @@ def reboot_billy():
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 
+
 @app.route("/shutdown", methods=["POST"])
 def shutdown_billy():
     """Shutdown Billy and webconfig services."""
@@ -416,6 +449,8 @@ def shutdown_billy():
         return jsonify({"status": "ok", "message": "Billy shutting down"})
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
+
+
 # ==== Persona ====
 
 
@@ -423,10 +458,12 @@ def shutdown_billy():
 def get_persona():
     config = configparser.ConfigParser()
     config.read(PERSONA_PATH)
+
     return jsonify({
         "PERSONALITY": dict(config["PERSONALITY"]) if "PERSONALITY" in config else {},
         "BACKSTORY": dict(config["BACKSTORY"]) if "BACKSTORY" in config else {},
         "META": config["META"].get("instructions", "") if "META" in config else "",
+        "WAKEUP": dict(config["WAKEUP"]) if "WAKEUP" in config else {},
     })
 
 
@@ -434,12 +471,182 @@ def get_persona():
 def save_persona():
     data = request.json
     config = configparser.ConfigParser()
+
+    # Convert and set sections
     config["PERSONALITY"] = {k: str(v) for k, v in data.get("PERSONALITY", {}).items()}
     config["BACKSTORY"] = data.get("BACKSTORY", {})
     config["META"] = {"instructions": data.get("META", "")}
+
+    # Add WAKEUP phrases (indexed, plain string values)
+    wakeup = data.get("WAKEUP", {})
+    config["WAKEUP"] = {
+        str(k): v["text"] if isinstance(v, dict) and "text" in v else str(v)
+        for k, v in wakeup.items()
+    }
+
+    # Save to persona.ini using relative path via PERSONA_PATH
     with open(PERSONA_PATH, "w") as f:
         config.write(f)
+
     return jsonify({"status": "ok"})
+
+
+@app.route("/persona/wakeup", methods=["POST"])
+def save_single_wakeup_phrase():
+    data = request.get_json()
+    index = str(data.get("index"))
+    phrase = data.get("phrase", "").strip()
+
+    if not index or not phrase:
+        return jsonify({"error": "Missing index or phrase"}), 400
+
+    config = configparser.ConfigParser()
+    config.read(PERSONA_PATH)
+
+    if "WAKEUP" not in config:
+        config["WAKEUP"] = {}
+
+    config["WAKEUP"][index] = phrase
+
+    with open(PERSONA_PATH, "w") as f:
+        config.write(f)
+
+    print(f"✅ Saved WAKEUP phrase {index} → {phrase}")
+    return jsonify({"status": "ok"})
+
+
+@app.route("/wakeup", methods=["GET"])
+def list_wakeup_clips():
+    config = configparser.ConfigParser()
+    config.read(PERSONA_PATH)
+    wakeup_data = dict(config["WAKEUP"]) if "WAKEUP" in config else {}
+
+    print("🧠 Loaded WAKEUP phrases from persona.ini:")
+    for k in sorted(wakeup_data.keys(), key=lambda x: int(x)):
+        print(f"  {k}: {wakeup_data[k]}")
+
+    files = glob.glob(str(WAKE_UP_DIR / "*.wav"))
+    available = {os.path.splitext(os.path.basename(f))[0] for f in files}
+
+    print("\n🎧 Available .wav files in custom folder:")
+    for f in sorted(available):
+        print(f"  - {f}")
+
+    clips = []
+    for k in sorted(wakeup_data.keys(), key=lambda x: int(x)):
+        phrase = wakeup_data[k]
+        slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", phrase).strip("_").lower()
+        has_audio = slug in available or k in available
+
+        print(
+            f"📦 Clip {k} → Phrase: \"{phrase}\" | Slug: \"{slug}\" | Has audio: {has_audio}"
+        )
+
+        clips.append({"index": int(k), "phrase": phrase, "has_audio": has_audio})
+
+    return jsonify({"clips": clips})
+
+
+@app.route("/wakeup/play", methods=["POST"])
+def play_wakeup_clip():
+    try:
+        index = int(request.json.get("index"))
+        if index < 1 or index > 99:
+            return jsonify({"error": "Invalid clip index"}), 400
+
+        sound_path = os.path.join(
+            PROJECT_ROOT, "sounds", "wake-up", "custom", f"{index}.wav"
+        )
+
+        if not os.path.exists(sound_path):
+            return jsonify({"error": f"Clip {index}.wav not found"}), 404
+
+        card_index = get_usb_pcm_card_index()
+        if card_index is None:
+            return jsonify({"error": "No matching speaker card found"}), 404
+
+        device = f"plughw:{card_index},0"
+        subprocess.Popen(["aplay", "-D", device, sound_path])
+        return jsonify({"status": f"Playing clip {index}.wav"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/sounds/wake-up/<filename>")
+def serve_wakeup_sound(filename):
+    return send_from_directory("sounds/wake-up", filename)
+
+
+executor = ThreadPoolExecutor(max_workers=2)
+
+
+@app.route("/wakeup/generate", methods=["POST"])
+def generate_wakeup_clip():
+    data = request.get_json()
+    prompt = data.get("text", "").strip()
+    index = data.get("index")
+
+    print(f"📥 /wakeup/generate → prompt='{prompt}', index={index}", flush=True)
+
+    if not prompt or index is None:
+        return jsonify({"error": "Missing 'text' or 'index'"}), 400
+
+    try:
+        path = generate_wake_clip_async(prompt, index)
+        return jsonify({"status": "ok", "path": path})
+    except Exception as e:
+        print(f"❌ Exception during wakeup generation: {e}", flush=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/wakeup/remove", methods=["POST"])
+def remove_wakeup_clip():
+    data = request.get_json()
+    index_to_remove = str(data.get("index"))
+
+    config = configparser.ConfigParser()
+    config.read(PERSONA_PATH)
+
+    if "WAKEUP" not in config:
+        return jsonify({"error": "No wakeup section found"}), 400
+
+    wakeup = dict(config["WAKEUP"])
+
+    if index_to_remove not in wakeup:
+        return jsonify({"error": f"Clip {index_to_remove} not found"}), 404
+
+    # Remove the phrase
+    removed_phrase = wakeup.pop(index_to_remove)
+
+    # Rebuild wakeup section with new indices
+    new_wakeup = {}
+    old_to_new_index = {}
+    for i, (old_k, phrase) in enumerate(wakeup.items(), start=1):
+        new_wakeup[str(i)] = phrase
+        old_to_new_index[old_k] = str(i)
+
+    config["WAKEUP"] = new_wakeup
+    with open(PERSONA_PATH, "w") as f:
+        config.write(f)
+
+    # Delete the removed audio file (by number or slug)
+    audio_path_num = WAKE_UP_DIR / f"{index_to_remove}.wav"
+    audio_path_slug = (
+        WAKE_UP_DIR
+        / f"{re.sub(r'[^a-zA-Z0-9_-]+', '_', removed_phrase).strip('_').lower()}.wav"
+    )
+    for p in (audio_path_num, audio_path_slug):
+        if p.exists():
+            p.unlink()
+
+    # 🔄 Rename remaining files to match new indices
+    for old_k, new_k in old_to_new_index.items():
+        old_path = WAKE_UP_DIR / f"{old_k}.wav"
+        new_path = WAKE_UP_DIR / f"{new_k}.wav"
+        if old_path.exists() and old_path != new_path:
+            old_path.rename(new_path)
+
+    return jsonify({"status": "removed and reindexed"})
 
 
 # ==== Audio: Speaker/Mic Tests ====
@@ -686,4 +893,9 @@ def export_persona():
 
 # ==== MAIN ====
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(core_config.FLASK_PORT), debug=True)
+    app.run(
+        host="0.0.0.0",
+        port=int(core_config.FLASK_PORT),
+        debug=False,
+        use_reloader=False,
+    )
