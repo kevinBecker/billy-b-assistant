@@ -19,7 +19,7 @@ h = lgpio.gpiochip_open(0)
 FREQ = 10000  # PWM frequency
 
 # -------------------------------------------------------------------
-# Pin mapping by profile (always use two-pin control)
+# Pin mapping by profile
 # -------------------------------------------------------------------
 MOUTH_IN1 = MOUTH_IN2 = HEAD_IN1 = HEAD_IN2 = TAIL_IN1 = TAIL_IN2 = None
 
@@ -35,15 +35,13 @@ if BILLY_PINS == "legacy":
 
 else:
     # NEW quiet wiring
-    HEAD_IN1 = 21
-    HEAD_IN2 = 20
-    MOUTH_IN1 = 16
-    MOUTH_IN2 = None
+    HEAD_IN1 = 21  # pin 40
+    MOUTH_IN1 = 16  # pin 36
 
     if USE_THIRD_MOTOR:
-        # Classic Billy (3 motors)
-        TAIL_IN1 = 23
-        TAIL_IN2 = 24
+        TAIL_IN1 = 20  # pin 38
+    else:
+        HEAD_IN2 = 20  # pin 38
 
 
 # Collect all pins we actually use

@@ -83,17 +83,60 @@ bottom left corner of the board. The 1-4 positions are counted from left to righ
 
 Using distinct jumper wire colors is recommended for easier identification.
 
-| Component | GPIO Pin number (physical pin)   | Function                                         |
-|-------------------------|----------------------------------|------------------------------------|
-| Controller 1, Motor IN1 | GPIO 13 (pin 33)                 | Head & tail direction/speed (PWM1) |
-| Controller 1, Motor IN2 | GPIO 6  (pin 31)                 | Head & tail on/off                 |
-| Controller 1, Motor IN3 | GPIO 12 (pin 32)                 | Mouth direction/speed (PWM0)       |
-| Controller 1, Motor IN4 | GPIO 5  (pin 29)                 | Mouth on/off                       |
-| Controller 2, Motor IN1 | GPIO 19 (pin 35)                 | Tail direction/speed (PWM2)        |
-| Controller 2, Motor IN2 | GPIO 26 (pin 37)                 | Tail on/off                        |
-| Motor +                 | 5v pwr  (pin 4)                  | Power to motor driver              |
-| Motor -                 | Ground  (pin 4)                  |                                    |
-| Button                  | GPIO 27 (pin 13) & GND (pin 14)  | Trigger voice session              |
+There are two selectable wiring profiles (`BILLY_PINS` in .env or via the web UI): 
+- `legacy`
+- `new`
+
+---
+
+#### Legacy Profile (for backwards compatibility)
+
+| Component         | GPIO Pin (Physical)             | Motor Driver Input    |
+|-------------------|---------------------------------|-----------------------|
+| Head IN1 (PWM)    | GPIO 13 (pin 33)                | Controller 1 IN1      |
+| Head IN2          | GPIO 6  (pin 31)                | Controller 1 IN2      |
+| Mouth IN1 (PWM)   | GPIO 12 (pin 32)                | Controller 1 IN3      |
+| Mouth IN2         | GPIO 5  (pin 29)                | Controller 1 IN4      |
+| Tail IN1 (PWM) \* | GPIO 19 (pin 35)                | Controller 2 IN1      |
+| Tail IN2 \*       | GPIO 26 (pin 37)                | Controller 2 IN2      |
+| Motor +           | 5v pwr  (pin 4)                 | Power to motor driver |
+| Motor -           | Ground  (pin 6)                 |                       |
+| Button            | GPIO 27 (pin 13) & GND (pin 14) | Trigger voice session |
+
+\* Only used on Classic Billy (3 motors).
+
+---
+
+#### New Profile (Default, quiet GPIO layout)
+- Updated wiring avoids “tweaky” boot GPIOs.
+- Mouth uses one-pin to control
+- Modern Billy (2 motors): Head & Tail uses direction to determine which movement (two-pin pair).
+- Classic Billy (3 motors): All 3 motors uses one-pin PWM control
+
+**Modern Billy (2 motors)**
+
+| Component      | GPIO Pin (Physical)                   | Motor Driver Input        |
+|----------------|---------------------------------------|---------------------------|
+| Head IN (PWM)  | GPIO 21 (pin 40)                      | Controller 1 IN1          |
+| Head IN (DIR)  | GPIO 20 (pin 38)                      | Controller 1 IN2          |
+| Mouth IN (PWM) | GPIO 16 (pin 36)                      | Controller 1 IN3          |
+| Motor +        | 5v pwr  (pin 4)                       | Power to motor driver     |
+| Motor -        | Ground  (pin 6)                       |                           |
+| Button         | GPIO 12 (pin 32) & GND (pin 34 or 30) | Trigger voice session     |
+---
+
+**Classic Billy (3 motors)**
+
+| Component      | GPIO Pin (Physical)                   | Motor Driver Input    |
+|----------------|---------------------------------------|-----------------------|
+| Head IN (PWM)  | GPIO 21 (pin 40)                      | Controller 1 IN1      |
+| Tail IN (PWM)  | GPIO 20 (pin 38)                      | Controller 2 IN1      |
+| Mouth IN (PWM) | GPIO 16 (pin 36)                      | Controller 1 IN3      |
+| Motor +        | 5v pwr  (pin 4)                       | Power to motor driver |
+| Motor -        | Ground  (pin 6)                       |                       |
+| Button         | GPIO 12 (pin 32) & GND (pin 34 or 30) | Trigger voice session |
+
+\* On Classic Billy, the firmware only drives `TAIL_IN1` (one-pin mode) and ignores `TAIL_IN2`.
 
 ![GPIO pins](./images/gpio-pins.png)
 ![Assembly overview 1](./images/assembly_1.jpeg)
