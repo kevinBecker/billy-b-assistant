@@ -86,6 +86,7 @@ RUN_MODE = os.getenv("RUN_MODE", "normal").lower()
 
 # === Billy Hardware ===
 BILLY_MODEL = os.getenv("BILLY_MODEL", "modern").strip().lower()
+BILLY_PINS = os.getenv("BILLY_PINS", "new").strip().lower()
 
 # === Audio Config ===
 SPEAKER_PREFERENCE = os.getenv("SPEAKER_PREFERENCE")

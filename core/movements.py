@@ -7,34 +7,73 @@ from threading import Lock, Thread
 import lgpio
 import numpy as np
 
-from .config import is_classic_billy
+from .config import BILLY_PINS, is_classic_billy
 
 
 # === Configuration ===
 USE_THIRD_MOTOR = is_classic_billy()
-
-print(f"⚙️ Using third motor: {USE_THIRD_MOTOR}")
+print(f"⚙️ Using third motor: {USE_THIRD_MOTOR} | Pin profile: {BILLY_PINS}")
 
 # === GPIO Setup ===
 h = lgpio.gpiochip_open(0)
 FREQ = 10000  # PWM frequency
 
-# Pin mapping
-MOUTH_IN1 = 12  # PWM0_CHAN0, pin 32
-MOUTH_IN2 = 5  # pin 29
-HEAD_IN1 = 13  # PWM0_CHAN1, pin 33
-HEAD_IN2 = 6  # pin 31
+# -------------------------------------------------------------------
+# Pin mapping by profile (keep functions the same; only pins differ)
+# -------------------------------------------------------------------
+if BILLY_PINS == "legacy":
+    # Original wiring (backwards compatible)
+    MOUTH_IN1 = 12  # PWM on IN1
+    MOUTH_IN2 = 5  # mate held LOW
+    HEAD_IN1 = 13  # PWM on IN1
+    HEAD_IN2 = 6  # mate held LOW
+    if USE_THIRD_MOTOR:
+        TAIL_IN1 = 19  # PWM on IN1
+        TAIL_IN2 = 26  # mate held LOW
 
-if (
-    USE_THIRD_MOTOR
-):  # Note: more than three hardware PWM channels is only a Pi5 feature!
-    TAIL_IN1 = 19  # PWM0_CHAN3, pin 35
-    TAIL_IN2 = 26  # pin 37
+    # Mouth uses legacy two-pin control
+    MOUTH_ONE_PIN = False
+    MOUTH_PWM = None
+    if USE_THIRD_MOTOR:
+        TAIL_PWM = None
 
-# Claim GPIOs
-motor_pins = [MOUTH_IN1, MOUTH_IN2, HEAD_IN1, HEAD_IN2]
-if USE_THIRD_MOTOR:
-    motor_pins += [TAIL_IN1, TAIL_IN2]
+else:
+    # NEW quiet wiring
+    # Mouth: one-way (IN1 = PWM on a GPIO), IN2 is HARD-TIED to GND (no GPIO)
+    MOUTH_PWM = 16
+    MOUTH_ONE_PIN = True
+
+    # Head: keep legacy-style two-pin logic but on quiet pins
+    HEAD_IN1 = 21
+    HEAD_IN2 = 20
+
+    # Classic tail (third motor): keep your existing one-pin PWM approach
+    TAIL_PWM = 26 if USE_THIRD_MOTOR else None
+
+    # For completeness (not used in new profile)
+    MOUTH_IN1 = None
+    MOUTH_IN2 = None
+    if USE_THIRD_MOTOR:
+        TAIL_IN1 = None
+        TAIL_IN2 = None
+
+# Claim only the pins we actually drive
+motor_pins = []
+for p in [
+    # mouth
+    MOUTH_PWM if 'MOUTH_PWM' in globals() else None,
+    MOUTH_IN1 if 'MOUTH_IN1' in globals() else None,
+    MOUTH_IN2 if 'MOUTH_IN2' in globals() else None,
+    # head
+    HEAD_IN1 if 'HEAD_IN1' in globals() else None,
+    HEAD_IN2 if 'HEAD_IN2' in globals() else None,
+    # tail (either two-pin legacy or one-pin PWM)
+    TAIL_PWM if 'TAIL_PWM' in globals() else None,
+    TAIL_IN1 if 'TAIL_IN1' in globals() else None,
+    TAIL_IN2 if 'TAIL_IN2' in globals() else None,
+]:
+    if p is not None:
+        motor_pins.append(p)
 
 for pin in motor_pins:
     lgpio.gpio_claim_output(h, pin)
@@ -49,7 +88,7 @@ _last_rms = 0
 head_out = False
 
 
-# === Motor Helpers ===
+# === Motor Helpers (unchanged) ===
 def brake_motor(pin1, pin2):
     lgpio.tx_pwm(h, pin1, FREQ, 0)
     lgpio.tx_pwm(h, pin2, FREQ, 0)
@@ -65,13 +104,23 @@ def run_motor(pwm_pin, low_pin, speed_percent=100, duration=0.3, brake=True):
         brake_motor(pwm_pin, low_pin)
 
 
-# === Movement Functions ===
+# === Movement Functions (keep signatures/behavior) ===
 def move_mouth(speed_percent, duration, brake=False):
-    run_motor(MOUTH_IN1, MOUTH_IN2, speed_percent, duration, brake)
+    if MOUTH_ONE_PIN:
+        # One-pin PWM (mate is hard GND). 0% = off/coast; spring closes.
+        lgpio.tx_pwm(h, MOUTH_PWM, FREQ, speed_percent)
+        time.sleep(duration)
+        lgpio.tx_pwm(h, MOUTH_PWM, FREQ, 0)
+    else:
+        # Legacy two-pin
+        run_motor(MOUTH_IN1, MOUTH_IN2, speed_percent, duration, brake)
 
 
 def stop_mouth():
-    brake_motor(MOUTH_IN1, MOUTH_IN2)
+    if MOUTH_ONE_PIN:
+        lgpio.tx_pwm(h, MOUTH_PWM, FREQ, 0)
+    else:
+        brake_motor(MOUTH_IN1, MOUTH_IN2)
 
 
 def move_head(state="on"):
@@ -93,9 +142,16 @@ def move_head(state="on"):
 
 
 def move_tail(duration=0.2):
-    if USE_THIRD_MOTOR:
+    if USE_THIRD_MOTOR and 'TAIL_PWM' in globals() and TAIL_PWM is not None:
+        # Classic tail on new profile: one-pin PWM with mate tied to GND
+        lgpio.tx_pwm(h, TAIL_PWM, FREQ, 80)
+        time.sleep(duration)
+        lgpio.tx_pwm(h, TAIL_PWM, FREQ, 0)
+    elif USE_THIRD_MOTOR and 'TAIL_IN1' in globals() and TAIL_IN1 is not None:
+        # Classic tail on legacy profile: two-pin
         run_motor(TAIL_IN1, TAIL_IN2, speed_percent=80, duration=duration)
     else:
+        # Modern (2 motors), legacy behavior: reverse the shared head/tail motor
         run_motor(HEAD_IN2, HEAD_IN1, speed_percent=80, duration=duration)
 
 
@@ -171,7 +227,7 @@ def interlude():
     Thread(target=lambda: _interlude_routine(), daemon=True).start()
 
 
-# === Motor Watchdog ===
+# === Motor Watchdog (unchanged) ===
 def stop_all_motors():
     print("🛑 Stopping all motors")
     move_head("off")
