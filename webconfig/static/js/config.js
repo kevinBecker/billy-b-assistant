@@ -323,9 +323,6 @@ const SettingsForm = (() => {
             if (pinSelect) {
                 payload.BILLY_PINS = pinSelect.value; // "new" | "legacy"
             }
-            const oldPins = (pinSelect?.getAttribute("data-original") || "new").toLowerCase();
-            const newPins = (payload.BILLY_PINS || "new").toLowerCase();
-            const pinLayoutChanged = (oldPins !== newPins);
 
             let hostnameChanged = false;
 
@@ -352,12 +349,8 @@ const SettingsForm = (() => {
                 }
             }
 
-            if (wasActive === "active" || pinLayoutChanged) {
-                await fetch("/service/restart");
-                showNotification("Settings saved – Billy restarted", "success");
-            } else {
-                showNotification("Settings saved", "success");
-            }
+            await fetch("/service/restart");
+            showNotification("Settings saved – Billy restarted", "success");
 
             if (portChanged || hostnameChanged) {
                 const targetHost = hostnameChanged ? `${newHostname}.local` : window.location.hostname;
