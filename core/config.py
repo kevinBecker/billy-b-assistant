@@ -97,7 +97,7 @@ CHUNK_MS = int(os.getenv("CHUNK_MS", "50"))
 PLAYBACK_VOLUME = 1
 
 # === GPIO Config ===
-BUTTON_PIN = 27 if BILLY_PINS == "legacy" else 12  # legacy=pin 13, new=pin 32
+BUTTON_PIN = 27 if BILLY_PINS == "legacy" else 24  # legacy=pin 13, new=pin 18
 
 # === MQTT Config ===
 MQTT_HOST = os.getenv("MQTT_HOST", "")

@@ -35,13 +35,13 @@ if BILLY_PINS == "legacy":
 
 else:
     # NEW quiet wiring
-    HEAD_IN1 = 21  # pin 40
-    MOUTH_IN1 = 16  # pin 36
+    HEAD_IN1 = 22  # pin 15
+    MOUTH_IN1 = 17  # pin 11
 
     if USE_THIRD_MOTOR:
-        TAIL_IN1 = 20  # pin 38
+        TAIL_IN1 = 27  # pin 13
     else:
-        HEAD_IN2 = 20  # pin 38
+        HEAD_IN2 = 27  # pin 13
 
 
 # Collect all pins we actually use
