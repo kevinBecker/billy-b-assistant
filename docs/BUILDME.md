@@ -105,6 +105,9 @@ There are two selectable wiring profiles (`BILLY_PINS` in .env or via the web UI
 
 \* Only used on Classic Billy (3 motors).
 
+![Assembly overview 1](./images/assembly_1.jpeg)
+![Assembly overview 2](./images/assembly_2.jpeg)
+
 ---
 
 #### New Profile (Default, quiet GPIO layout)
@@ -115,32 +118,31 @@ There are two selectable wiring profiles (`BILLY_PINS` in .env or via the web UI
 
 **Modern Billy (2 motors)**
 
-| Component      | GPIO Pin (Physical)                   | Motor Driver Input        |
-|----------------|---------------------------------------|---------------------------|
-| Head IN (PWM)  | GPIO 21 (pin 40)                      | Controller 1 IN1          |
-| Head IN (DIR)  | GPIO 20 (pin 38)                      | Controller 1 IN2          |
-| Mouth IN (PWM) | GPIO 16 (pin 36)                      | Controller 1 IN3          |
-| Motor +        | 5v pwr  (pin 4)                       | Power to motor driver     |
-| Motor -        | Ground  (pin 6)                       |                           |
-| Button         | GPIO 12 (pin 32) & GND (pin 34 or 30) | Trigger voice session     |
+| Component | GPIO Pin (Physical)               | Motor Driver Input |
+|-----------|-----------------------------------|--------------------|
+| Head      | GPIO 17 (pin 11)                  | Pin IN1            |
+| Tail      | GPIO 27 (pin 13)                  | Pin IN2            |
+| Mouth     | GPIO 22 (pin 15)                  | Pin IN3            |
+| Motor +   | 5v pwr  (pin 4)                   | Pin +              |
+| Motor -   | Ground  (pin 6)                   | Pin -              |
+| Button    | GPIO 24 (pin 18) & GND (pin 20)   |                    |
 ---
 
 **Classic Billy (3 motors)**
 
-| Component      | GPIO Pin (Physical)                   | Motor Driver Input    |
-|----------------|---------------------------------------|-----------------------|
-| Head IN (PWM)  | GPIO 21 (pin 40)                      | Controller 1 IN1      |
-| Tail IN (PWM)  | GPIO 20 (pin 38)                      | Controller 2 IN1      |
-| Mouth IN (PWM) | GPIO 16 (pin 36)                      | Controller 1 IN3      |
-| Motor +        | 5v pwr  (pin 4)                       | Power to motor driver |
-| Motor -        | Ground  (pin 6)                       |                       |
-| Button         | GPIO 12 (pin 32) & GND (pin 34 or 30) | Trigger voice session |
+| Component | GPIO Pin (Physical)             | Motor Driver Input |
+|-----------|---------------------------------|--------------------|
+| Head      | GPIO 17 (pin 11)                | Driver 1 Pin IN1   |
+| Tail      | GPIO 27 (pin 13)                | Driver 2 Pin IN1   |
+| Mouth     | GPIO 22 (pin 15)                | Driver 1 Pin IN3   |
+| Motor +   | 5v pwr  (pin 4)                 | Driver 1 & 2 Pin + |
+| Motor -   | Ground  (pin 6)                 | Driver 1 & 2 Pin - |
+| Button    | GPIO 24 (pin 18) & GND (pin 20) |                    |
 
-\* On Classic Billy, the firmware only drives `TAIL_IN1` (one-pin mode) and ignores `TAIL_IN2`.
 
 ![GPIO pins](./images/gpio-pins.png)
-![Assembly overview 1](./images/assembly_1.jpeg)
-![Assembly overview 2](./images/assembly_2.jpeg)
+
+
 
 ### Speaker and mic
 
