@@ -275,6 +275,29 @@ const ServiceStatus = (() => {
     return {fetchStatus, updateServiceStatusUI};
 })();
 
+// ===================== PIN PROFILE =====================
+const PinProfile = (() => {
+    function bindUI() {
+        const sel = document.getElementById('BILLY_PINS_SELECT');
+        if (!sel) return;
+
+        // Load current value from /config
+        fetch('/config')
+            .then(r => r.json())
+            .then(cfg => {
+                const mode = String(cfg.BILLY_PINS || 'new').toLowerCase();
+                sel.value = mode;
+                sel.setAttribute('data-original', mode);  // <-- add this
+            })
+            .catch(() => {
+                sel.value = 'new';
+                sel.setAttribute('data-original', 'new');  // <-- and this for fallback
+            });
+
+    }
+    return { bindUI };
+})();
+
 // ===================== SETTINGS FORM =====================
 
 const SettingsForm = (() => {
@@ -295,6 +318,11 @@ const SettingsForm = (() => {
             const hostnameInput = document.getElementById("hostname");
             const oldHostname = (hostnameInput.getAttribute("data-original") || hostnameInput.defaultValue || "").trim();
             const newHostname = (formData.get("hostname") || "").trim();
+
+            const pinSelect = document.getElementById("BILLY_PINS_SELECT");
+            if (pinSelect) {
+                payload.BILLY_PINS = pinSelect.value; // "new" | "legacy"
+            }
 
             let hostnameChanged = false;
 
@@ -321,12 +349,8 @@ const SettingsForm = (() => {
                 }
             }
 
-            if (wasActive === "active") {
-                await fetch("/service/restart");
-                showNotification("Settings saved – Billy restarted", "success");
-            } else {
-                showNotification("Settings saved", "success");
-            }
+            await fetch("/service/restart");
+            showNotification("Settings saved – Billy restarted", "success");
 
             if (portChanged || hostnameChanged) {
                 const targetHost = hostnameChanged ? `${newHostname}.local` : window.location.hostname;
@@ -1303,5 +1327,6 @@ document.addEventListener("DOMContentLoaded", () => {
     PersonaForm.handlePersonaSave();
     window.addBackstoryField = PersonaForm.addBackstoryField;
     MotorPanel.bindUI();
+    PinProfile.bindUI();
     Sections.collapsible();
 });

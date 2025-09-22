@@ -83,21 +83,66 @@ bottom left corner of the board. The 1-4 positions are counted from left to righ
 
 Using distinct jumper wire colors is recommended for easier identification.
 
-| Component | GPIO Pin number (physical pin)   | Function                                         |
-|-------------------------|----------------------------------|------------------------------------|
-| Controller 1, Motor IN1 | GPIO 13 (pin 33)                 | Head & tail direction/speed (PWM1) |
-| Controller 1, Motor IN2 | GPIO 6  (pin 31)                 | Head & tail on/off                 |
-| Controller 1, Motor IN3 | GPIO 12 (pin 32)                 | Mouth direction/speed (PWM0)       |
-| Controller 1, Motor IN4 | GPIO 5  (pin 29)                 | Mouth on/off                       |
-| Controller 2, Motor IN1 | GPIO 19 (pin 35)                 | Tail direction/speed (PWM2)        |
-| Controller 2, Motor IN2 | GPIO 26 (pin 37)                 | Tail on/off                        |
-| Motor +                 | 5v pwr  (pin 4)                  | Power to motor driver              |
-| Motor -                 | Ground  (pin 4)                  |                                    |
-| Button                  | GPIO 27 (pin 13) & GND (pin 14)  | Trigger voice session              |
+There are two selectable wiring profiles (`BILLY_PINS` in .env or via the web UI): 
+- `legacy`
+- `new`
 
-![GPIO pins](./images/gpio-pins.png)
+---
+
+#### Legacy Profile (for backwards compatibility)
+
+| Component         | GPIO Pin (Physical)             | Motor Driver Input    |
+|-------------------|---------------------------------|-----------------------|
+| Head IN1 (PWM)    | GPIO 13 (pin 33)                | Controller 1 IN1      |
+| Head IN2          | GPIO 6  (pin 31)                | Controller 1 IN2      |
+| Mouth IN1 (PWM)   | GPIO 12 (pin 32)                | Controller 1 IN3      |
+| Mouth IN2         | GPIO 5  (pin 29)                | Controller 1 IN4      |
+| Tail IN1 (PWM) \* | GPIO 19 (pin 35)                | Controller 2 IN1      |
+| Tail IN2 \*       | GPIO 26 (pin 37)                | Controller 2 IN2      |
+| Motor +           | 5v pwr  (pin 4)                 | Power to motor driver |
+| Motor -           | Ground  (pin 6)                 |                       |
+| Button            | GPIO 27 (pin 13) & GND (pin 14) | Trigger voice session |
+
+\* Only used on Classic Billy (3 motors).
+
 ![Assembly overview 1](./images/assembly_1.jpeg)
 ![Assembly overview 2](./images/assembly_2.jpeg)
+
+---
+
+#### New Profile (Default, quiet GPIO layout)
+- Updated wiring avoids “tweaky” boot GPIOs.
+- Mouth uses one-pin to control
+- Modern Billy (2 motors): Head & Tail uses direction to determine which movement (two-pin pair).
+- Classic Billy (3 motors): All 3 motors uses one-pin PWM control
+
+**Modern Billy (2 motors)**
+
+| Component | GPIO Pin (Physical)               | Motor Driver Input |
+|-----------|-----------------------------------|--------------------|
+| Head      | GPIO 17 (pin 11)                  | Pin IN1            |
+| Tail      | GPIO 27 (pin 13)                  | Pin IN2            |
+| Mouth     | GPIO 22 (pin 15)                  | Pin IN3            |
+| Motor +   | 5v pwr  (pin 4)                   | Pin +              |
+| Motor -   | Ground  (pin 6)                   | Pin -              |
+| Button    | GPIO 24 (pin 18) & GND (pin 20)   |                    |
+---
+
+**Classic Billy (3 motors)**
+
+| Component | GPIO Pin (Physical)             | Motor Driver Input |
+|-----------|---------------------------------|--------------------|
+| Head      | GPIO 17 (pin 11)                | Driver 1 Pin IN1   |
+| Tail      | GPIO 27 (pin 13)                | Driver 2 Pin IN1   |
+| Mouth     | GPIO 22 (pin 15)                | Driver 1 Pin IN3   |
+| Motor +   | 5v pwr  (pin 4)                 | Driver 1 & 2 Pin + |
+| Motor -   | Ground  (pin 6)                 | Driver 1 & 2 Pin - |
+| Button    | GPIO 24 (pin 18) & GND (pin 20) |                    |
+
+
+![GPIO pins](./images/gpio-pins.png)
+
+
 
 ### Speaker and mic
 

@@ -7,39 +7,53 @@ from threading import Lock, Thread
 import lgpio
 import numpy as np
 
-from .config import is_classic_billy
+from .config import BILLY_PINS, is_classic_billy
 
 
 # === Configuration ===
 USE_THIRD_MOTOR = is_classic_billy()
-
-print(f"⚙️ Using third motor: {USE_THIRD_MOTOR}")
+print(f"⚙️ Using third motor: {USE_THIRD_MOTOR} | Pin profile: {BILLY_PINS}")
 
 # === GPIO Setup ===
 h = lgpio.gpiochip_open(0)
 FREQ = 10000  # PWM frequency
 
-# Pin mapping
-MOUTH_IN1 = 12  # PWM0_CHAN0, pin 32
-MOUTH_IN2 = 5  # pin 29
-HEAD_IN1 = 13  # PWM0_CHAN1, pin 33
-HEAD_IN2 = 6  # pin 31
+# -------------------------------------------------------------------
+# Pin mapping by profile
+# -------------------------------------------------------------------
+MOUTH_IN1 = MOUTH_IN2 = HEAD_IN1 = HEAD_IN2 = TAIL_IN1 = TAIL_IN2 = None
 
-if (
-    USE_THIRD_MOTOR
-):  # Note: more than three hardware PWM channels is only a Pi5 feature!
-    TAIL_IN1 = 19  # PWM0_CHAN3, pin 35
-    TAIL_IN2 = 26  # pin 37
+if BILLY_PINS == "legacy":
+    # Original wiring (backwards compatible)
+    MOUTH_IN1 = 12
+    MOUTH_IN2 = 5
+    HEAD_IN1 = 13
+    HEAD_IN2 = 6
+    if USE_THIRD_MOTOR:
+        TAIL_IN1 = 19
+        TAIL_IN2 = 26
 
-# Claim GPIOs
-motor_pins = [MOUTH_IN1, MOUTH_IN2, HEAD_IN1, HEAD_IN2]
-if USE_THIRD_MOTOR:
-    motor_pins += [TAIL_IN1, TAIL_IN2]
+else:
+    # NEW quiet wiring
+    HEAD_IN1 = 22  # pin 15
+    MOUTH_IN1 = 17  # pin 11
+
+    if USE_THIRD_MOTOR:
+        TAIL_IN1 = 27  # pin 13
+    else:
+        HEAD_IN2 = 27  # pin 13
+
+
+# Collect all pins we actually use
+motor_pins = [
+    p
+    for p in (MOUTH_IN1, MOUTH_IN2, HEAD_IN1, HEAD_IN2, TAIL_IN1, TAIL_IN2)
+    if p is not None
+]
 
 for pin in motor_pins:
     lgpio.gpio_claim_output(h, pin)
     lgpio.gpio_write(h, pin, 0)
-
 # === State ===
 _head_tail_lock = Lock()
 _motor_watchdog_running = False
@@ -49,23 +63,24 @@ _last_rms = 0
 head_out = False
 
 
-# === Motor Helpers ===
-def brake_motor(pin1, pin2):
+# === Motor Helpers (unchanged) ===
+def brake_motor(pin1, pin2=None):
     lgpio.tx_pwm(h, pin1, FREQ, 0)
-    lgpio.tx_pwm(h, pin2, FREQ, 0)
-    lgpio.gpio_write(h, pin1, 0)
-    lgpio.gpio_write(h, pin2, 0)
+    if pin2 is not None:
+        lgpio.tx_pwm(h, pin2, FREQ, 0)
+        lgpio.gpio_write(h, pin2, 0)
 
 
-def run_motor(pwm_pin, low_pin, speed_percent=100, duration=0.3, brake=True):
-    lgpio.gpio_write(h, low_pin, 0)
+def run_motor(pwm_pin, low_pin=None, speed_percent=100, duration=0.3, brake=True):
+    if low_pin is not None:
+        lgpio.gpio_write(h, low_pin, 0)
     lgpio.tx_pwm(h, pwm_pin, FREQ, speed_percent)
     time.sleep(duration)
     if brake:
         brake_motor(pwm_pin, low_pin)
 
 
-# === Movement Functions ===
+# === Movement Functions (keep signatures/behavior) ===
 def move_mouth(speed_percent, duration, brake=False):
     run_motor(MOUTH_IN1, MOUTH_IN2, speed_percent, duration, brake)
 
@@ -93,9 +108,11 @@ def move_head(state="on"):
 
 
 def move_tail(duration=0.2):
-    if USE_THIRD_MOTOR:
+    if USE_THIRD_MOTOR and TAIL_IN1 is not None and TAIL_IN2 is not None:
+        # Classic Billy (3 motors): dedicated tail H-bridge
         run_motor(TAIL_IN1, TAIL_IN2, speed_percent=80, duration=duration)
     else:
+        # Modern Billy (2 motors): reverse the shared head/tail motor
         run_motor(HEAD_IN2, HEAD_IN1, speed_percent=80, duration=duration)
 
 
@@ -171,7 +188,7 @@ def interlude():
     Thread(target=lambda: _interlude_routine(), daemon=True).start()
 
 
-# === Motor Watchdog ===
+# === Motor Watchdog (unchanged) ===
 def stop_all_motors():
     print("🛑 Stopping all motors")
     move_head("off")
