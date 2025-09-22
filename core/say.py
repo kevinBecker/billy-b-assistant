@@ -119,10 +119,8 @@ async def say(text: str):
             # Wait for playback to complete
             await asyncio.to_thread(playback_queue.join)
 
-            try:
-                move_head("off")
-            except Exception as e:
-                print(f"\n⚠️ Error head motor: {e}")
-
     except Exception as e:
         print(f"❌ say() failed: {e}")
+
+    finally:
+        move_head("off")
