@@ -201,24 +201,26 @@ def delayed_restart():
 
 
 def get_usb_pcm_card_index():
-    """Find playback (speaker) card index."""
-    preference = (core_config.SPEAKER_PREFERENCE or "").lower()
+    """
+    If SPEAKER_PREFERENCE is set and matches, return that ALSA card index.
+    Otherwise return None to indicate 'use system default'.
+    """
+    preference = (core_config.SPEAKER_PREFERENCE or "").lower().strip()
     try:
-        output = subprocess.check_output(["aplay", "-l"], text=True)
+        if not preference:
+            return None  # <-- use default device
+        out = subprocess.check_output(["aplay", "-l"], text=True)
         cards = re.findall(
-            r"card (\d+): ([^\s]+) \[(.*?)\], device (\d+): (.*?) \[", output
+            r"card (\d+): ([^\s]+) \[(.*?)\], device (\d+): (.*?) \[", out
         )
         for card_index, shortname, longname, device_index, desc in cards:
-            name_combined = f"{shortname} {longname} {desc}".lower()
-            if preference in name_combined:
+            name = f"{shortname} {longname} {desc}".lower()
+            if preference in name:
                 return int(card_index)
-        for card_index, _, longname, _, _ in cards:
-            if "usb" in longname.lower():
-                return int(card_index)
-        return None
+        return None  # no match -> use default
     except Exception as e:
         print("Failed to detect speaker card:", e)
-        return None
+        return None  # fall back to default
 
 
 def get_usb_capture_card_index():
@@ -242,6 +244,16 @@ def get_usb_capture_card_index():
         return None
 
 
+def amixer_base_args_for_card(card_index: int | None) -> list[str]:
+    """Use -c <index> if we have a match; otherwise -D default."""
+    return ["-D", "default"] if card_index is None else ["-c", str(card_index)]
+
+
+def alsa_play_device(card_index: int | None) -> str:
+    """Return ALSA device for playback based on Option B logic."""
+    return "default" if card_index is None else f"plughw:{card_index},0"
+
+
 def get_mic_gain_numid(card_index):
     """Find the numid for mic gain on the specified card."""
     try:
@@ -255,7 +267,7 @@ def get_mic_gain_numid(card_index):
                     return int(match.group(1))
     except Exception as e:
         print("Failed to get mic gain numid:", e)
-    return None
+        return None
 
 
 # ==== Audio RMS stream for mic check ====
@@ -453,8 +465,6 @@ def shutdown_billy():
 
 
 # ==== Persona ====
-
-
 @app.route("/persona", methods=["GET"])
 def get_persona():
     config = configparser.ConfigParser()
@@ -558,17 +568,14 @@ def play_wakeup_clip():
         sound_path = os.path.join(
             PROJECT_ROOT, "sounds", "wake-up", "custom", f"{index}.wav"
         )
-
         if not os.path.exists(sound_path):
             return jsonify({"error": f"Clip {index}.wav not found"}), 404
 
-        card_index = get_usb_pcm_card_index()
-        if card_index is None:
-            return jsonify({"error": "No matching speaker card found"}), 404
+        card_index = get_usb_pcm_card_index()  # int | None (None => use default)
+        device = alsa_play_device(card_index)
 
-        device = f"plughw:{card_index},0"
-        subprocess.Popen(["aplay", "-D", device, sound_path])
-        return jsonify({"status": f"Playing clip {index}.wav"})
+        subprocess.Popen(["aplay", "-q", "-D", device, sound_path])
+        return jsonify({"status": f"Playing clip {index}.wav on {device}"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -651,17 +658,14 @@ def remove_wakeup_clip():
 
 
 # ==== Audio: Speaker/Mic Tests ====
-
-
 @app.route("/speaker-test", methods=["POST"])
 def speaker_test():
     try:
-        card_index = get_usb_pcm_card_index()
-        if card_index is None:
-            return jsonify({"error": "No matching speaker card found"}), 404
-        device = f"plughw:{card_index},0"
         sound_path = os.path.join(PROJECT_ROOT, "sounds", "speakertest.wav")
-        subprocess.Popen(["aplay", "-D", device, sound_path])
+        card_index = get_usb_pcm_card_index()  # int | None (None => use default)
+        device = alsa_play_device(card_index)
+
+        subprocess.Popen(["aplay", "-q", "-D", device, sound_path])
         return jsonify({"status": f"playing on {device}"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -736,35 +740,39 @@ def mic_gain():
 
 @app.route("/volume", methods=["GET", "POST"])
 def volume():
-    card_index = get_usb_pcm_card_index()
-    if card_index is None:
-        return jsonify({"error": "Could not determine speaker card"}), 500
     try:
+        card_index = get_usb_pcm_card_index()  # int | None
+        base = amixer_base_args_for_card(card_index)
+        control = "PCM"
+
         if request.method == "GET":
             output = subprocess.check_output(
-                ["amixer", "-c", str(card_index), "get", "PCM"], text=True
+                ["amixer", *base, "get", control], text=True
             )
-            match = re.search(r"\[(\d{1,3})%\]", output)
-            if match:
-                return jsonify({"volume": int(match.group(1))})
-            return jsonify({"error": "Could not parse volume"}), 500
-        if request.method == "POST":
-            data = request.get_json()
-            value = data.get("volume")
-            if value is None:
-                return jsonify({"error": "Missing volume"}), 400
-            value = int(value)
-            if 0 <= value <= 100:
-                subprocess.check_call([
-                    "amixer",
-                    "-c",
-                    str(card_index),
-                    "set",
-                    "PCM",
-                    f"{value}%",
-                ])
-                return jsonify({"volume": value})
+            m = re.search(r"\[(\d{1,3})%\]", output)
+            if not m:
+                return jsonify({"error": f"Could not parse volume for {control}"}), 500
+            return jsonify({
+                "volume": int(m.group(1)),
+                "control": control,
+                "target": "default" if card_index is None else f"card {card_index}",
+            })
+
+        # POST
+        data = request.get_json()
+        if data is None or "volume" not in data:
+            return jsonify({"error": "Missing volume"}), 400
+        value = int(data["volume"])
+        if not (0 <= value <= 100):
             return jsonify({"error": "Volume must be 0–100"}), 400
+
+        subprocess.check_call(["amixer", *base, "set", control, f"{value}%"])
+        return jsonify({
+            "volume": value,
+            "control": control,
+            "target": "default" if card_index is None else f"card {card_index}",
+        })
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
