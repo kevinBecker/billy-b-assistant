@@ -350,22 +350,6 @@
                         Hardware Settings
                         <span class="material-icons transition-transform duration-200 ml-2 rotate-0">expand_more</span>
                     </h3>
-                    <div class="mb-4">
-                        <label for="BILLY_MODEL" class="block font-semibold text-sm text-slate-300">
-                            Billy Version
-                        </label>
-                        <select id="BILLY_MODEL" name="BILLY_MODEL"
-                                class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                            <option value="modern" {% if config.get(
-                            'BILLY_MODEL', 'modern') == 'modern' %}selected{% endif %}>
-                            Modern (2 motors)
-                            </option>
-                            <option value="classic" {% if config.get(
-                            'BILLY_MODEL') == 'classic' %}selected{% endif %}>
-                            Classic (3 motors)
-                            </option>
-                        </select>
-                    </div>
 
                     <div class="mb-4 relative">
                         <label for="BILLY_PINS_SELECT"
@@ -390,6 +374,23 @@
                                 <option value="legacy">Legacy (old wiring)</option>
                             </select>
                         </div>
+                    </div>
+
+                    <div class="mb-4" id="hardware-version-row">
+                        <label for="BILLY_MODEL" class="block font-semibold text-sm text-slate-300">
+                            Billy Version
+                        </label>
+                        <select id="BILLY_MODEL" name="BILLY_MODEL"
+                                class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                            <option value="modern" {% if config.get(
+                            'BILLY_MODEL', 'modern') == 'modern' %}selected{% endif %}>
+                            Modern (2 motors)
+                            </option>
+                            <option value="classic" {% if config.get(
+                            'BILLY_MODEL') == 'classic' %}selected{% endif %}>
+                            Classic (3 motors)
+                            </option>
+                        </select>
                     </div>
 
                     <div class="mb-4">

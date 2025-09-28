@@ -21,35 +21,27 @@ FREQ = 10000  # PWM frequency
 # -------------------------------------------------------------------
 # Pin mapping by profile
 # -------------------------------------------------------------------
-MOUTH_IN1 = MOUTH_IN2 = HEAD_IN1 = HEAD_IN2 = TAIL_IN1 = TAIL_IN2 = None
+MOUTH = GND_1 = HEAD = TAIL = GND_2 = GND_3 = None
 
 if BILLY_PINS == "legacy":
     # Original wiring (backwards compatible)
-    MOUTH_IN1 = 12
-    MOUTH_IN2 = 5
-    HEAD_IN1 = 13
-    HEAD_IN2 = 6
+    MOUTH = 12
+    HEAD = 13
+    TAIL = 6
+    GND_1 = 5
     if USE_THIRD_MOTOR:
-        TAIL_IN1 = 19
-        TAIL_IN2 = 26
+        TAIL = 19  # legacy 3-motor: dedicated tail PWM
+        GND_2 = 6  # head mate (kept LOW)
+        GND_3 = 26  # tail mate (kept LOW)
 
 else:
     # NEW quiet wiring
-    HEAD_IN1 = 22  # pin 15
-    MOUTH_IN1 = 17  # pin 11
-
-    if USE_THIRD_MOTOR:
-        TAIL_IN1 = 27  # pin 13
-    else:
-        HEAD_IN2 = 27  # pin 13
-
+    HEAD = 22  # pin 15
+    MOUTH = 17  # pin 11
+    TAIL = 27  # pin 13
 
 # Collect all pins we actually use
-motor_pins = [
-    p
-    for p in (MOUTH_IN1, MOUTH_IN2, HEAD_IN1, HEAD_IN2, TAIL_IN1, TAIL_IN2)
-    if p is not None
-]
+motor_pins = [p for p in (MOUTH, HEAD, TAIL, GND_1, GND_2, GND_3) if p is not None]
 
 for pin in motor_pins:
     lgpio.gpio_claim_output(h, pin)
@@ -82,38 +74,47 @@ def run_motor(pwm_pin, low_pin=None, speed_percent=100, duration=0.3, brake=True
 
 # === Movement Functions (keep signatures/behavior) ===
 def move_mouth(speed_percent, duration, brake=False):
-    run_motor(MOUTH_IN1, MOUTH_IN2, speed_percent, duration, brake)
+    run_motor(MOUTH, GND_1, speed_percent, duration, brake)
 
 
 def stop_mouth():
-    brake_motor(MOUTH_IN1, MOUTH_IN2)
+    brake_motor(MOUTH, GND_1)
 
 
 def move_head(state="on"):
     global head_out
 
     def _move_head_on():
-        lgpio.gpio_write(h, HEAD_IN2, 0)
-        lgpio.tx_pwm(h, HEAD_IN1, FREQ, 80)
+        lgpio.gpio_write(h, TAIL, 0)  # ensure tail bridge is off
+        lgpio.tx_pwm(h, HEAD, FREQ, 80)
         time.sleep(0.5)
-        lgpio.tx_pwm(h, HEAD_IN1, FREQ, 100)  # Stay extended
+        lgpio.tx_pwm(h, HEAD, FREQ, 100)  # Stay extended
 
     if state == "on":
         if not head_out:
             threading.Thread(target=_move_head_on, daemon=True).start()
             head_out = True
     else:
-        brake_motor(HEAD_IN1, HEAD_IN2)
+        brake_motor(HEAD, TAIL)
         head_out = False
 
 
 def move_tail(duration=0.2):
-    if USE_THIRD_MOTOR and TAIL_IN1 is not None and TAIL_IN2 is not None:
-        # Classic Billy (3 motors): dedicated tail H-bridge
-        run_motor(TAIL_IN1, TAIL_IN2, speed_percent=80, duration=duration)
+    if BILLY_PINS == "legacy":
+        if USE_THIRD_MOTOR and TAIL is not None and GND_3 is not None:
+            # Legacy + classic (3 motors): tail has its own bridge (TAIL, GND_3)
+            run_motor(TAIL, GND_3, speed_percent=80, duration=duration)
+        else:
+            # Legacy + modern (2 motors): tail is the reverse input of the head bridge
+            # TAIL is the 'other' head input, HEAD is the mate to hold low
+            run_motor(TAIL, HEAD, speed_percent=80, duration=duration)
     else:
-        # Modern Billy (2 motors): reverse the shared head/tail motor
-        run_motor(HEAD_IN2, HEAD_IN1, speed_percent=80, duration=duration)
+        if USE_THIRD_MOTOR:
+            # NEW + classic (3 motors): tail has its own channel; mate hard-tied to GND
+            run_motor(TAIL, None, speed_percent=80, duration=duration)
+        else:
+            # NEW + modern (2 motors): tail and head share bridge; hold HEAD low
+            run_motor(TAIL, HEAD, speed_percent=80, duration=duration)
 
 
 def move_tail_async(duration=0.3):

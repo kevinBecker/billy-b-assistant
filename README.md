@@ -100,7 +100,9 @@ sudo reboot
 
 ---
 
-## C. GPIO Voltage Configuration (Motor Safety)
+## C. GPIO Voltage Configuration (Motor Safety) (DEPRECATED)
+> ⚠️ **Note:** These `/boot/config.txt` entries are only required with the deprecated legacy pin layout.
+> For the new pin layout, the unused inputs are already tied to ground and no config changes are needed.
 
 When the Raspberry Pi powers up, all GPIO pins are in an **undefined state** until the Billy B-Assistant software takes control. This can cause the **motor driver board to activate or stall** the motors momentarily. To prevent stalling and overheating the motors in case the software doesn't start, we set all the gpio pins to Low at boot:
 
