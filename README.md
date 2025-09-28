@@ -31,9 +31,14 @@ The **Billy Bass Assistant** is a Raspberry Pi–powered voice assistant embedde
 
 ---
 
-## Hardware build instructions
+## Hardware 
 
 See [BUILDME.md](./docs/BUILDME.md) for detailed build/wiring instructions.
+
+**OR** 
+
+Check out my Etsy page https://thingsfromthom.etsy.com/ to buy a pre-assembled version that is ready to go.
+
 
 ---
 

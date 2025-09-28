@@ -117,6 +117,7 @@ ALLOW_UPDATE_PERSONALITY_INI = (
 
 # === Software Config ===
 FLASK_PORT = int(os.getenv("FLASK_PORT", "80"))
+SHOW_SUPPORT = os.getenv("SHOW_SUPPORT", True)
 
 
 def is_classic_billy():

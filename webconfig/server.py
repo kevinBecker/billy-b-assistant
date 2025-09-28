@@ -59,6 +59,7 @@ CONFIG_KEYS = [
     "SPEAKER_PREFERENCE",
     "FLASK_PORT",
     "RUN_MODE",
+    "SHOW_SUPPORT",
 ]
 ALLOW_RC_TAGS = os.getenv("ALLOW_RC_TAGS", "false").lower() == "true"
 WEBCONFIG_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -286,9 +287,8 @@ latest = fetch_latest_tag()
 current = get_current_version()
 save_versions(current, latest)
 
+
 # ==== ROUTES ====
-
-
 @app.route("/")
 def index():
     return render_template("index.html", config=load_env())

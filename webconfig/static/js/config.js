@@ -1,9 +1,34 @@
+
+// ===================== APP CONFIG (single fetch) =====================
+const AppConfig = (() => {
+    let cfg = null;
+    let promise = null;
+
+    const load = () => {
+        if (promise) return promise;
+        promise = fetch("/config")
+            .then(r => r.json())
+            .then(j => (cfg = j))
+            .catch(e => {
+                console.warn("Failed to load /config:", e);
+                cfg = {};
+                return cfg;
+            });
+        return promise;
+    };
+
+    const get = () => cfg || {};
+    return { load, get };
+})();
+
+
 // ===================== Header Secondary Actions =====================
 
 const LogPanel = (() => {
     let autoScrollEnabled = false;
     let isLogHidden = true;
     let isEnvHidden = true;
+    let isSupportHidden = true;
 
     // Reboot Billy
     const rebootBilly = async () => {
@@ -87,6 +112,13 @@ const LogPanel = (() => {
         }
     };
 
+    const toggleSupportPanel = () => {
+        isSupportHidden = !isSupportHidden;
+        elements.supportPanel.classList.toggle("hidden", isSupportHidden);
+        elements.toggleSupportBtn.classList.toggle("bg-red-500", !isSupportHidden);
+        elements.toggleSupportBtn.classList.toggle("bg-zinc-700", isSupportHidden);
+    };
+
     const toggleMotion = () => {
         const btn = elements.toggleMotionBtn;
         const icon = btn.querySelector(".material-icons");
@@ -156,7 +188,7 @@ const LogPanel = (() => {
 
     // Cache DOM references after DOMContentLoaded
     let elements = {};
-    const bindUI = () => {
+    const bindUI = (cfg = {}) => {
         elements = {
             logOutput: document.getElementById("log-output"),
             logContainer: document.getElementById("log-container"),
@@ -169,9 +201,36 @@ const LogPanel = (() => {
             envTextarea: document.getElementById("env-textarea"),
             saveEnvBtn: document.getElementById("save-env-btn"),
             toggleMotionBtn: document.getElementById("toggle-motion-btn"),
+            powerBtn: document.getElementById("power-btn"),
+            powerDropdown: document.getElementById("power-dropdown"),
             rebootBillyBtn: document.getElementById("reboot-billy-btn"),
             shutdownBillyBtn: document.getElementById("shutdown-billy-btn"),
+            toggleSupportBtn: document.getElementById("toggle-support-btn"),
+            supportPanel: document.getElementById("support-panel"),
         };
+
+        const show = String(cfg.SHOW_SUPPORT || "").toLowerCase() === "true";
+        if (show) {
+            elements.toggleSupportBtn?.classList.remove("hidden");
+        } else {
+            elements.toggleSupportBtn?.classList.add("hidden");
+            elements.supportPanel?.classList.add("hidden");
+            isSupportHidden = true;
+        }
+
+        // Toggle dropdown open/close
+        elements.powerBtn?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            elements.powerDropdown?.classList.toggle("hidden");
+        });
+
+        // Close on outside click
+        document.addEventListener("click", (e) => {
+            const menu = document.getElementById("power-menu");
+            if (!menu?.contains(e.target)) {
+                elements.powerDropdown?.classList.add("hidden");
+            }
+        });
 
         elements.toggleBtn.addEventListener("click", toggleLogPanel);
         elements.toggleFullscreenBtn.addEventListener("click", toggleFullscreenLog);
@@ -181,6 +240,7 @@ const LogPanel = (() => {
         elements.saveEnvBtn.addEventListener("click", saveEnv);
         elements.rebootBillyBtn.addEventListener("click", rebootBilly);
         elements.shutdownBillyBtn.addEventListener("click", shutdownBilly);
+        elements.toggleSupportBtn?.addEventListener("click", toggleSupportPanel);
 
         if (localStorage.getItem("reduceMotion") === "1") {
             document.documentElement.classList.add("reduce-motion");
@@ -193,6 +253,7 @@ const LogPanel = (() => {
                 icon.textContent = "blur_off";
             }
         }
+
     };
 
     return {fetchLogs, bindUI};
@@ -210,21 +271,31 @@ const ServiceStatus = (() => {
     const updateServiceStatusUI = (status) => {
         const statusEl = document.getElementById("service-status");
         const controlsEl = document.getElementById("service-controls");
+        const logoEl = document.getElementById("status-logo");
+
         statusEl.textContent = `(${status})`;
         statusEl.classList.remove("text-emerald-500", "text-amber-500", "text-rose-500");
 
+        let logoSrc = "/static/images/status-inactive.png";
+
         if (status === "active") {
             statusEl.classList.add("text-emerald-500");
+            logoSrc = "/static/images/status-active.png";
         } else if (status === "inactive") {
             statusEl.classList.add("text-amber-500");
+            logoSrc = "/static/images/status-inactive.png";
         } else if (status === "failed") {
             statusEl.classList.add("text-rose-500");
+            logoSrc = "/static/images/status-inactive.png"; // fallback
         }
+
+        // Swap the logo if element exists
+        if (logoEl) logoEl.src = logoSrc;
 
         controlsEl.innerHTML = "";
         const createButton = (label, action, color, iconName) => {
             const btn = document.createElement("button");
-            btn.className = `flex items-center gap-1 bg-${color}-500 hover:bg-${color}-400 text-zinc-800 font-semibold py-1 px-2 rounded`;
+            btn.className = `flex items-center transition-all gap-1 bg-${color}-500 hover:bg-${color}-400 text-zinc-800 font-semibold py-1 px-2 rounded`;
 
             const icon = document.createElement("i");
             icon.className = "material-icons";
@@ -239,6 +310,7 @@ const ServiceStatus = (() => {
             btn.onclick = () => handleServiceAction(action);
             return btn;
         };
+
         if (status === "inactive" || status === "failed") {
             controlsEl.appendChild(createButton("Start", "start", "emerald", "play_arrow"));
         } else if (status === "active") {
@@ -251,23 +323,28 @@ const ServiceStatus = (() => {
 
     const handleServiceAction = async (action) => {
         const statusEl = document.getElementById("service-status");
+        const logoEl = document.getElementById("status-logo");
+
         const statusMap = {
-            restart: {text: "restarting", color: "text-amber-500"},
-            stop: {text: "stopping", color: "text-rose-500"},
-            start: {text: "starting", color: "text-emerald-500"}
+            restart: {text: "restarting", color: "text-amber-500", logo: "/static/images/status-starting.png"},
+            stop:    {text: "stopping",   color: "text-rose-500",   logo: "/static/images/status-stopping.png"},
+            start:   {text: "starting",   color: "text-emerald-500",logo: "/static/images/status-starting.png"}
         };
 
         if (statusMap[action]) {
-            const {text, color} = statusMap[action];
+            const {text, color, logo} = statusMap[action];
             statusEl.textContent = text;
             statusEl.classList.remove("text-emerald-500", "text-amber-500", "text-rose-500");
             statusEl.classList.add(color);
+            if (logoEl) logoEl.src = logo;
         }
+
         try {
             await fetch(`/service/${action}`);
         } catch (err) {
             console.error(`Failed to ${action} service:`, err);
         }
+
         fetchStatus();
         LogPanel.fetchLogs();
     };
@@ -275,25 +352,16 @@ const ServiceStatus = (() => {
     return {fetchStatus, updateServiceStatusUI};
 })();
 
+
 // ===================== PIN PROFILE =====================
 const PinProfile = (() => {
-    function bindUI() {
+    function bindUI(cfg = {}) {
         const sel = document.getElementById('BILLY_PINS_SELECT');
         if (!sel) return;
 
-        // Load current value from /config
-        fetch('/config')
-            .then(r => r.json())
-            .then(cfg => {
-                const mode = String(cfg.BILLY_PINS || 'new').toLowerCase();
-                sel.value = mode;
-                sel.setAttribute('data-original', mode);  // <-- add this
-            })
-            .catch(() => {
-                sel.value = 'new';
-                sel.setAttribute('data-original', 'new');  // <-- and this for fallback
-            });
-
+        const mode = String(cfg.BILLY_PINS || 'new').toLowerCase();
+        sel.value = mode;
+        sel.setAttribute('data-original', mode);
     }
     return { bindUI };
 })();
@@ -1314,12 +1382,15 @@ function importPersona(input) {
 
 // ===================== INITIALIZE =====================
 
-document.addEventListener("DOMContentLoaded", () => {
-    LogPanel.bindUI();
+document.addEventListener("DOMContentLoaded", async () => {
+    const cfg = await AppConfig.load();
+
+    LogPanel.bindUI(cfg);
     LogPanel.fetchLogs();
     ServiceStatus.fetchStatus();
     setInterval(LogPanel.fetchLogs, 5000);
     setInterval(ServiceStatus.fetchStatus, 10000);
+
     AudioPanel.updateDeviceLabels();
     PersonaForm.loadPersona();
     AudioPanel.loadMicGain();
@@ -1327,6 +1398,6 @@ document.addEventListener("DOMContentLoaded", () => {
     PersonaForm.handlePersonaSave();
     window.addBackstoryField = PersonaForm.addBackstoryField;
     MotorPanel.bindUI();
-    PinProfile.bindUI();
+    PinProfile.bindUI(cfg);
     Sections.collapsible();
 });
