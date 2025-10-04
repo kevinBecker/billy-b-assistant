@@ -95,6 +95,7 @@ MIC_TIMEOUT_SECONDS = int(os.getenv("MIC_TIMEOUT_SECONDS", "5"))
 SILENCE_THRESHOLD = int(os.getenv("SILENCE_THRESHOLD", "2000"))
 CHUNK_MS = int(os.getenv("CHUNK_MS", "50"))
 PLAYBACK_VOLUME = 1
+MOUTH_ARTICULATION = int(os.getenv("MOUTH_ARTICULATION", "5"))
 
 # === GPIO Config ===
 BUTTON_PIN = 27 if BILLY_PINS == "legacy" else 24  # legacy=pin 13, new=pin 18

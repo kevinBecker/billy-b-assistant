@@ -7,7 +7,7 @@ from threading import Lock, Thread
 import lgpio
 import numpy as np
 
-from .config import BILLY_PINS, is_classic_billy
+from .config import BILLY_PINS, MOUTH_ARTICULATION, is_classic_billy
 
 
 # === Configuration ===
@@ -21,21 +21,24 @@ FREQ = 10000  # PWM frequency
 # -------------------------------------------------------------------
 # Pin mapping by profile
 # -------------------------------------------------------------------
+# We normalize to three "drive" pins (MOUTH, HEAD, TAIL) and up to three
+# "mates" that must be held LOW for legacy wiring (GND_1..GND_3).
 MOUTH = GND_1 = HEAD = TAIL = GND_2 = GND_3 = None
 
 if BILLY_PINS == "legacy":
     # Original wiring (backwards compatible)
+    # Controller 1: IN1=HEAD, IN2=TAIL (2-motor legacy) | IN3=MOUTH, IN4=GND_1
     MOUTH = 12
     HEAD = 13
     TAIL = 6
     GND_1 = 5
     if USE_THIRD_MOTOR:
-        TAIL = 19  # legacy 3-motor: dedicated tail PWM
-        GND_2 = 6  # head mate (kept LOW)
-        GND_3 = 26  # tail mate (kept LOW)
-
+        # Classic Billy (3 motors): dedicated tail bridge on second driver
+        TAIL = 19  # second driver IN1 (PWM)
+        GND_2 = 6  # head mate (keep LOW)
+        GND_3 = 26  # tail mate (keep LOW)
 else:
-    # NEW quiet wiring
+    # NEW quiet wiring (mates are tied to GND in hardware)
     HEAD = 22  # pin 15
     MOUTH = 17  # pin 11
     TAIL = 27  # pin 13
@@ -43,9 +46,11 @@ else:
 # Collect all pins we actually use
 motor_pins = [p for p in (MOUTH, HEAD, TAIL, GND_1, GND_2, GND_3) if p is not None]
 
+# Claim/initialize
 for pin in motor_pins:
     lgpio.gpio_claim_output(h, pin)
     lgpio.gpio_write(h, pin, 0)
+
 # === State ===
 _head_tail_lock = Lock()
 _motor_watchdog_running = False
@@ -54,27 +59,54 @@ _mouth_open_until = 0
 _last_rms = 0
 head_out = False
 
+# === PWM tracking (so watchdog can see PWM activity) ===
+_pwm = {pin: {"duty": 0, "since": None} for pin in motor_pins}
 
-# === Motor Helpers (unchanged) ===
+
+def set_pwm(pin: int, duty: int):
+    """Start/adjust PWM on pin and remember when it went active."""
+    lgpio.tx_pwm(h, pin, FREQ, int(duty))
+    if duty > 0:
+        _pwm[pin]["duty"] = int(duty)
+        _pwm[pin]["since"] = (
+            time.time() if _pwm[pin]["since"] is None else _pwm[pin]["since"]
+        )
+    else:
+        _pwm[pin]["duty"] = 0
+        _pwm[pin]["since"] = None
+
+
+def clear_pwm(pin: int):
+    """Stop PWM on pin and clear active since timestamp."""
+    lgpio.tx_pwm(h, pin, FREQ, 0)
+    _pwm[pin]["duty"] = 0
+    _pwm[pin]["since"] = None
+
+
+# === Motor Helpers ===
 def brake_motor(pin1, pin2=None):
-    lgpio.tx_pwm(h, pin1, FREQ, 0)
+    """Actively stop the channel: zero PWM and drive LOW."""
+    clear_pwm(pin1)
     if pin2 is not None:
-        lgpio.tx_pwm(h, pin2, FREQ, 0)
+        clear_pwm(pin2)
         lgpio.gpio_write(h, pin2, 0)
+    lgpio.gpio_write(h, pin1, 0)
 
 
-def run_motor(pwm_pin, low_pin=None, speed_percent=100, duration=0.3, brake=True):
+def run_motor_async(pwm_pin, low_pin=None, speed_percent=100, duration=0.3, brake=True):
     if low_pin is not None:
         lgpio.gpio_write(h, low_pin, 0)
-    lgpio.tx_pwm(h, pwm_pin, FREQ, speed_percent)
-    time.sleep(duration)
+    set_pwm(pwm_pin, int(speed_percent))
     if brake:
-        brake_motor(pwm_pin, low_pin)
+        threading.Timer(duration, lambda: brake_motor(pwm_pin, low_pin)).start()
+    else:
+        # still auto-close after duration, but just clear PWM (no active brake)
+        threading.Timer(duration, lambda: clear_pwm(pwm_pin)).start()
 
 
 # === Movement Functions (keep signatures/behavior) ===
 def move_mouth(speed_percent, duration, brake=False):
-    run_motor(MOUTH, GND_1, speed_percent, duration, brake)
+    run_motor_async(MOUTH, GND_1, speed_percent, duration, brake)
 
 
 def stop_mouth():
@@ -85,45 +117,55 @@ def move_head(state="on"):
     global head_out
 
     def _move_head_on():
-        lgpio.gpio_write(h, TAIL, 0)  # ensure tail bridge is off
-        lgpio.tx_pwm(h, HEAD, FREQ, 80)
+        # Ensure opposite input is LOW if sharing a bridge (2-motor cases)
+        # For 3-motor "new" layout, mate is hard GND so this is a no-op.
+        lgpio.gpio_write(h, TAIL, 0) if TAIL is not None else None
+        set_pwm(HEAD, 80)
         time.sleep(0.5)
-        lgpio.tx_pwm(h, HEAD, FREQ, 100)  # Stay extended
+        set_pwm(HEAD, 100)  # stay extended
 
     if state == "on":
         if not head_out:
             threading.Thread(target=_move_head_on, daemon=True).start()
             head_out = True
     else:
+        # Brake both sides of shared bridge where relevant
         brake_motor(HEAD, TAIL)
         head_out = False
 
 
 def move_tail(duration=0.2):
+    """
+    Tail drive matrix:
+      - legacy + classic(3): TAIL has dedicated bridge => mate = GND_3
+      - legacy + modern(2):  shared with HEAD => mate = HEAD
+      - new    + classic(3): dedicated channel with mate tied to GND => mate = None
+      - new    + modern(2):  shared bridge with HEAD => mate = HEAD
+    """
     if BILLY_PINS == "legacy":
         if USE_THIRD_MOTOR and TAIL is not None and GND_3 is not None:
-            # Legacy + classic (3 motors): tail has its own bridge (TAIL, GND_3)
-            run_motor(TAIL, GND_3, speed_percent=80, duration=duration)
+            run_motor_async(TAIL, GND_3, speed_percent=80, duration=duration)
         else:
-            # Legacy + modern (2 motors): tail is the reverse input of the head bridge
-            # TAIL is the 'other' head input, HEAD is the mate to hold low
-            run_motor(TAIL, HEAD, speed_percent=80, duration=duration)
+            run_motor_async(TAIL, HEAD, speed_percent=80, duration=duration)
     else:
         if USE_THIRD_MOTOR:
-            # NEW + classic (3 motors): tail has its own channel; mate hard-tied to GND
-            run_motor(TAIL, None, speed_percent=80, duration=duration)
+            run_motor_async(TAIL, None, speed_percent=80, duration=duration)
         else:
-            # NEW + modern (2 motors): tail and head share bridge; hold HEAD low
-            run_motor(TAIL, HEAD, speed_percent=80, duration=duration)
+            run_motor_async(TAIL, HEAD, speed_percent=80, duration=duration)
 
 
 def move_tail_async(duration=0.3):
     threading.Thread(target=move_tail, args=(duration,), daemon=True).start()
 
 
+def _articulation_multiplier():
+    """Return direct articulation multiplier (1 = normal, higher = slower)."""
+    return max(0, min(10, float(MOUTH_ARTICULATION)))
+
+
 # === Mouth Sync ===
 def flap_from_pcm_chunk(
-    audio, threshold=1500, min_flap_gap=0.1, chunk_ms=40, sample_rate=24000
+    audio, threshold=1500, min_flap_gap=0.15, chunk_ms=40, sample_rate=24000
 ):
     global _last_flap, _mouth_open_until, _last_rms
     now = time.time()
@@ -159,6 +201,8 @@ def flap_from_pcm_chunk(
     duration_ms = np.clip(duration_ms, 15, chunk_ms)
     duration = duration_ms / 1000.0
 
+    duration *= _articulation_multiplier()
+
     _last_flap = now
     _mouth_open_until = now + duration
 
@@ -170,12 +214,10 @@ def _interlude_routine():
     try:
         move_head("off")
         time.sleep(random.uniform(0.2, 2))
-
         flap_count = random.randint(1, 3)
         for _ in range(flap_count):
             move_tail()
             time.sleep(random.uniform(0.25, 0.9))
-
         if random.random() < 0.9:
             move_head("on")
     except Exception as e:
@@ -189,36 +231,87 @@ def interlude():
     Thread(target=lambda: _interlude_routine(), daemon=True).start()
 
 
-# === Motor Watchdog (unchanged) ===
+# === Motor Watchdog (per-pin continuous activity) ===
+WATCHDOG_TIMEOUT_SEC = 30  # max continuous ON time per pin
+WATCHDOG_POLL_SEC = 1.0  # poll cadence
+
+
+def _mate_for(pin: int):
+    """
+    Return the logical 'mate' input that should be LOW when 'pin' drives.
+    This lets the watchdog brake a channel safely.
+    """
+    if pin == MOUTH:
+        return GND_1
+    if pin == HEAD:
+        if BILLY_PINS == "legacy":
+            # legacy modern shares bridge with tail
+            return TAIL
+        # new layout: 3-motor => mate hard GND (None); 2-motor => mate is TAIL
+        return None if USE_THIRD_MOTOR else TAIL
+    if pin == TAIL:
+        if BILLY_PINS == "legacy":
+            return GND_3 if USE_THIRD_MOTOR else HEAD
+        return None if USE_THIRD_MOTOR else HEAD
+    return None
+
+
+def _stop_channel(pin: int):
+    """Brake one channel safely (pin + its mate)."""
+    mate = _mate_for(pin)
+    clear_pwm(pin)
+    lgpio.gpio_write(h, pin, 0)
+    if mate is not None:
+        clear_pwm(mate)
+        lgpio.gpio_write(h, mate, 0)
+
+
+def _pin_is_active(pin: int) -> bool:
+    """Active if line is HIGH or PWM duty > 0."""
+    try:
+        if lgpio.gpio_read(h, pin) == 1:
+            return True
+    except Exception:
+        pass
+    return _pwm.get(pin, {}).get("duty", 0) > 0
+
+
 def stop_all_motors():
     print("🛑 Stopping all motors")
-    move_head("off")
     for pin in motor_pins:
-        lgpio.tx_pwm(h, pin, FREQ, 0)
+        clear_pwm(pin)
         lgpio.gpio_write(h, pin, 0)
 
 
 def is_motor_active():
-    return any(lgpio.gpio_read(h, pin) == 1 for pin in motor_pins)
+    return any(_pin_is_active(pin) for pin in motor_pins)
 
 
 def motor_watchdog():
-    """Background thread that stops motors if active too long."""
+    """Stop any single pin that stays active longer than WATCHDOG_TIMEOUT_SEC."""
     global _motor_watchdog_running
     _motor_watchdog_running = True
-    last_activity = time.time()
-    idle = True
-    while _motor_watchdog_running:
-        active = is_motor_active()
-        now = time.time()
 
-        if active:
-            last_activity = now
-            idle = False
-        elif not idle and now - last_activity > 60:
-            stop_all_motors()
-            idle = True
-        time.sleep(1)
+    # Track continuous-on start time per pin
+    since_on = {pin: None for pin in motor_pins}
+
+    while _motor_watchdog_running:
+        now = time.time()
+        for pin in motor_pins:
+            active = _pin_is_active(pin)
+            if active:
+                if since_on[pin] is None:
+                    since_on[pin] = now
+                else:
+                    if (now - since_on[pin]) >= WATCHDOG_TIMEOUT_SEC:
+                        print(
+                            f"⏱️ Watchdog: pin {pin} active > {WATCHDOG_TIMEOUT_SEC}s → braking channel"
+                        )
+                        _stop_channel(pin)
+                        since_on[pin] = None
+            else:
+                since_on[pin] = None
+        time.sleep(WATCHDOG_POLL_SEC)
 
 
 def start_motor_watchdog():
@@ -230,5 +323,6 @@ def stop_motor_watchdog():
     _motor_watchdog_running = False
 
 
+# Ensure safe shutdown
 atexit.register(stop_all_motors)
 atexit.register(stop_motor_watchdog)

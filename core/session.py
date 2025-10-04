@@ -139,19 +139,23 @@ class BillySession:
                         })
                     )
 
-                except socket.gaierror:
-                    print("📡 Network unreachable or DNS failed. Playing nowifi.wav...")
-                    path = "sounds/nowifi.wav"
-                    if os.path.exists(path):
-                        await asyncio.to_thread(audio.enqueue_wav_to_playback, path)
-                        await asyncio.to_thread(audio.playback_queue.join)
+                except websockets.exceptions.ConnectionClosedError as e:
+                    reason = getattr(e, "reason", str(e))
+                    if "invalid_api_key" in reason:
+                        await self._play_error_sound("noapikey", reason)
                     else:
-                        print("⚠️ nowifi.wav not found, skipping.")
+                        await self._play_error_sound("error", reason)
+                    return
+
+                except socket.gaierror:
+                    await self._play_error_sound(
+                        "nowifi", "Network unreachable or DNS failed"
+                    )
                     return
 
                 except Exception as e:
-                    print(f"❌ Unexpected error during WebSocket setup: {e}")
-                    raise
+                    await self._play_error_sound("error", str(e))
+                    return
 
         if not TEXT_ONLY_MODE:
             audio.playback_done_event.clear()
@@ -412,25 +416,15 @@ class BillySession:
                 return
 
         elif data["type"] == "error":
-            error: dict[str, Any] = data.get('error') or {}
-            stop_all_motors()
-            print(
-                f"\n🛑 Error response (code='{error.get('code') or '<unknown>'}'): "
-                f"{error.get('message') or '<unknown>'}"
-            )
+            error: dict[str, Any] = data.get("error") or {}
+            code = error.get("code", "error").lower()
+            message = error.get("message", "Unknown error")
 
-            if error.get("code") == "invalid_api_key":
-                path = "sounds/noapikey.wav"
-                if os.path.exists(path):
-                    print(
-                        "🔐 Invalid API key detected during session. Playing noapikey.wav..."
-                    )
-                    await asyncio.to_thread(audio.enqueue_wav_to_playback, path)
-                    await asyncio.to_thread(audio.playback_queue.join)
-                else:
-                    print("⚠️ noapikey.wav not found, skipping audio.")
-                await self.stop_session()
-                return
+            code = "noapikey" if "invalid_api_key" in code else "error"
+
+            print(f"\n🛑 API Error ({code}): {message}")
+            await self._play_error_sound(code, message)
+            return
 
     async def mic_timeout_checker(self):
         print("🛡️ Mic timeout checker active")
@@ -513,3 +507,27 @@ class BillySession:
     async def request_stop(self):
         print("🛑 Stop requested via external signal.")
         self.session_active.clear()
+
+    async def _play_error_sound(self, code: str = "error", message: str | None = None):
+        """
+        Play an error sound based on the provided code.
+        Example:
+          - "error"     → sounds/error.wav
+          - "nowifi"    → sounds/nowifi.wav
+          - "noapikey"  → sounds/noapikey.wav
+        """
+        stop_all_motors()
+
+        filename = f"{code}.wav"
+        sound_path = os.path.join("sounds", filename)
+
+        print(f"🛑 Error ({code}): {message or 'No message'}")
+        print(f"🔊 Attempting to play {filename}...")
+
+        if os.path.exists(sound_path):
+            await asyncio.to_thread(audio.enqueue_wav_to_playback, sound_path)
+            await asyncio.to_thread(audio.playback_queue.join)
+        else:
+            print(f"⚠️ {sound_path} not found, skipping audio playback.")
+
+        await self.stop_session()
