@@ -73,6 +73,9 @@ WAKE_UP_DIR_DEFAULT = PROJECT_ROOT / "sounds" / "wake-up" / "default"
 rms_queue = queue.Queue()
 mic_check_running = False
 
+# Release notes cache (fetched once on boot)
+RELEASE_NOTE = {"tag": None, "body": "", "url": "", "fetched_at": 0}
+
 # ==== Helpers: Environment, Config, Versions ====
 
 
@@ -187,6 +190,35 @@ def fetch_latest_tag():
         return None
 
 
+def fetch_release_note_for_tag(tag: str):
+    """
+    Fetch release notes (markdown body) for a given GitHub tag.
+    Returns dict: {tag, body, url} or None on failure.
+    """
+    try:
+        # GitHub releases-by-tag endpoint
+        output = subprocess.check_output(
+            [
+                "curl",
+                "-s",
+                f"https://api.github.com/repos/Thokoop/billy-b-assistant/releases/tags/{tag}",
+            ],
+            text=True,
+        )
+        data = json.loads(output)
+        if isinstance(data, dict) and data.get("body"):
+            return {
+                "tag": data.get("tag_name") or tag,
+                "body": data.get("body") or "",
+                "url": data.get("html_url") or "",
+            }
+        # If not found or missing body, return None
+        return None
+    except Exception as e:
+        print("[fetch_release_note_for_tag] Exception:", e)
+        return None
+
+
 def restart_services():
     """Restart both Billy and webconfig systemd services."""
     subprocess.run(["sudo", "systemctl", "restart", "billy-webconfig.service"])
@@ -287,6 +319,25 @@ latest = fetch_latest_tag()
 current = get_current_version()
 save_versions(current, latest)
 
+# ==== Release Note Bootstrap (fetch once) ====
+try:
+    versions_cfg = load_versions()
+    tag_for_notes = versions_cfg["version"].get("latest") or versions_cfg[
+        "version"
+    ].get("current")
+    if tag_for_notes:
+        note = fetch_release_note_for_tag(tag_for_notes)
+        if note:
+            RELEASE_NOTE.update(note)
+            RELEASE_NOTE["fetched_at"] = int(time.time())
+            print(f"[release-note] Cached notes for {RELEASE_NOTE['tag']}")
+        else:
+            print("[release-note] No notes found for tag:", tag_for_notes)
+    else:
+        print("[release-note] No tag available to fetch notes.")
+except Exception as e:
+    print("[release-note] Bootstrap failed:", e)
+
 
 # ==== ROUTES ====
 @app.route("/")
@@ -350,6 +401,15 @@ def perform_update():
         return jsonify({"status": "updated", "version": latest})
     except subprocess.CalledProcessError as e:
         return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/release-note")
+def release_note():
+    """
+    Returns the cached release note fetched at boot.
+    Response: { tag, body, url, fetched_at }
+    """
+    return jsonify(RELEASE_NOTE)
 
 
 @app.route("/save", methods=["POST"])
