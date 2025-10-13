@@ -86,6 +86,7 @@ RUN_MODE = os.getenv("RUN_MODE", "normal").lower()
 
 # === Billy Hardware ===
 BILLY_MODEL = os.getenv("BILLY_MODEL", "modern").strip().lower()
+BILLY_PINS = os.getenv("BILLY_PINS", "new").strip().lower()
 
 # === Audio Config ===
 SPEAKER_PREFERENCE = os.getenv("SPEAKER_PREFERENCE")
@@ -94,9 +95,10 @@ MIC_TIMEOUT_SECONDS = int(os.getenv("MIC_TIMEOUT_SECONDS", "5"))
 SILENCE_THRESHOLD = int(os.getenv("SILENCE_THRESHOLD", "2000"))
 CHUNK_MS = int(os.getenv("CHUNK_MS", "50"))
 PLAYBACK_VOLUME = 1
+MOUTH_ARTICULATION = int(os.getenv("MOUTH_ARTICULATION", "5"))
 
 # === GPIO Config ===
-BUTTON_PIN = int(os.getenv("BUTTON_PIN", "27"))
+BUTTON_PIN = 27 if BILLY_PINS == "legacy" else 24  # legacy=pin 13, new=pin 18
 
 # === MQTT Config ===
 MQTT_HOST = os.getenv("MQTT_HOST", "")
@@ -116,6 +118,7 @@ ALLOW_UPDATE_PERSONALITY_INI = (
 
 # === Software Config ===
 FLASK_PORT = int(os.getenv("FLASK_PORT", "80"))
+SHOW_SUPPORT = os.getenv("SHOW_SUPPORT", True)
 
 
 def is_classic_billy():

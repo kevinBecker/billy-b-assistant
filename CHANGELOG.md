@@ -140,3 +140,26 @@ All notable changes to this project will be documented in this file.
 - Improved update process by re-installing python requirements on software update
 - Updated personality traits prompt to be more descriptive and more distinct.
 - Disabled Flask debug mode by default.
+
+## [1.5.0] — 2025-10-13
+
+>### ⚠️ For existing builds of Billy: ⚠️ 
+> 
+> **Please select the Legacy Pin Layout in the Hardware Settings tab of the Web UI if you can't switch to the new unified wiring layout (see [BUILDME.md](./docs/BUILDME.md#from-motor-driver-to-raspberry-pi-gpio-pinout))**
+
+### Added
+- **Configurable Pin Layouts:** Introduced `BILLY_PINS` Pin Layout setting (`new` / `legacy`) to switch between the new (default) pin layout and the legacy pin layout (for builds before october '25)
+- **Mouth Articulation Control:** Added `MOUTH_ARTICULATION` (1–10) setting to fine-tune speech motion responsiveness.
+- **Error Sound Handling:**  Centralized error playback — now plays `error.wav`, `noapikey.wav`, or `nowifi.wav` depending on the issue.
+- **Release notes notification:** Notification in the UI with the release notes of the latest version.
+
+### Changed
+- **Unified GPIO Logic:** Refactored motor control for both Modern (2-motor) and Classic (3-motor) models into a single system. Default pin assignments moved to safer GPIOs. Unused H-bridge inputs are now grounded;
+- **Movement Refinements:** Improved PWM handling and non-blocking motion timing for smoother, more natural flapping.
+- **UI Enhancements:** Added Billy artwork to header and included reboot/power/restart-ui buttons. Improved feedback for mic and speaker device tests.
+
+### Fixed
+- Minor mouth sync inconsistencies under load.
+- Occasional stalls caused by blocking PWM threads.
+- Better recovery after OpenAI API or network errors.
+- Motor watchdog will now disengage any motor that is on > 30 seconds

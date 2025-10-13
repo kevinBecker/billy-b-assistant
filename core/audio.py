@@ -26,7 +26,6 @@ from .movements import (
     interlude,
     move_head,
     move_tail_async,
-    stop_all_motors,
 )
 
 
@@ -232,7 +231,6 @@ def playback_worker(chunk_ms):
         print(f"❌ Playback stream failed: {e}")
     finally:
         playback_done_event.set()
-        stop_all_motors()
 
 
 def ensure_playback_worker_started(chunk_ms):

@@ -1,9 +1,34 @@
+// ===================== APP CONFIG (single fetch) =====================
+const AppConfig = (() => {
+    let cfg = null;
+    let promise = null;
+
+    const load = () => {
+        if (promise) return promise;
+        promise = fetch("/config")
+            .then(r => r.json())
+            .then(j => (cfg = j))
+            .catch(e => {
+                console.warn("Failed to load /config:", e);
+                cfg = {};
+                return cfg;
+            });
+        return promise;
+    };
+
+    const get = () => cfg || {};
+    return { load, get };
+})();
+
+
 // ===================== Header Secondary Actions =====================
 
 const LogPanel = (() => {
     let autoScrollEnabled = false;
     let isLogHidden = true;
     let isEnvHidden = true;
+    let isSupportHidden = true;
+    let isReleaseHidden = true;
 
     // Reboot Billy
     const rebootBilly = async () => {
@@ -48,6 +73,22 @@ const LogPanel = (() => {
         }
     };
 
+    const restartUI = async () => {
+        try {
+            const res = await fetch('/restart', {method: 'POST'});
+            const data = await res.json();
+            if (data.status === "ok") {
+                showNotification("Restarting UI…", "success");
+                setTimeout(() => location.reload(), 3000);
+            } else {
+                showNotification(data.error || "Restart failed", "error");
+            }
+        } catch (err) {
+            showNotification(err.message, "error");
+        }
+    };
+
+
     // Fetch logs and update UI
     const fetchLogs = async () => {
         const res = await fetch("/logs");
@@ -85,6 +126,27 @@ const LogPanel = (() => {
                 .then(text => elements.envTextarea.value = text.trim())
                 .catch(() => showNotification("An error occurred while loading .env", "error"));
         }
+    };
+
+    const toggleSupportPanel = () => {
+        isSupportHidden = !isSupportHidden;
+        elements.supportPanel.classList.toggle("hidden", isSupportHidden);
+        elements.toggleSupportBtn.classList.toggle("bg-red-500", !isSupportHidden);
+        elements.toggleSupportBtn.classList.toggle("bg-zinc-700", isSupportHidden);
+    };
+
+    const toggleReleasePanel = () => {
+        isReleaseHidden = !isReleaseHidden;
+
+        elements.releasePanel.classList.toggle("hidden", isReleaseHidden);
+
+        // active styling like other toggles
+        elements.toggleReleaseBtn.classList.toggle("bg-emerald-500", !isReleaseHidden);
+        elements.toggleReleaseBtn.classList.toggle("hover:bg-emerald-400", !isReleaseHidden);
+        elements.toggleReleaseBtn.classList.toggle("text-black", !isReleaseHidden);
+
+        elements.toggleReleaseBtn.classList.toggle("bg-zinc-700", isReleaseHidden);
+        elements.toggleReleaseBtn.classList.toggle("hover:bg-zinc-600", isReleaseHidden);
     };
 
     const toggleMotion = () => {
@@ -156,7 +218,7 @@ const LogPanel = (() => {
 
     // Cache DOM references after DOMContentLoaded
     let elements = {};
-    const bindUI = () => {
+    const bindUI = (cfg = {}) => {
         elements = {
             logOutput: document.getElementById("log-output"),
             logContainer: document.getElementById("log-container"),
@@ -169,9 +231,47 @@ const LogPanel = (() => {
             envTextarea: document.getElementById("env-textarea"),
             saveEnvBtn: document.getElementById("save-env-btn"),
             toggleMotionBtn: document.getElementById("toggle-motion-btn"),
+            powerBtn: document.getElementById("power-btn"),
+            powerDropdown: document.getElementById("power-dropdown"),
             rebootBillyBtn: document.getElementById("reboot-billy-btn"),
+            restartUIBtn: document.getElementById("restart-ui-btn"),
             shutdownBillyBtn: document.getElementById("shutdown-billy-btn"),
+            toggleSupportBtn: document.getElementById("toggle-support-btn"),
+            supportPanel: document.getElementById("support-panel"),
+
+            // Release panel bits
+            toggleReleaseBtn: document.getElementById("current-version"),
+            releasePanel: document.getElementById("release-panel"),
+            releaseTitle: document.getElementById("release-title"),
+            releaseBody: document.getElementById("release-body"),
+            releaseLink: document.getElementById("release-link"),
+            releaseClose: document.getElementById("release-close"),
+            releaseMarkRead: document.getElementById("release-mark-read"),
+            releaseBadge: document.getElementById("release-badge"),
         };
+
+        const show = String(cfg.SHOW_SUPPORT || "").toLowerCase() === "true";
+        if (show) {
+            elements.toggleSupportBtn?.classList.remove("hidden");
+        } else {
+            elements.toggleSupportBtn?.classList.add("hidden");
+            elements.supportPanel?.classList.add("hidden");
+            isSupportHidden = true;
+        }
+
+        // Toggle dropdown open/close
+        elements.powerBtn?.addEventListener("click", (e) => {
+            e.stopPropagation();
+            elements.powerDropdown?.classList.toggle("hidden");
+        });
+
+        // Close on outside click
+        document.addEventListener("click", (e) => {
+            const menu = document.getElementById("power-menu");
+            if (!menu?.contains(e.target)) {
+                elements.powerDropdown?.classList.add("hidden");
+            }
+        });
 
         elements.toggleBtn.addEventListener("click", toggleLogPanel);
         elements.toggleFullscreenBtn.addEventListener("click", toggleFullscreenLog);
@@ -180,7 +280,17 @@ const LogPanel = (() => {
         elements.toggleMotionBtn.addEventListener("click", toggleMotion);
         elements.saveEnvBtn.addEventListener("click", saveEnv);
         elements.rebootBillyBtn.addEventListener("click", rebootBilly);
+        elements.restartUIBtn.addEventListener("click", restartUI);
         elements.shutdownBillyBtn.addEventListener("click", shutdownBilly);
+        elements.toggleSupportBtn?.addEventListener("click", toggleSupportPanel);
+        elements.toggleReleaseBtn?.addEventListener("click", toggleReleasePanel);
+        elements.releaseClose?.addEventListener("click", () => {
+            isReleaseHidden = true;
+            elements.releasePanel.classList.add("hidden");
+            // reset button to inactive style
+            elements.toggleReleaseBtn.classList.remove("bg-emerald-500","hover:bg-emerald-400","text-black");
+            elements.toggleReleaseBtn.classList.add("bg-zinc-700","hover:bg-zinc-600","text-white");
+        });
 
         if (localStorage.getItem("reduceMotion") === "1") {
             document.documentElement.classList.add("reduce-motion");
@@ -193,6 +303,7 @@ const LogPanel = (() => {
                 icon.textContent = "blur_off";
             }
         }
+
     };
 
     return {fetchLogs, bindUI};
@@ -210,21 +321,31 @@ const ServiceStatus = (() => {
     const updateServiceStatusUI = (status) => {
         const statusEl = document.getElementById("service-status");
         const controlsEl = document.getElementById("service-controls");
+        const logoEl = document.getElementById("status-logo");
+
         statusEl.textContent = `(${status})`;
         statusEl.classList.remove("text-emerald-500", "text-amber-500", "text-rose-500");
 
+        let logoSrc = "/static/images/status-inactive.png";
+
         if (status === "active") {
             statusEl.classList.add("text-emerald-500");
+            logoSrc = "/static/images/status-active.png";
         } else if (status === "inactive") {
             statusEl.classList.add("text-amber-500");
+            logoSrc = "/static/images/status-inactive.png";
         } else if (status === "failed") {
             statusEl.classList.add("text-rose-500");
+            logoSrc = "/static/images/status-inactive.png"; // fallback
         }
+
+        // Swap the logo if element exists
+        if (logoEl) logoEl.src = logoSrc;
 
         controlsEl.innerHTML = "";
         const createButton = (label, action, color, iconName) => {
             const btn = document.createElement("button");
-            btn.className = `flex items-center gap-1 bg-${color}-500 hover:bg-${color}-400 text-zinc-800 font-semibold py-1 px-2 rounded`;
+            btn.className = `flex items-center transition-all gap-1 bg-${color}-500 hover:bg-${color}-400 text-zinc-800 font-semibold py-1 px-2 rounded`;
 
             const icon = document.createElement("i");
             icon.className = "material-icons";
@@ -239,6 +360,7 @@ const ServiceStatus = (() => {
             btn.onclick = () => handleServiceAction(action);
             return btn;
         };
+
         if (status === "inactive" || status === "failed") {
             controlsEl.appendChild(createButton("Start", "start", "emerald", "play_arrow"));
         } else if (status === "active") {
@@ -251,28 +373,73 @@ const ServiceStatus = (() => {
 
     const handleServiceAction = async (action) => {
         const statusEl = document.getElementById("service-status");
+        const logoEl = document.getElementById("status-logo");
+
         const statusMap = {
-            restart: {text: "restarting", color: "text-amber-500"},
-            stop: {text: "stopping", color: "text-rose-500"},
-            start: {text: "starting", color: "text-emerald-500"}
+            restart: {text: "restarting", color: "text-amber-500", logo: "/static/images/status-starting.png"},
+            stop:    {text: "stopping",   color: "text-rose-500",   logo: "/static/images/status-stopping.png"},
+            start:   {text: "starting",   color: "text-emerald-500",logo: "/static/images/status-starting.png"}
         };
 
         if (statusMap[action]) {
-            const {text, color} = statusMap[action];
+            const {text, color, logo} = statusMap[action];
             statusEl.textContent = text;
             statusEl.classList.remove("text-emerald-500", "text-amber-500", "text-rose-500");
             statusEl.classList.add(color);
+            if (logoEl) logoEl.src = logo;
         }
+
         try {
             await fetch(`/service/${action}`);
         } catch (err) {
             console.error(`Failed to ${action} service:`, err);
         }
+
         fetchStatus();
         LogPanel.fetchLogs();
     };
 
     return {fetchStatus, updateServiceStatusUI};
+})();
+
+
+// ===================== PIN PROFILE + HARDWARE VISIBILITY =====================
+const PinProfile = (() => {
+    function syncHardwareVisibility() {
+        const pinSelect = document.getElementById('BILLY_PINS_SELECT');
+        const modelRow  = document.getElementById('hardware-version-row');
+        const modelSel  = document.getElementById('BILLY_MODEL');
+        if (!pinSelect || !modelRow || !modelSel) return;
+
+        const isNew = pinSelect.value === 'new';
+
+        if (isNew) {
+            modelRow.classList.add('hidden', 'force-hidden');
+            if (!modelSel.dataset.prev) modelSel.dataset.prev = modelSel.value;
+            modelSel.value = 'modern';
+            modelSel.disabled = true;
+        } else {
+            modelRow.classList.remove('hidden', 'force-hidden');
+            modelSel.disabled = false;
+            if (modelSel.dataset.prev) modelSel.value = modelSel.dataset.prev;
+        }
+    }
+
+    function bindUI(cfg = {}) {
+        const sel = document.getElementById('BILLY_PINS_SELECT');
+        if (!sel) return;
+
+        // Initialize select from config
+        const mode = String(cfg.BILLY_PINS || 'new').toLowerCase();
+        sel.value = mode;
+        sel.setAttribute('data-original', mode);
+
+        // Wire visibility behavior
+        sel.addEventListener('change', syncHardwareVisibility);
+        syncHardwareVisibility(); // run once after initializing value
+    }
+
+    return { bindUI };
 })();
 
 // ===================== SETTINGS FORM =====================
@@ -295,6 +462,11 @@ const SettingsForm = (() => {
             const hostnameInput = document.getElementById("hostname");
             const oldHostname = (hostnameInput.getAttribute("data-original") || hostnameInput.defaultValue || "").trim();
             const newHostname = (formData.get("hostname") || "").trim();
+
+            const pinSelect = document.getElementById("BILLY_PINS_SELECT");
+            if (pinSelect) {
+                payload.BILLY_PINS = pinSelect.value; // "new" | "legacy"
+            }
 
             let hostnameChanged = false;
 
@@ -321,12 +493,8 @@ const SettingsForm = (() => {
                 }
             }
 
-            if (wasActive === "active") {
-                await fetch("/service/restart");
-                showNotification("Settings saved – Billy restarted", "success");
-            } else {
-                showNotification("Settings saved", "success");
-            }
+            await fetch("/service/restart");
+            showNotification("Settings saved – Billy restarted", "success");
 
             if (portChanged || hostnameChanged) {
                 const targetHost = hostnameChanged ? `${newHostname}.local` : window.location.hostname;
@@ -852,14 +1020,22 @@ document.addEventListener('click', (e) => {
     fetch("/version")
         .then(res => res.json())
         .then(data => {
-            document.getElementById("current-version").textContent = `${data.current}`;
+            const currentBtn = document.getElementById("current-version");
+            if (currentBtn) {
+                const label = currentBtn.querySelector(".label");
+                if (label) label.textContent = `${data.current}`;
+            }
             if (data.update_available) {
                 const latestSpan = document.getElementById("latest-version");
                 const updateBtn = document.getElementById("update-btn");
-                latestSpan.textContent = `Update to: ${data.latest}`;
-                latestSpan.classList.remove("hidden");
-                updateBtn.classList.add('flex');
-                updateBtn.classList.remove("hidden");
+                if (latestSpan) {
+                    latestSpan.textContent = `Update to: ${data.latest}`;
+                    latestSpan.classList.remove("hidden");
+                }
+                if (updateBtn) {
+                    updateBtn.classList.add('flex');
+                    updateBtn.classList.remove("hidden");
+                }
             }
         })
         .catch(err => {
@@ -903,6 +1079,103 @@ document.addEventListener('click', (e) => {
                 showNotification("Failed to update", "error");
             });
     });
+})();
+
+// ===================== RELEASE NOTES =====================
+const ReleaseNotes = (() => {
+    const keyFor = (tag) => `release_notice_read_${tag}`;
+
+    const els = {
+        panel:       () => document.getElementById("release-panel"),
+        title:       () => document.getElementById("release-title"),
+        body:        () => document.getElementById("release-body"),
+        link:        () => document.getElementById("release-link"),
+        markReadBtn: () => document.getElementById("release-mark-read"),
+        closeBtn:    () => document.getElementById("release-close"),
+        badge:       () => document.getElementById("release-badge"),
+        toggleBtn:   () => document.getElementById("current-version"),
+    };
+
+    async function fetchNote() {
+        const res = await fetch("/release-note");
+        if (!res.ok) throw new Error("Failed to fetch /release-note");
+        return res.json(); // { tag, body, url, fetched_at }
+    }
+
+    function isRead(tag) {
+        return localStorage.getItem(keyFor(tag)) === "1";
+    }
+
+    function markRead(tag) {
+        localStorage.setItem(keyFor(tag), "1");
+
+        const badge = els.badge();
+        if (badge) badge.classList.add("!hidden");
+
+        const mark = els.markReadBtn();
+        if (mark) mark.classList.add("!hidden");
+
+        showNotification("Marked release notes as read", "success");
+    }
+
+    function render(note) {
+        const t = els.title();
+        const b = els.body();
+        const l = els.link();
+        const mark = els.markReadBtn();
+        const badge = els.badge();
+
+        if (t) t.textContent = `Release Notes – ${note.tag}`;
+        if (b) b.innerHTML = marked.parse(note.body || "No content.");
+
+        if (l) {
+            if (note.url) {
+                l.href = note.url;
+                l.classList.remove("hidden");
+            } else {
+                l.classList.add("hidden");
+            }
+        }
+
+        const read = isRead(note.tag);
+
+        // Toggle badge visibility
+        if (badge) badge.classList.toggle("!hidden", read);
+
+        // Toggle Mark as read visibility
+        if (mark) mark.classList.toggle("!hidden", read);
+
+        // Wire button
+        if (mark && !read) {
+            mark.onclick = () => markRead(note.tag);
+        }
+
+        const close = els.closeBtn();
+        if (close) {
+            close.onclick = () => {
+                const panel = els.panel();
+                const btn = els.toggleBtn();
+                if (panel) panel.classList.add("hidden");
+                if (btn) {
+                    btn.classList.remove("bg-emerald-500", "hover:bg-emerald-400", "text-black");
+                    btn.classList.add("bg-zinc-700", "hover:bg-zinc-600");
+                }
+            };
+        }
+    }
+
+    async function init() {
+        try {
+            const note = await fetchNote();
+            render(note);
+        } catch (e) {
+            console.warn("Release notes unavailable:", e);
+            const badge = els.badge();
+            if (badge) badge.classList.add("hidden");
+        }
+    }
+
+    return { init };
 })();
 
 // ===================== AUDIO =====================
@@ -1189,7 +1462,9 @@ const Sections = (() => {
             header.classList.toggle('mb-4', !collapsed);
 
             [...section.children].forEach(child => {
-                if (child !== header) child.classList.toggle('hidden', collapsed);
+                if (child !== header && !child.classList.contains('force-hidden')) {
+                    child.classList.toggle('hidden', collapsed);
+                }
             });
 
             // Click to toggle
@@ -1290,12 +1565,15 @@ function importPersona(input) {
 
 // ===================== INITIALIZE =====================
 
-document.addEventListener("DOMContentLoaded", () => {
-    LogPanel.bindUI();
+document.addEventListener("DOMContentLoaded", async () => {
+    const cfg = await AppConfig.load();
+
+    LogPanel.bindUI(cfg);
     LogPanel.fetchLogs();
     ServiceStatus.fetchStatus();
     setInterval(LogPanel.fetchLogs, 5000);
     setInterval(ServiceStatus.fetchStatus, 10000);
+
     AudioPanel.updateDeviceLabels();
     PersonaForm.loadPersona();
     AudioPanel.loadMicGain();
@@ -1303,5 +1581,7 @@ document.addEventListener("DOMContentLoaded", () => {
     PersonaForm.handlePersonaSave();
     window.addBackstoryField = PersonaForm.addBackstoryField;
     MotorPanel.bindUI();
+    PinProfile.bindUI(cfg);
     Sections.collapsible();
+    ReleaseNotes.init();
 });

@@ -1,16 +1,18 @@
 import asyncio
 import base64
 import json
+import os
 
 import websockets.legacy.client
 
 from .audio import (
+    enqueue_wav_to_playback,
     ensure_playback_worker_started,
     playback_queue,
     rotate_and_save_response_audio,
 )
 from .config import CHUNK_MS, INSTRUCTIONS, OPENAI_API_KEY, OPENAI_MODEL, VOICE
-from .movements import move_head
+from .movements import move_head, stop_all_motors
 
 
 async def say(text: str):
@@ -21,8 +23,6 @@ async def say(text: str):
         "Authorization": f"Bearer {OPENAI_API_KEY}",
         "openai-beta": "realtime=v1",
     }
-
-    instructions = INSTRUCTIONS
 
     try:
         async with websockets.legacy.client.connect(uri, extra_headers=headers) as ws:
@@ -35,13 +35,13 @@ async def say(text: str):
                         "modalities": ["text", "audio"],
                         "output_audio_format": "pcm16",
                         "turn_detection": {"type": "semantic_vad"},
-                        "instructions": instructions,
+                        "instructions": INSTRUCTIONS,
                     },
                 })
             )
             print("🛰️ Session started")
 
-            # Step 2: Send text
+            # Step 2: Prepare message
             if text.strip().startswith("{{") and text.strip().endswith("}}"):
                 stripped_text = text.strip()[2:-2].strip()
                 print("💬 Detected prompt message, sending as-is")
@@ -78,13 +78,34 @@ async def say(text: str):
             full_audio = bytearray()
             full_text = ""
 
-            # Ensure playback thread is running BEFORE putting anything in the queue
             ensure_playback_worker_started(CHUNK_MS)
-
             move_head("on")
 
             async for message in ws:
                 parsed = json.loads(message)
+
+                # Handle explicit error responses from OpenAI
+                if parsed.get("type") == "error":
+                    error = parsed.get("error", {})
+                    code = error.get("code", "<unknown>")
+                    msg = error.get("message", "<unknown>")
+                    print(f"🛑 OpenAI Error ({code}): {msg}")
+
+                    stop_all_motors()
+                    sound_path = (
+                        "sounds/noapikey.wav"
+                        if code == "invalid_api_key"
+                        else "sounds/error.wav"
+                    )
+
+                    if os.path.exists(sound_path):
+                        print(f"🔊 Playing {os.path.basename(sound_path)}...")
+                        await asyncio.to_thread(enqueue_wav_to_playback, sound_path)
+                        await asyncio.to_thread(playback_queue.join)
+                    else:
+                        print(f"⚠️ {sound_path} not found, skipping audio.")
+
+                    return  # stop say()
 
                 # Capture audio
                 if parsed["type"] in ("response.audio", "response.audio.delta"):
@@ -110,19 +131,23 @@ async def say(text: str):
             print(f"✅ Audio received: {len(full_audio)} bytes")
             print(f"📝 Transcript: {full_text.strip()}")
 
-            # Save + enqueue playback
             rotate_and_save_response_audio(full_audio)
-
-            # Signal end of playback
             playback_queue.put(None)
-
-            # Wait for playback to complete
             await asyncio.to_thread(playback_queue.join)
 
-            try:
-                move_head("off")
-            except Exception as e:
-                print(f"\n⚠️ Error head motor: {e}")
-
     except Exception as e:
+        stop_all_motors()
         print(f"❌ say() failed: {e}")
+
+        msg = str(e).lower()
+        path = "sounds/noapikey.wav" if "invalid_api_key" in msg else "sounds/error.wav"
+
+        if os.path.exists(path):
+            print(f"🔊 Playing {os.path.basename(path)}...")
+            await asyncio.to_thread(enqueue_wav_to_playback, path)
+            await asyncio.to_thread(playback_queue.join)
+        else:
+            print(f"⚠️ {path} not found, skipping audio.")
+
+    finally:
+        move_head("off")
