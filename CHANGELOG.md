@@ -141,7 +141,11 @@ All notable changes to this project will be documented in this file.
 - Updated personality traits prompt to be more descriptive and more distinct.
 - Disabled Flask debug mode by default.
 
-## [1.5.0] — 2025-10-04
+## [1.5.0] — 2025-10-13
+
+>### ⚠️ For existing builds of Billy: ⚠️ 
+> 
+> **Please select the Legacy Pin Layout in the Hardware Settings tab of the Web UI if you can't switch to the new unified wiring layout (see [BUILDME.md](./docs/BUILDME.md#from-motor-driver-to-raspberry-pi-gpio-pinout))**
 
 ### Added
 - **Configurable Pin Layouts:** Introduced `BILLY_PINS` Pin Layout setting (`new` / `legacy`) to switch between the new (default) pin layout and the legacy pin layout (for builds before october '25)
