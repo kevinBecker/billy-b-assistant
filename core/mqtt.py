@@ -43,7 +43,7 @@ def on_connect(client, userdata, flags, rc):
 def start_mqtt():
     global mqtt_client
     if not mqtt_available():
-        print(f"⚠️ MQTT not configured, missing {mqtt_missing()} skipping.")
+        print(f"⚠️ MQTT not configured, missing {mqtt_missing()}. Skipping...")
         return
 
     mqtt_client = mqtt.Client()
