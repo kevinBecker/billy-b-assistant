@@ -14,6 +14,19 @@ mqtt_connected = False
 def mqtt_available():
     return all([MQTT_HOST, MQTT_PORT, MQTT_USERNAME, MQTT_PASSWORD])
 
+def mqtt_missing():
+    missing=""
+    if all([MQTT_HOST]):
+      missing="MQTT_HOST, "
+    if all([MQTT_PORT]):
+        missing+="MQTT_PORT, "
+    if all([MQTT_USERNAME]):
+        missing+="MQTT_USERNAME, "
+    if all([MQTT_PASSWORD]):
+        missing+="MQTT_PASSWORD, "
+    if len(missing)>2:
+        missing=missing[:-2]
+    return missing
 
 def on_connect(client, userdata, flags, rc):
     global mqtt_connected
@@ -30,7 +43,7 @@ def on_connect(client, userdata, flags, rc):
 def start_mqtt():
     global mqtt_client
     if not mqtt_available():
-        print("⚠️ MQTT not configured, skipping.")
+        print(f"⚠️ MQTT not configured, missing {mqtt_missing()} skipping.")
         return
 
     mqtt_client = mqtt.Client()
