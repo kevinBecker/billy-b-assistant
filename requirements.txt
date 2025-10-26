@@ -1,7 +1,8 @@
+# Core dependencies with Python 3.13 compatibility
 sounddevice
 websockets
-numpy
-scipy
+numpy>=1.24.0,<2.0.0
+scipy>=1.10.0,<2.0.0
 gpiozero
 python-dotenv
 pydub
@@ -10,5 +11,6 @@ requests
 openai
 aiohttp
 flask
-lgpio
+adafruit-circuitpython-motorkit
+adafruit-circuitpython-busdevice
 packaging

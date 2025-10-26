@@ -60,6 +60,8 @@ $RECYCLE.BIN/
 
 # PYTHON-SPECIFIC FILES
 core/__pycache__/
+*.pyc
+
 
 # PROJECT-SPECIFIC FILES
 .idea
