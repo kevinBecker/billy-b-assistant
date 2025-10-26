@@ -25,8 +25,17 @@ Billy B-Assistant → Local Services (Ollama + Coqui TTS + Whisper)
 
 ## Prerequisites
 
-- Raspberry Pi 4 or 5 (recommended: 8GB RAM)
+### For Local LLM Deployment
+- **Raspberry Pi 5 (8GB RAM)** - Recommended
+- **Raspberry Pi 5 (4GB RAM)** - Minimum (use smaller models)
+- **Raspberry Pi 4 (8GB RAM)** - Acceptable (slower performance)
 - At least 16GB free storage space
+- Stable internet connection for initial model downloads
+
+### For Remote LLM Deployment
+- **Raspberry Pi**: Any model (4GB+ RAM for TTS/STT)
+- **LLM Server**: More powerful machine (8GB+ RAM, modern CPU)
+- Network connectivity between Pi and LLM server
 - Stable internet connection for initial model downloads
 
 ## Installation
@@ -41,17 +50,37 @@ cd setup/local_models
 sudo bash install_all.sh
 ```
 
-This will install all three services:
-- Ollama (LLM)
-- Coqui TTS (Text-to-Speech)
-- Whisper STT (Speech-to-Text)
+The installer will ask you to choose your LLM deployment:
+1. **Local LLM** - Run Ollama on the Raspberry Pi (requires 6-8GB RAM)
+2. **Remote LLM** - Use a separate server for the LLM
+3. **Skip LLM** - Use OpenAI or configure later
 
-### Option 2: Manual Installation
+This will install:
+- Ollama (LLM) - locally or configure for remote
+- Coqui TTS (Text-to-Speech) - always local
+- Whisper STT (Speech-to-Text) - always local
+
+### Option 2: Remote LLM Server Setup
+
+If you want to run the LLM on a separate, more powerful server:
+
+```bash
+# On your LLM server (not the Raspberry Pi)
+bash setup/local_models/setup_llm_server.sh
+```
+
+Then on your Raspberry Pi:
+```bash
+# Choose option 2 during installation
+sudo bash setup/local_models/install_all.sh
+```
+
+### Option 3: Manual Installation
 
 Install each service individually:
 
 ```bash
-# Install Ollama
+# Install Ollama (local)
 sudo bash setup/local_models/install_ollama.sh
 
 # Install Coqui TTS
@@ -60,6 +89,38 @@ sudo bash setup/local_models/install_coqui_tts.sh
 # Install Whisper STT
 sudo bash setup/local_models/install_whisper.sh
 ```
+
+### Option 4: Configuration Management
+
+Use the configuration tool to switch between deployment options:
+
+```bash
+# Configure LLM deployment
+bash setup/local_models/configure_llm.sh
+```
+
+## Deployment Scenarios
+
+### Scenario 1: All Local (Recommended for Pi 5 8GB)
+- **LLM**: Ollama on Raspberry Pi
+- **TTS**: Coqui TTS on Raspberry Pi  
+- **STT**: Whisper on Raspberry Pi
+- **Benefits**: Complete privacy, no network dependency
+- **Requirements**: Pi 5 with 8GB RAM
+
+### Scenario 2: Remote LLM (Recommended for Pi 4 or limited RAM)
+- **LLM**: Ollama on separate server
+- **TTS**: Coqui TTS on Raspberry Pi
+- **STT**: Whisper on Raspberry Pi
+- **Benefits**: Better LLM performance, lower Pi requirements
+- **Requirements**: Network connection, separate LLM server
+
+### Scenario 3: Hybrid (Flexible)
+- **LLM**: Switchable between local/remote/OpenAI
+- **TTS**: Coqui TTS on Raspberry Pi
+- **STT**: Whisper on Raspberry Pi
+- **Benefits**: Maximum flexibility, fallback options
+- **Requirements**: Configurable setup
 
 ## Configuration
 

@@ -595,6 +595,21 @@ Behind the scenes:
 - Make sure the target rooms/devices are defined in HA
 - Alias your entities in Home Assistant for better voice matching
 
+## M. (Optional) Local LLM Inference
+
+Billy B-Assistant can use a local LLM for inference instead of the OpenAI Realtime API. This is useful if you want to run the model on your own hardware.
+
+```bash
+# 1. Install all local model services
+cd setup/local_models
+sudo bash install_all.sh
+
+# 2. Configure Billy to use local models
+echo "USE_LOCAL_MODELS=true" >> .env
+
+# 3. Restart Billy B-Assistant
+sudo systemctl restart billy
+```
 ---
 
 # Future Ideas & Bug report

@@ -12,6 +12,10 @@ if ! grep -q "Raspberry Pi" /proc/cpuinfo; then
     echo "⚠️ This script is designed for Raspberry Pi. Proceeding anyway..."
 fi
 
+# Check Python version
+PYTHON_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+echo "🐍 Detected Python version: $PYTHON_VERSION"
+
 # Install system dependencies
 echo "📦 Installing system dependencies..."
 sudo apt update
@@ -166,6 +170,12 @@ sudo chmod +x /opt/whisper-stt/stt_server.py
 
 # Create systemd service
 echo "⚙️ Creating systemd service..."
+if [[ "$PYTHON_VERSION" > "3.12" ]]; then
+    PYTHON_PATH="/opt/whisper-stt/lib/python3.${PYTHON_VERSION##*.}/site-packages"
+else
+    PYTHON_PATH="/opt/whisper-stt/lib/python3.${PYTHON_VERSION##*.}/site-packages"
+fi
+
 sudo tee /etc/systemd/system/whisper-stt.service > /dev/null <<EOF
 [Unit]
 Description=Whisper STT Server for Billy B-Assistant
@@ -178,7 +188,7 @@ WorkingDirectory=/opt/whisper-stt
 ExecStart=/opt/whisper-stt/bin/python stt_server.py
 Restart=always
 RestartSec=3
-Environment="PYTHONPATH=/opt/whisper-stt/lib/python3.11/site-packages"
+Environment="PYTHONPATH=$PYTHON_PATH"
 
 [Install]
 WantedBy=multi-user.target
