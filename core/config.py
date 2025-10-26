@@ -71,10 +71,28 @@ Use your backstory to inspire jokes, metaphors, or occasional references in conv
 {BACKSTORY_FACTS}
 """.strip()
 
-# === OpenAI Config ===
+# === OpenAI Config (Legacy) ===
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini-realtime-preview")
 VOICE = os.getenv("VOICE", "ash")
+
+# === Local Model Config ===
+USE_LOCAL_MODELS = os.getenv("USE_LOCAL_MODELS", "false").lower() == "true"
+
+# Local LLM (Ollama) Config
+LOCAL_LLM_HOST = os.getenv("LOCAL_LLM_HOST", "localhost")
+LOCAL_LLM_PORT = int(os.getenv("LOCAL_LLM_PORT", "11434"))
+LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "llama3.1:8b")
+
+# Local TTS (Coqui TTS) Config
+LOCAL_TTS_HOST = os.getenv("LOCAL_TTS_HOST", "localhost")
+LOCAL_TTS_PORT = int(os.getenv("LOCAL_TTS_PORT", "5002"))
+LOCAL_TTS_VOICE = os.getenv("LOCAL_TTS_VOICE", "default")
+
+# Local STT (Whisper) Config
+LOCAL_STT_HOST = os.getenv("LOCAL_STT_HOST", "localhost")
+LOCAL_STT_PORT = int(os.getenv("LOCAL_STT_PORT", "5003"))
+LOCAL_STT_MODEL = os.getenv("LOCAL_STT_MODEL", "base")
 
 # === Modes ===
 DEBUG_MODE = os.getenv("DEBUG_MODE", "true").lower() == "true"

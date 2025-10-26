@@ -14,3 +14,9 @@ flask
 adafruit-circuitpython-motorkit
 adafruit-circuitpython-busdevice
 packaging
+
+# Local model dependencies (optional)
+# These are installed separately by the setup scripts
+# TTS>=0.22.0  # Coqui TTS
+# soundfile>=0.12.1  # Audio file handling
+# torch>=2.0.0  # PyTorch for TTS models

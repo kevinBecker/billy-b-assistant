@@ -171,7 +171,7 @@ def on_message(client, userdata, msg):
         import asyncio
         import threading
 
-        from core.say import say
+        from core.hybrid_say import say
 
         try:
             text = msg.payload.decode().strip()
