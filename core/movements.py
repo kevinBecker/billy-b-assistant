@@ -26,11 +26,6 @@ print("🔧 MotorKit initialized")
 # We map: motor1=mouth, motor2=body, motor3=head
 # Note: body is used for tail movement in the current implementation
 
-# Motor references for easier access
-MOUTH_MOTOR = kit.motor1
-BODY_MOTOR = kit.motor3  # Used for tail movement
-HEAD_MOTOR = kit.motor2
-
 FLIP_MOUTH_DIRECTION = True
 FLIP_HEAD_DIRECTION = False
 FLIP_TAIL_DIRECTION = True
@@ -46,7 +41,6 @@ if MOUTH == 2:
     MOUTH_MOTOR = kit.motor2
 if MOUTH == 3:
     MOUTH_MOTOR = kit.motor3
-
 
 if HEAD == 1:
     HEAD_MOTOR = kit.motor1
