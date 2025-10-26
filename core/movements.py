@@ -70,7 +70,7 @@ head_out = False
 
 # === Throttle tracking (so watchdog can see motor activity) ===
 _throttle = {pin: {"throttle": 0, "since": None} for pin in motor_pins}
-_motor_map = {MOUTH: MOUTH_MOTOR, TAIL: BODY_MOTOR, HEAD: HEAD_MOTOR}
+_motor_map = {MOUTH: MOUTH_MOTOR, TAIL: TAIL_MOTOR, HEAD: HEAD_MOTOR}
 
 
 def set_throttle(pin: int, throttle: float):
