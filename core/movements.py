@@ -4,8 +4,9 @@ import threading
 import time
 from threading import Lock, Thread
 
-import lgpio
+import board
 import numpy as np
+from adafruit_motorkit import MotorKit
 
 from .config import BILLY_PINS, MOUTH_ARTICULATION, is_classic_billy
 
@@ -14,42 +15,56 @@ from .config import BILLY_PINS, MOUTH_ARTICULATION, is_classic_billy
 USE_THIRD_MOTOR = is_classic_billy()
 print(f"⚙️ Using third motor: {USE_THIRD_MOTOR} | Pin profile: {BILLY_PINS}")
 
-# === GPIO Setup ===
-h = lgpio.gpiochip_open(0)
-FREQ = 10000  # PWM frequency
+# === MotorKit Setup ===
+kit = MotorKit(i2c=board.I2C())
+print("🔧 MotorKit initialized")
 
 # -------------------------------------------------------------------
-# Pin mapping by profile
+# Motor mapping
 # -------------------------------------------------------------------
-# We normalize to three "drive" pins (MOUTH, HEAD, TAIL) and up to three
-# "mates" that must be held LOW for legacy wiring (GND_1..GND_3).
-MOUTH = GND_1 = HEAD = TAIL = GND_2 = GND_3 = None
+# MotorKit provides 4 motors: motor1, motor2, motor3, motor4
+# We map: motor1=mouth, motor2=body, motor3=head
+# Note: body is used for tail movement in the current implementation
 
-if BILLY_PINS == "legacy":
-    # Original wiring (backwards compatible)
-    # Controller 1: IN1=HEAD, IN2=TAIL (2-motor legacy) | IN3=MOUTH, IN4=GND_1
-    MOUTH = 12
-    HEAD = 13
-    TAIL = 6
-    GND_1 = 5
-    if USE_THIRD_MOTOR:
-        # Classic Billy (3 motors): dedicated tail bridge on second driver
-        TAIL = 19  # second driver IN1 (PWM)
-        GND_2 = 6  # head mate (keep LOW)
-        GND_3 = 26  # tail mate (keep LOW)
-else:
-    # NEW quiet wiring (mates are tied to GND in hardware)
-    HEAD = 22  # pin 15
-    MOUTH = 17  # pin 11
-    TAIL = 27  # pin 13
+# Motor references for easier access
+MOUTH_MOTOR = kit.motor1
+BODY_MOTOR = kit.motor3  # Used for tail movement
+HEAD_MOTOR = kit.motor2
 
-# Collect all pins we actually use
-motor_pins = [p for p in (MOUTH, HEAD, TAIL, GND_1, GND_2, GND_3) if p is not None]
+FLIP_MOUTH_DIRECTION = True
+FLIP_HEAD_DIRECTION = False
+FLIP_TAIL_DIRECTION = True
 
-# Claim/initialize
-for pin in motor_pins:
-    lgpio.gpio_claim_output(h, pin)
-    lgpio.gpio_write(h, pin, 0)
+# For compatibility with existing code that expects pin numbers
+MOUTH = 1
+HEAD = 2
+TAIL = 3  # Using body motor for tail
+
+if MOUTH == 1:
+    MOUTH_MOTOR = kit.motor1
+if MOUTH == 2:
+    MOUTH_MOTOR = kit.motor2
+if MOUTH == 3:
+    MOUTH_MOTOR = kit.motor3
+
+
+if HEAD == 1:
+    HEAD_MOTOR = kit.motor1
+if HEAD == 2:
+    HEAD_MOTOR = kit.motor2
+if HEAD == 3:
+    HEAD_MOTOR = kit.motor3
+
+if TAIL == 1:
+    TAIL_MOTOR = kit.motor1
+if TAIL == 2:
+    TAIL_MOTOR = kit.motor2
+if TAIL == 3:
+    TAIL_MOTOR = kit.motor3
+
+# All motor references for tracking
+motor_refs = [MOUTH_MOTOR, BODY_MOTOR, HEAD_MOTOR]
+motor_pins = [MOUTH, TAIL, HEAD]  # For compatibility with existing code
 
 # === State ===
 _head_tail_lock = Lock()
@@ -59,99 +74,103 @@ _mouth_open_until = 0
 _last_rms = 0
 head_out = False
 
-# === PWM tracking (so watchdog can see PWM activity) ===
-_pwm = {pin: {"duty": 0, "since": None} for pin in motor_pins}
+# === Throttle tracking (so watchdog can see motor activity) ===
+_throttle = {pin: {"throttle": 0, "since": None} for pin in motor_pins}
+_motor_map = {MOUTH: MOUTH_MOTOR, TAIL: BODY_MOTOR, HEAD: HEAD_MOTOR}
 
 
-def set_pwm(pin: int, duty: int):
-    """Start/adjust PWM on pin and remember when it went active."""
-    lgpio.tx_pwm(h, pin, FREQ, int(duty))
-    if duty > 0:
-        _pwm[pin]["duty"] = int(duty)
-        _pwm[pin]["since"] = (
-            time.time() if _pwm[pin]["since"] is None else _pwm[pin]["since"]
+def set_throttle(pin: int, throttle: float):
+    """Start/adjust throttle on motor and remember when it went active."""
+    motor = _motor_map.get(pin)
+    if motor is None:
+        return
+
+    # Convert percentage to throttle (-1.0 to 1.0)
+    throttle_value = max(-1.0, min(1.0, throttle / 100.0))
+
+    # Apply direction flip based on motor type
+    if pin == MOUTH and FLIP_MOUTH_DIRECTION:
+        throttle_value = -throttle_value
+    elif pin == HEAD and FLIP_HEAD_DIRECTION:
+        throttle_value = -throttle_value
+    elif pin == TAIL and FLIP_TAIL_DIRECTION:
+        throttle_value = -throttle_value
+
+    motor.throttle = throttle_value
+
+    if abs(throttle_value) > 0:
+        _throttle[pin]["throttle"] = throttle_value
+        _throttle[pin]["since"] = (
+            time.time() if _throttle[pin]["since"] is None else _throttle[pin]["since"]
         )
     else:
-        _pwm[pin]["duty"] = 0
-        _pwm[pin]["since"] = None
+        _throttle[pin]["throttle"] = 0
+        _throttle[pin]["since"] = None
 
 
-def clear_pwm(pin: int):
-    """Stop PWM on pin and clear active since timestamp."""
-    lgpio.tx_pwm(h, pin, FREQ, 0)
-    _pwm[pin]["duty"] = 0
-    _pwm[pin]["since"] = None
+def clear_throttle(pin: int):
+    """Stop throttle on motor and clear active since timestamp."""
+    motor = _motor_map.get(pin)
+    if motor is None:
+        return
+
+    motor.throttle = 0
+    _throttle[pin]["throttle"] = 0
+    _throttle[pin]["since"] = None
 
 
 # === Motor Helpers ===
 def brake_motor(pin1, pin2=None):
-    """Actively stop the channel: zero PWM and drive LOW."""
-    clear_pwm(pin1)
+    """Actively stop the motor: zero throttle."""
+    clear_throttle(pin1)
     if pin2 is not None:
-        clear_pwm(pin2)
-        lgpio.gpio_write(h, pin2, 0)
-    lgpio.gpio_write(h, pin1, 0)
+        clear_throttle(pin2)
 
 
-def run_motor_async(pwm_pin, low_pin=None, speed_percent=100, duration=0.3, brake=True):
-    if low_pin is not None:
-        lgpio.gpio_write(h, low_pin, 0)
-    set_pwm(pwm_pin, int(speed_percent))
+def run_motor_async(motor_pin, low_pin=None, speed_percent=100, duration=0.3, brake=True):
+    # MotorKit handles the low pin internally, so we ignore it
+    set_throttle(motor_pin, float(speed_percent))
     if brake:
-        threading.Timer(duration, lambda: brake_motor(pwm_pin, low_pin)).start()
+        threading.Timer(duration, lambda: brake_motor(motor_pin, low_pin)).start()
     else:
-        # still auto-close after duration, but just clear PWM (no active brake)
-        threading.Timer(duration, lambda: clear_pwm(pwm_pin)).start()
+        # still auto-close after duration, but just clear throttle (no active brake)
+        threading.Timer(duration, lambda: clear_throttle(motor_pin)).start()
 
 
 # === Movement Functions (keep signatures/behavior) ===
 def move_mouth(speed_percent, duration, brake=False):
-    run_motor_async(MOUTH, GND_1, speed_percent, duration, brake)
+    run_motor_async(MOUTH, None, speed_percent, duration, brake)
 
 
 def stop_mouth():
-    brake_motor(MOUTH, GND_1)
+    brake_motor(MOUTH, None)
 
 
 def move_head(state="on"):
     global head_out
 
     def _move_head_on():
-        # Ensure opposite input is LOW if sharing a bridge (2-motor cases)
-        # For 3-motor "new" layout, mate is hard GND so this is a no-op.
-        lgpio.gpio_write(h, TAIL, 0) if TAIL is not None else None
-        set_pwm(HEAD, 80)
+        # Move head to extended position
+        set_throttle(HEAD, 80)
         time.sleep(0.5)
-        set_pwm(HEAD, 100)  # stay extended
+        set_throttle(HEAD, 100)  # stay extended
 
     if state == "on":
         if not head_out:
             threading.Thread(target=_move_head_on, daemon=True).start()
             head_out = True
     else:
-        # Brake both sides of shared bridge where relevant
-        brake_motor(HEAD, TAIL)
+        # Stop head motor
+        brake_motor(HEAD, None)
         head_out = False
 
 
 def move_tail(duration=0.2):
     """
-    Tail drive matrix:
-      - legacy + classic(3): TAIL has dedicated bridge => mate = GND_3
-      - legacy + modern(2):  shared with HEAD => mate = HEAD
-      - new    + classic(3): dedicated channel with mate tied to GND => mate = None
-      - new    + modern(2):  shared bridge with HEAD => mate = HEAD
+    Move tail using the body motor (motor2).
+    MotorKit handles the motor control internally.
     """
-    if BILLY_PINS == "legacy":
-        if USE_THIRD_MOTOR and TAIL is not None and GND_3 is not None:
-            run_motor_async(TAIL, GND_3, speed_percent=80, duration=duration)
-        else:
-            run_motor_async(TAIL, HEAD, speed_percent=80, duration=duration)
-    else:
-        if USE_THIRD_MOTOR:
-            run_motor_async(TAIL, None, speed_percent=80, duration=duration)
-        else:
-            run_motor_async(TAIL, HEAD, speed_percent=80, duration=duration)
+    run_motor_async(TAIL, None, speed_percent=80, duration=duration)
 
 
 def move_tail_async(duration=0.3):
@@ -165,7 +184,7 @@ def _articulation_multiplier():
 
 # === Mouth Sync ===
 def flap_from_pcm_chunk(
-    audio, threshold=1500, min_flap_gap=0.15, chunk_ms=40, sample_rate=24000
+    audio, threshold=1500, min_flap_gap=0.15, chunk_ms=40, sample_rate=24000  # pylint: disable=unused-argument
 ):
     global _last_flap, _mouth_open_until, _last_rms
     now = time.time()
@@ -174,7 +193,7 @@ def flap_from_pcm_chunk(
         return
 
     rms = np.sqrt(np.mean(audio.astype(np.float32) ** 2))
-    peak = np.max(np.abs(audio))
+    # peak = np.max(np.abs(audio))  # Not used in current implementation
 
     # Smooth out sudden fluctuations
     if '_last_rms' not in globals():
@@ -192,7 +211,7 @@ def flap_from_pcm_chunk(
         return
 
     normalized = np.clip(rms / 32768.0, 0.0, 1.0)
-    dyn_range = peak / (rms + 1e-5)
+    # dyn_range = peak / (rms + 1e-5)  # Not used in current implementation
 
     # Flap speed and duration scaling
     speed = int(np.clip(np.interp(normalized, [0.005, 0.15], [25, 100]), 25, 100))
@@ -236,51 +255,28 @@ WATCHDOG_TIMEOUT_SEC = 30  # max continuous ON time per pin
 WATCHDOG_POLL_SEC = 1.0  # poll cadence
 
 
-def _mate_for(pin: int):
+def _mate_for(pin: int):  # pylint: disable=unused-argument
     """
-    Return the logical 'mate' input that should be LOW when 'pin' drives.
-    This lets the watchdog brake a channel safely.
+    MotorKit handles motor control internally, so no mate pins needed.
+    Return None for all pins.
     """
-    if pin == MOUTH:
-        return GND_1
-    if pin == HEAD:
-        if BILLY_PINS == "legacy":
-            # legacy modern shares bridge with tail
-            return TAIL
-        # new layout: 3-motor => mate hard GND (None); 2-motor => mate is TAIL
-        return None if USE_THIRD_MOTOR else TAIL
-    if pin == TAIL:
-        if BILLY_PINS == "legacy":
-            return GND_3 if USE_THIRD_MOTOR else HEAD
-        return None if USE_THIRD_MOTOR else HEAD
     return None
 
 
 def _stop_channel(pin: int):
-    """Brake one channel safely (pin + its mate)."""
-    mate = _mate_for(pin)
-    clear_pwm(pin)
-    lgpio.gpio_write(h, pin, 0)
-    if mate is not None:
-        clear_pwm(mate)
-        lgpio.gpio_write(h, mate, 0)
+    """Stop one motor safely."""
+    clear_throttle(pin)
 
 
 def _pin_is_active(pin: int) -> bool:
-    """Active if line is HIGH or PWM duty > 0."""
-    try:
-        if lgpio.gpio_read(h, pin) == 1:
-            return True
-    except Exception:
-        pass
-    return _pwm.get(pin, {}).get("duty", 0) > 0
+    """Active if throttle > 0."""
+    return abs(_throttle.get(pin, {}).get("throttle", 0)) > 0
 
 
 def stop_all_motors():
     print("🛑 Stopping all motors")
     for pin in motor_pins:
-        clear_pwm(pin)
-        lgpio.gpio_write(h, pin, 0)
+        clear_throttle(pin)
 
 
 def is_motor_active():
