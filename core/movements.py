@@ -57,7 +57,7 @@ if TAIL == 3:
     TAIL_MOTOR = kit.motor3
 
 # All motor references for tracking
-motor_refs = [MOUTH_MOTOR, BODY_MOTOR, HEAD_MOTOR]
+motor_refs = [MOUTH_MOTOR, TAIL_MOTOR, HEAD_MOTOR]
 motor_pins = [MOUTH, TAIL, HEAD]  # For compatibility with existing code
 
 # === State ===
