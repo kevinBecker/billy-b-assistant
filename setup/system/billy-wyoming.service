@@ -1,0 +1,29 @@
+[Unit]
+Description=Billy Bass Wyoming Integration
+After=network.target sound.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/billy-b-assistant-git
+ExecStart=/home/pi/billy-b-assistant-git/start_billy_wyoming.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables
+Environment=PYTHONPATH=/home/pi/billy-b-assistant-git
+Environment=DISPLAY=:0
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/home/pi/billy-b-assistant-git
+
+[Install]
+WantedBy=multi-user.target

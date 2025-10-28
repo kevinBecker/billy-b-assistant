@@ -1,0 +1,28 @@
+# Billy Bass Wyoming Integration Requirements
+# This file includes both Billy's original dependencies and Wyoming-Satellite dependencies
+
+# Billy's original dependencies
+sounddevice
+websockets
+numpy>=1.24.0,<2.0.0
+scipy>=1.10.0,<2.0.0
+gpiozero
+python-dotenv
+pydub
+paho-mqtt
+requests
+openai
+aiohttp
+flask
+adafruit-circuitpython-motorkit
+adafruit-circuitpython-busdevice
+packaging
+
+# Wyoming-Satellite dependencies
+wyoming==1.5.4
+zeroconf==0.88.0
+pyring-buffer>=1,<2
+
+# Optional Wyoming dependencies for enhanced functionality
+pysilero-vad==1.0.0
+webrtc-noise-gain==1.2.3
