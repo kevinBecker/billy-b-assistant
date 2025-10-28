@@ -30,7 +30,8 @@ def create_billy_satellite_settings():
         rate=22050,
         width=2,
         channels=1,
-        samples_per_chunk=1024
+        samples_per_chunk=1024,
+        disconnect_after_stop=False
     )
     
     wake_settings = WakeSettings(
@@ -48,8 +49,9 @@ def create_billy_satellite_settings():
     )
     
     vad_settings = VadSettings(
+        enabled=False,  # Disabled since we use wake word detection
         threshold=0.5,
-        trigger_level=0.3,
+        trigger_level=1,  # Changed from 0.3 to 1 (integer)
         buffer_seconds=0.5,
         wake_word_timeout=10.0
     )
