@@ -10,66 +10,66 @@ from wyoming_satellite.settings import SatelliteSettings, MicSettings, SndSettin
 
 def create_billy_satellite_settings():
     """Create optimized Wyoming Satellite settings for Billy Bass."""
-    settings = SatelliteSettings()
+    # Create individual settings objects
+    mic_settings = MicSettings()
+    mic_settings.enabled = True
+    mic_settings.rate = 16000
+    mic_settings.width = 2
+    mic_settings.channels = 1
+    mic_settings.samples_per_chunk = 1024
+    mic_settings.command = ["arecord", "-r", "16000", "-c", "1", "-f", "S16_LE", "-t", "raw"]
+    mic_settings.reconnect_seconds = 5.0
+    mic_settings.volume_multiplier = 1.0
+    mic_settings.auto_gain = 0  # Disable auto gain for Billy
+    mic_settings.noise_suppression = 0  # Disable noise suppression for Billy
+    mic_settings.mute_during_awake_wav = True
+    mic_settings.seconds_to_mute_after_awake_wav = 1.0
     
-    # Microphone settings - optimized for Billy's audio setup
-    settings.mic.enabled = True
-    settings.mic.rate = 16000
-    settings.mic.width = 2
-    settings.mic.channels = 1
-    settings.mic.samples_per_chunk = 1024
-    settings.mic.command = ["arecord", "-r", "16000", "-c", "1", "-f", "S16_LE", "-t", "raw"]
-    settings.mic.reconnect_seconds = 5.0
-    settings.mic.volume_multiplier = 1.0
-    settings.mic.auto_gain = 0  # Disable auto gain for Billy
-    settings.mic.noise_suppression = 0  # Disable noise suppression for Billy
-    settings.mic.mute_during_awake_wav = True
-    settings.mic.seconds_to_mute_after_awake_wav = 1.0
+    snd_settings = SndSettings()
+    snd_settings.enabled = True
+    snd_settings.rate = 22050
+    snd_settings.width = 2
+    snd_settings.channels = 1
+    snd_settings.samples_per_chunk = 1024
+    snd_settings.command = ["aplay", "-r", "22050", "-c", "1", "-f", "S16_LE", "-t", "raw"]
+    snd_settings.reconnect_seconds = 5.0
+    snd_settings.volume_multiplier = 1.0
+    snd_settings.disconnect_after_stop = False
     
-    # Speaker settings - optimized for Billy's audio output
-    settings.snd.enabled = True
-    settings.snd.rate = 22050
-    settings.snd.width = 2
-    settings.snd.channels = 1
-    settings.snd.samples_per_chunk = 1024
-    settings.snd.command = ["aplay", "-r", "22050", "-c", "1", "-f", "S16_LE", "-t", "raw"]
-    settings.snd.reconnect_seconds = 5.0
-    settings.snd.volume_multiplier = 1.0
-    settings.snd.disconnect_after_stop = False
-    
-    # Wake word detection settings
-    settings.wake.enabled = True
-    settings.wake.uri = "tcp://127.0.0.1:10400"  # Local wake word service
-    settings.wake.rate = 16000
-    settings.wake.width = 2
-    settings.wake.channels = 1
-    settings.wake.names = [
+    wake_settings = WakeSettings()
+    wake_settings.enabled = True
+    wake_settings.uri = "tcp://127.0.0.1:10400"  # Local wake word service
+    wake_settings.rate = 16000
+    wake_settings.width = 2
+    wake_settings.channels = 1
+    wake_settings.names = [
         {"name": "ok_nabu", "pipeline": None},
         {"name": "hey_jarvis", "pipeline": None},
         {"name": "alexa", "pipeline": None}
     ]
-    settings.wake.refractory_seconds = 2.0
-    settings.wake.reconnect_seconds = 5.0
+    wake_settings.refractory_seconds = 2.0
+    wake_settings.reconnect_seconds = 5.0
     
-    # Event handling settings
-    settings.event.enabled = True
-    settings.event.uri = "stdio://"  # Use our custom event handler
-    settings.event.reconnect_seconds = 5.0
+    event_settings = EventSettings()
+    event_settings.enabled = True
+    event_settings.uri = "stdio://"  # Use our custom event handler
+    event_settings.reconnect_seconds = 5.0
     
-    # VAD settings - disabled since we use wake word detection
-    settings.vad.enabled = False
-    settings.vad.threshold = 0.5
-    settings.vad.trigger_level = 0.3
-    settings.vad.buffer_seconds = 0.5
-    settings.vad.wake_word_timeout = 10.0
+    vad_settings = VadSettings()
+    vad_settings.enabled = False  # Disabled since we use wake word detection
+    vad_settings.threshold = 0.5
+    vad_settings.trigger_level = 0.3
+    vad_settings.buffer_seconds = 0.5
+    vad_settings.wake_word_timeout = 10.0
     
-    # Timer settings
-    settings.timer.finished_wav = None
-    settings.timer.finished_wav_plays = 1
-    settings.timer.finished_wav_delay = 0.0
-    
-    # Debug settings
-    settings.debug_recording_dir = None
+    # Create the main settings object
+    settings = SatelliteSettings(
+        mic=mic_settings,
+        snd=snd_settings,
+        wake=wake_settings,
+        event=event_settings,
+        vad=vad_settings
+    )
     
     return settings
 
