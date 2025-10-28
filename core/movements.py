@@ -4,28 +4,29 @@ import threading
 import time
 from threading import Lock, Thread
 
-import board
 import numpy as np
-from adafruit_motorkit import MotorKit
 
 from .config import BILLY_PINS, MOUTH_ARTICULATION, is_classic_billy
-
 
 # === Configuration ===
 USE_THIRD_MOTOR = is_classic_billy()
 print(f"⚙️ Using third motor: {USE_THIRD_MOTOR} | Pin profile: {BILLY_PINS}")
 
-# === MotorKit Setup ===
-kit = MotorKit(i2c=board.I2C())
-print("🔧 MotorKit initialized")
+# === Motor Control Setup ===
+USE_MOTOR_KIT = BILLY_PINS == "adafruit_motor_hat"
+
+if USE_MOTOR_KIT:
+    import board
+    from adafruit_motorkit import MotorKit
+    kit = MotorKit(i2c=board.I2C())
+    print("🔧 MotorKit initialized")
+else:
+    print("🔧 Using GPIO-based motor control (not implemented yet)")
+    kit = None
 
 # -------------------------------------------------------------------
 # Motor mapping
 # -------------------------------------------------------------------
-# MotorKit provides 4 motors: motor1, motor2, motor3, motor4
-# We map: motor1=mouth, motor2=body, motor3=head
-# Note: body is used for tail movement in the current implementation
-
 FLIP_MOUTH_DIRECTION = True
 FLIP_HEAD_DIRECTION = False
 FLIP_TAIL_DIRECTION = True
@@ -35,26 +36,36 @@ MOUTH = 1
 HEAD = 2
 TAIL = 3  # Using body motor for tail
 
-if MOUTH == 1:
-    MOUTH_MOTOR = kit.motor1
-if MOUTH == 2:
-    MOUTH_MOTOR = kit.motor2
-if MOUTH == 3:
-    MOUTH_MOTOR = kit.motor3
+if USE_MOTOR_KIT:
+    # MotorKit provides 4 motors: motor1, motor2, motor3, motor4
+    # We map: motor1=mouth, motor2=body, motor3=head
+    # Note: body is used for tail movement in the current implementation
+    
+    if MOUTH == 1:
+        MOUTH_MOTOR = kit.motor1
+    if MOUTH == 2:
+        MOUTH_MOTOR = kit.motor2
+    if MOUTH == 3:
+        MOUTH_MOTOR = kit.motor3
 
-if HEAD == 1:
-    HEAD_MOTOR = kit.motor1
-if HEAD == 2:
-    HEAD_MOTOR = kit.motor2
-if HEAD == 3:
-    HEAD_MOTOR = kit.motor3
+    if HEAD == 1:
+        HEAD_MOTOR = kit.motor1
+    if HEAD == 2:
+        HEAD_MOTOR = kit.motor2
+    if HEAD == 3:
+        HEAD_MOTOR = kit.motor3
 
-if TAIL == 1:
-    TAIL_MOTOR = kit.motor1
-if TAIL == 2:
-    TAIL_MOTOR = kit.motor2
-if TAIL == 3:
-    TAIL_MOTOR = kit.motor3
+    if TAIL == 1:
+        TAIL_MOTOR = kit.motor1
+    if TAIL == 2:
+        TAIL_MOTOR = kit.motor2
+    if TAIL == 3:
+        TAIL_MOTOR = kit.motor3
+else:
+    # GPIO-based motor control (placeholder for future implementation)
+    MOUTH_MOTOR = None
+    HEAD_MOTOR = None
+    TAIL_MOTOR = None
 
 # All motor references for tracking
 motor_refs = [MOUTH_MOTOR, TAIL_MOTOR, HEAD_MOTOR]
@@ -75,6 +86,10 @@ _motor_map = {MOUTH: MOUTH_MOTOR, TAIL: TAIL_MOTOR, HEAD: HEAD_MOTOR}
 
 def set_throttle(pin: int, throttle: float):
     """Start/adjust throttle on motor and remember when it went active."""
+    if not USE_MOTOR_KIT:
+        print(f"⚠️ Motor control not available - GPIO mode not implemented yet")
+        return
+        
     motor = _motor_map.get(pin)
     if motor is None:
         return
@@ -104,6 +119,9 @@ def set_throttle(pin: int, throttle: float):
 
 def clear_throttle(pin: int):
     """Stop throttle on motor and clear active since timestamp."""
+    if not USE_MOTOR_KIT:
+        return
+        
     motor = _motor_map.get(pin)
     if motor is None:
         return
@@ -123,6 +141,7 @@ def brake_motor(pin1, pin2=None):
 
 def run_motor_async(motor_pin, low_pin=None, speed_percent=100, duration=0.3, brake=True):
     # MotorKit handles the low pin internally, so we ignore it
+    # For GPIO mode, low_pin would be used for H-bridge control
     set_throttle(motor_pin, float(speed_percent))
     if brake:
         threading.Timer(duration, lambda: brake_motor(motor_pin, low_pin)).start()
@@ -163,6 +182,7 @@ def move_tail(duration=0.2):
     """
     Move tail using the body motor (motor2).
     MotorKit handles the motor control internally.
+    For GPIO mode, this would control the tail motor via H-bridge.
     """
     run_motor_async(TAIL, None, speed_percent=80, duration=duration)
 
@@ -252,6 +272,7 @@ WATCHDOG_POLL_SEC = 1.0  # poll cadence
 def _mate_for(pin: int):  # pylint: disable=unused-argument
     """
     MotorKit handles motor control internally, so no mate pins needed.
+    For GPIO mode, this would return the corresponding low pin for H-bridge control.
     Return None for all pins.
     """
     return None
