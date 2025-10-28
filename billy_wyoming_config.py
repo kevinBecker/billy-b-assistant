@@ -6,8 +6,9 @@ with Wyoming-Satellite voice processing.
 """
 
 import os
+import subprocess
 from wyoming_satellite.settings import SatelliteSettings, MicSettings, SndSettings, WakeSettings, EventSettings, VadSettings
-from core.config import WYOMING_WAKE_WORDS, WYOMING_WAKE_WORD_URI
+from core.config import WYOMING_WAKE_WORDS, WYOMING_WAKE_WORD_URI, WYOMING_WAKE_WORD_SERVICE
 
 def create_billy_satellite_settings():
     """Create optimized Wyoming Satellite settings for Billy Bass."""
@@ -35,8 +36,19 @@ def create_billy_satellite_settings():
         disconnect_after_stop=False
     )
     
+    # Check if external wake word service is available
+    try:
+        subprocess.run([WYOMING_WAKE_WORD_SERVICE, "--help"], 
+                      capture_output=True, timeout=5)
+        wake_uri = WYOMING_WAKE_WORD_URI
+        print(f"✅ External wake word service available: {WYOMING_WAKE_WORD_SERVICE}")
+    except (FileNotFoundError, subprocess.TimeoutExpired, subprocess.CalledProcessError):
+        # Fall back to built-in wake word detection
+        wake_uri = None
+        print("⚠️ External wake word service not available, using built-in detection")
+    
     wake_settings = WakeSettings(
-        uri=WYOMING_WAKE_WORD_URI,  # Configurable wake word service URI
+        uri=wake_uri,  # None for built-in, URI for external service
         reconnect_seconds=5.0,
         names=WYOMING_WAKE_WORDS,  # Configurable wake words
         rate=16000,

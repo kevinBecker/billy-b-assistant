@@ -93,21 +93,57 @@ def start_wake_word_service():
         print(f"🔗 URI: {WYOMING_WAKE_WORD_URI}")
         print(f"🗣️ Wake words: {', '.join(WYOMING_WAKE_WORDS)}")
         
-        # Start the wake word service
-        wake_word_process = subprocess.Popen([
+        # Try different wake word service commands
+        wake_word_commands = [
             WYOMING_WAKE_WORD_SERVICE,
-            "--uri", WYOMING_WAKE_WORD_URI
-        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            "wyoming-openwakeword",
+            "./wyoming-openwakeword/script/run",  # Submodule installation
+            "python3 -m wyoming_openwakeword",
+            "python -m wyoming_openwakeword"
+        ]
         
-        # Give it a moment to start
-        time.sleep(2)
+        wake_word_process = None
+        for cmd in wake_word_commands:
+            try:
+                if cmd.startswith("python"):
+                    # Handle Python module execution
+                    cmd_parts = cmd.split()
+                    wake_word_process = subprocess.Popen(
+                        cmd_parts + ["--uri", WYOMING_WAKE_WORD_URI],
+                        stdout=subprocess.PIPE, 
+                        stderr=subprocess.PIPE
+                    )
+                elif cmd.startswith("./wyoming-openwakeword/script/run"):
+                    # Handle submodule script execution
+                    wake_word_process = subprocess.Popen([
+                        cmd, "--uri", WYOMING_WAKE_WORD_URI
+                    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                else:
+                    # Handle direct command execution
+                    wake_word_process = subprocess.Popen([
+                        cmd, "--uri", WYOMING_WAKE_WORD_URI
+                    ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                
+                # Give it a moment to start
+                time.sleep(2)
+                
+                if wake_word_process.poll() is None:
+                    print(f"✅ Wake word service started successfully with: {cmd}")
+                    return True
+                else:
+                    print(f"⚠️ Command failed: {cmd}")
+                    wake_word_process = None
+                    
+            except FileNotFoundError:
+                print(f"⚠️ Command not found: {cmd}")
+                continue
+            except Exception as e:
+                print(f"⚠️ Error with {cmd}: {e}")
+                continue
         
-        if wake_word_process.poll() is None:
-            print("✅ Wake word service started successfully")
-            return True
-        else:
-            print("❌ Wake word service failed to start")
-            return False
+        print("❌ No working wake word service found")
+        print("💡 Try installing: pip install wyoming-openwakeword")
+        return False
             
     except Exception as e:
         print(f"❌ Error starting wake word service: {e}")
@@ -153,8 +189,8 @@ def main():
     
     # Start wake word service
     if not start_wake_word_service():
-        print("❌ Failed to start wake word service. Exiting.")
-        sys.exit(1)
+        print("⚠️ Wake word service not available, using Wyoming-Satellite built-in wake word")
+        print("💡 For better performance, install: pip install wyoming-openwakeword")
     
     # Start Wyoming satellite
     if not start_wyoming_satellite():
