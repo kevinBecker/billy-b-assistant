@@ -412,8 +412,9 @@ const PinProfile = (() => {
         if (!pinSelect || !modelRow || !modelSel) return;
 
         const isNew = pinSelect.value === 'new';
+        const isMotorHat = pinSelect.value === 'adafruit_motor_hat';
 
-        if (isNew) {
+        if (isNew || isMotorHat) {
             modelRow.classList.add('hidden', 'force-hidden');
             if (!modelSel.dataset.prev) modelSel.dataset.prev = modelSel.value;
             modelSel.value = 'modern';
@@ -465,7 +466,7 @@ const SettingsForm = (() => {
 
             const pinSelect = document.getElementById("BILLY_PINS_SELECT");
             if (pinSelect) {
-                payload.BILLY_PINS = pinSelect.value; // "new" | "legacy"
+                payload.BILLY_PINS = pinSelect.value; // "new" | "legacy" | "adafruit_motor_hat"
             }
 
             let hostnameChanged = false;

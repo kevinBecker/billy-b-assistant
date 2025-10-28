@@ -98,7 +98,12 @@ PLAYBACK_VOLUME = 1
 MOUTH_ARTICULATION = int(os.getenv("MOUTH_ARTICULATION", "5"))
 
 # === GPIO Config ===
-BUTTON_PIN = 27 if BILLY_PINS == "legacy" else 24  # legacy=pin 13, new=pin 18
+if BILLY_PINS == "legacy":
+    BUTTON_PIN = 27  # legacy=pin 13
+elif BILLY_PINS == "adafruit_motor_hat":
+    BUTTON_PIN = 24  # motor hat=pin 18 (same as new)
+else:  # new or default
+    BUTTON_PIN = 24  # new=pin 18
 
 # === MQTT Config ===
 MQTT_HOST = os.getenv("MQTT_HOST", "")
