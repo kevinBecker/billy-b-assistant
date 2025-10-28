@@ -86,7 +86,7 @@ RUN_MODE = os.getenv("RUN_MODE", "normal").lower()
 
 # === Billy Hardware ===
 BILLY_MODEL = os.getenv("BILLY_MODEL", "modern").strip().lower()
-BILLY_PINS = os.getenv("BILLY_PINS", "new").strip().lower()
+BILLY_PINS = os.getenv("BILLY_PINS", "adafruit_motor_hat").strip().lower()
 
 # === Audio Config ===
 SPEAKER_PREFERENCE = os.getenv("SPEAKER_PREFERENCE")
@@ -124,6 +124,12 @@ ALLOW_UPDATE_PERSONALITY_INI = (
 # === Software Config ===
 FLASK_PORT = int(os.getenv("FLASK_PORT", "80"))
 SHOW_SUPPORT = os.getenv("SHOW_SUPPORT", True)
+
+# === Wyoming Wake Word Config ===
+WYOMING_WAKE_WORDS = os.getenv("WYOMING_WAKE_WORDS", "ok_nabu,hey_jarvis,alexa,hey_billy").split(",")
+WYOMING_WAKE_WORD_URI = os.getenv("WYOMING_WAKE_WORD_URI", "tcp://127.0.0.1:10400")
+WYOMING_WAKE_WORD_SERVICE = os.getenv("WYOMING_WAKE_WORD_SERVICE", "wyoming-openwakeword")
+WYOMING_SATELLITE_URI = os.getenv("WYOMING_SATELLITE_URI", "tcp://0.0.0.0:10700")
 
 
 def is_classic_billy():

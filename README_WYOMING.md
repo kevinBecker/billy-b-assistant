@@ -93,22 +93,25 @@ echo "SPEAKER_PREFERENCE=plughw:1,0" >> .env
 ### Quick Start
 
 ```bash
-# Start Billy with Wyoming integration
-./start_billy_wyoming.sh
+# Start Billy with Wyoming integration (automatically starts wake word service)
+python3 main.py
 ```
 
-### Manual Start
+### Alternative: Manual Start
 
 ```bash
 # Terminal 1: Start wake word service
-cd wyoming-satellite
-./script/run \
-  --uri 'tcp://0.0.0.0:10400' \
-  --preload-model 'ok_nabu' \
-  --debug
+wyoming-openwakeword --uri tcp://127.0.0.1:10400
 
 # Terminal 2: Start Billy
 python3 billy_wyoming_main.py
+```
+
+### Legacy: Using startup script
+
+```bash
+# Start Billy with Wyoming integration
+./start_billy_wyoming.sh
 ```
 
 ### Home Assistant Integration
@@ -130,13 +133,15 @@ MIC_PREFERENCE=plughw:1,0          # Preferred microphone device
 SPEAKER_PREFERENCE=plughw:1,0       # Preferred speaker device
 
 # Wyoming Configuration
-WYOMING_WAKE_URI=tcp://127.0.0.1:10400  # Wake word service URI
+WYOMING_WAKE_WORDS=ok_nabu,hey_jarvis,alexa  # Comma-separated wake words
+WYOMING_WAKE_WORD_URI=tcp://127.0.0.1:10400  # Wake word service URI
+WYOMING_WAKE_WORD_SERVICE=wyoming-openwakeword  # Wake word service command
 WYOMING_SATELLITE_URI=tcp://0.0.0.0:10700  # Satellite URI
 
 # Billy Motion Configuration
 MOUTH_ARTICULATION=5                # Mouth movement sensitivity (1-10)
 BILLY_MODEL=modern                  # Billy hardware model
-BILLY_PINS=new                      # Pin configuration
+BILLY_PINS=adafruit_motor_hat       # Pin configuration (adafruit_motor_hat, new, legacy)
 ```
 
 ### Wake Word Models

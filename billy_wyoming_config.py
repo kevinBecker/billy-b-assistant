@@ -7,6 +7,7 @@ with Wyoming-Satellite voice processing.
 
 import os
 from wyoming_satellite.settings import SatelliteSettings, MicSettings, SndSettings, WakeSettings, EventSettings, VadSettings
+from core.config import WYOMING_WAKE_WORDS, WYOMING_WAKE_WORD_URI
 
 def create_billy_satellite_settings():
     """Create optimized Wyoming Satellite settings for Billy Bass."""
@@ -35,9 +36,9 @@ def create_billy_satellite_settings():
     )
     
     wake_settings = WakeSettings(
-        uri="tcp://127.0.0.1:10400",  # Local wake word service
+        uri=WYOMING_WAKE_WORD_URI,  # Configurable wake word service URI
         reconnect_seconds=5.0,
-        names=["ok_nabu", "hey_jarvis", "alexa"],
+        names=WYOMING_WAKE_WORDS,  # Configurable wake words
         rate=16000,
         width=2,
         channels=1
