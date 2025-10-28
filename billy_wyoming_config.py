@@ -10,57 +10,44 @@ from wyoming_satellite.settings import SatelliteSettings, MicSettings, SndSettin
 
 def create_billy_satellite_settings():
     """Create optimized Wyoming Satellite settings for Billy Bass."""
-    # Create individual settings objects with all parameters
+    # Create individual settings objects with correct parameters
     mic_settings = MicSettings(
-        enabled=True,
-        rate=16000,
-        width=2,
-        channels=1,
-        samples_per_chunk=1024,
         command=["arecord", "-r", "16000", "-c", "1", "-f", "S16_LE", "-t", "raw"],
         reconnect_seconds=5.0,
         volume_multiplier=1.0,
         auto_gain=0,  # Disable auto gain for Billy
         noise_suppression=0,  # Disable noise suppression for Billy
-        mute_during_awake_wav=True,
-        seconds_to_mute_after_awake_wav=1.0
-    )
-    
-    snd_settings = SndSettings(
-        enabled=True,
-        rate=22050,
-        width=2,
-        channels=1,
-        samples_per_chunk=1024,
-        command=["aplay", "-r", "22050", "-c", "1", "-f", "S16_LE", "-t", "raw"],
-        reconnect_seconds=5.0,
-        volume_multiplier=1.0,
-        disconnect_after_stop=False
-    )
-    
-    wake_settings = WakeSettings(
-        enabled=True,
-        uri="tcp://127.0.0.1:10400",  # Local wake word service
         rate=16000,
         width=2,
         channels=1,
-        names=[
-            {"name": "ok_nabu", "pipeline": None},
-            {"name": "hey_jarvis", "pipeline": None},
-            {"name": "alexa", "pipeline": None}
-        ],
-        refractory_seconds=2.0,
-        reconnect_seconds=5.0
+        samples_per_chunk=1024
+    )
+    
+    snd_settings = SndSettings(
+        command=["aplay", "-r", "22050", "-c", "1", "-f", "S16_LE", "-t", "raw"],
+        reconnect_seconds=5.0,
+        volume_multiplier=1.0,
+        rate=22050,
+        width=2,
+        channels=1,
+        samples_per_chunk=1024
+    )
+    
+    wake_settings = WakeSettings(
+        uri="tcp://127.0.0.1:10400",  # Local wake word service
+        reconnect_seconds=5.0,
+        rate=16000,
+        width=2,
+        channels=1,
+        samples_per_chunk=1024
     )
     
     event_settings = EventSettings(
-        enabled=True,
         uri="stdio://",  # Use our custom event handler
         reconnect_seconds=5.0
     )
     
     vad_settings = VadSettings(
-        enabled=False,  # Disabled since we use wake word detection
         threshold=0.5,
         trigger_level=0.3,
         buffer_seconds=0.5,

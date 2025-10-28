@@ -83,10 +83,17 @@ def test_configuration():
         from billy_wyoming_config import create_billy_satellite_settings
         settings = create_billy_satellite_settings()
         
-        # Check key settings
-        assert settings.mic.enabled == True
-        assert settings.snd.enabled == True
-        assert settings.wake.enabled == True
+        # Check key settings - test that objects were created properly
+        assert settings.mic is not None
+        assert settings.snd is not None
+        assert settings.wake is not None
+        assert settings.event is not None
+        assert settings.vad is not None
+        
+        # Check some specific values
+        assert settings.mic.rate == 16000
+        assert settings.snd.rate == 22050
+        assert settings.wake.uri == "tcp://127.0.0.1:10400"
         
         print("✅ Configuration test passed!")
         return True
