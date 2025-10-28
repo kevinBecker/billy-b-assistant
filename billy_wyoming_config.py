@@ -36,10 +36,10 @@ def create_billy_satellite_settings():
     wake_settings = WakeSettings(
         uri="tcp://127.0.0.1:10400",  # Local wake word service
         reconnect_seconds=5.0,
+        names=["ok_nabu", "hey_jarvis", "alexa"],
         rate=16000,
         width=2,
-        channels=1,
-        samples_per_chunk=1024
+        channels=1
     )
     
     event_settings = EventSettings(
