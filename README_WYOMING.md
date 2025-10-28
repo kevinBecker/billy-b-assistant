@@ -45,14 +45,31 @@ The Wyoming integration replaces Billy's original audio processing with Wyoming-
 
 ### Step 1: Install Dependencies
 
+**Option A: Simple Installation (Recommended)**
 ```bash
-# Install Billy's dependencies plus Wyoming requirements
+# Install everything from PyPI
+pip install -r requirements_wyoming.txt
+pip install wyoming-satellite wyoming-openwakeword
+```
+
+**Option B: Local Installation**
+```bash
+# Install Billy's dependencies
 pip install -r requirements_wyoming.txt
 
-# Install Wyoming-Satellite
+# Install Wyoming-Satellite from local directory
 cd wyoming-satellite
 pip install -e .
 cd ..
+```
+
+**Option C: Use Installation Scripts**
+```bash
+# Try the simple method first
+./install_wyoming_simple.sh
+
+# If that fails, try the alternative method
+./install_wyoming_alternative.sh
 ```
 
 ### Step 2: Install Wake Word Service
