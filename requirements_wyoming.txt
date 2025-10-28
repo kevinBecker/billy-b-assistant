@@ -1,5 +1,5 @@
 # Billy Bass Wyoming Integration Requirements
-# This file includes both Billy's original dependencies and Wyoming-Satellite dependencies
+# This file includes all dependencies for Billy Bass with Wyoming voice processing
 
 # Billy's original dependencies
 sounddevice
@@ -18,11 +18,13 @@ adafruit-circuitpython-motorkit
 adafruit-circuitpython-busdevice
 packaging
 
-# Wyoming-Satellite dependencies
-wyoming==1.5.4
-zeroconf==0.88.0
+# Wyoming dependencies
+wyoming>=1.5.0
+wyoming-satellite>=1.4.0
+zeroconf>=0.88.0
 pyring-buffer>=1,<2
 
 # Optional Wyoming dependencies for enhanced functionality
+wyoming-openwakeword>=1.8.0
 pysilero-vad==1.0.0
 webrtc-noise-gain==1.2.3
