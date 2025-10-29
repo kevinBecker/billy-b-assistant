@@ -35,8 +35,7 @@ ensure_env_file()
 from dotenv import load_dotenv
 load_dotenv()
 
-# Import Billy components
-import core.button
+# Import Billy components (skip button since main.py handles it)
 from core.movements import start_motor_watchdog, stop_all_motors
 from core.mqtt import start_mqtt, stop_mqtt
 from core.config import DEBUG_MODE, CHUNK_MS
@@ -44,7 +43,6 @@ from core.config import DEBUG_MODE, CHUNK_MS
 # Import Wyoming components
 from wyoming_satellite.satellite import WakeStreamingSatellite
 from wyoming_satellite.settings import SatelliteSettings
-from wyoming_satellite.event_handler import SatelliteEventHandler
 from wyoming.info import Info
 from wyoming.server import AsyncServer
 
@@ -135,18 +133,11 @@ async def run_wyoming_satellite():
         )
     )
     
-    # Create event handler
-    event_handler = SatelliteEventHandler(
-        wyoming_info=wyoming_info,
-        satellite=satellite,
-        cli_args=None
-    )
-    
-    # Start server
+    # Start server directly with satellite
     server = AsyncServer.from_uri("tcp://0.0.0.0:10700")
     
     try:
-        await server.run(lambda *args, **kwargs: event_handler)
+        await server.run(satellite)
     except Exception as e:
         _LOGGER.exception("Error running Wyoming Satellite: %s", e)
     finally:
@@ -171,8 +162,7 @@ def main():
     # Start motor watchdog
     start_motor_watchdog()
     
-    # Start button handling
-    core.button.start_loop()
+    # Button handling is done by main.py, not here
     
     # Start Wyoming Satellite in a separate thread
     def run_satellite():

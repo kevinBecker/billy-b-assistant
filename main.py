@@ -165,11 +165,17 @@ def start_wyoming_satellite():
         # Give it a moment to start
         time.sleep(3)
         
+        # Check if process is still running
         if wyoming_satellite_process.poll() is None:
             print("✅ Wyoming satellite started successfully")
             return True
         else:
-            print("❌ Wyoming satellite failed to start")
+            # Check stderr for any error messages
+            stderr_output = wyoming_satellite_process.stderr.read().decode('utf-8')
+            if stderr_output:
+                print(f"❌ Wyoming satellite failed to start. Error: {stderr_output}")
+            else:
+                print("❌ Wyoming satellite failed to start (no error output)")
             return False
             
     except Exception as e:
