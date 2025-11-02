@@ -140,6 +140,12 @@ def stop_mouth():
     brake_motor(MOUTH, None)
 
 
+def close_mouth():
+    """Pulse the mouth motor in reverse for 0.1 seconds to close the mouth."""
+    # Use negative speed to reverse direction (will be flipped if FLIP_MOUTH_DIRECTION is True)
+    run_motor_async(MOUTH, None, speed_percent=-80, duration=0.1, brake=True)
+
+
 def move_head(state="on"):
     global head_out
 

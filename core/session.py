@@ -28,7 +28,7 @@ from .config import (
 )
 from .ha import send_conversation_prompt
 from .mic import MicManager
-from .movements import move_tail_async, stop_all_motors
+from .movements import close_mouth, move_tail_async, stop_all_motors
 from .mqtt import mqtt_publish
 from .personality import update_persona_ini
 
@@ -405,6 +405,10 @@ class BillySession:
 
                 self.audio_buffer.clear()
                 audio.playback_done_event.set()
+                
+                # Close the mouth with a reverse pulse when done talking
+                close_mouth()
+                
                 self.last_activity[0] = time.time()
 
                 # Allow mic input only after a short delay
