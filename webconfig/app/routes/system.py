@@ -12,6 +12,7 @@ from pathlib import Path
 from dotenv import find_dotenv, set_key
 from flask import Blueprint, jsonify, render_template, request
 from packaging.version import parse as parse_version
+from werkzeug.utils import secure_filename
 
 from core.news_manager import load_news_sources, save_news_sources
 
@@ -65,7 +66,30 @@ CONFIG_KEYS = [
     "SHOW_RC_VERSIONS",
     "FLAP_ON_BOOT",
     "NEWS_REQUEST_TIMEOUT_SECONDS",
+    "FOLLOW_UP_RETRY_LIMIT",
+    "WAKE_WORD_ENABLED",
+    "WAKE_WORD_BACKEND",
+    "WAKE_WORD_COOLDOWN_SECONDS",
+    "PORCUPINE_ACCESS_KEY",
+    "WAKE_WORD_PORCUPINE_KEYWORD_PATH",
+    "WAKE_WORD_PORCUPINE_SENSITIVITY",
 ]
+WAKEWORD_REL_ROOT = Path("wakewords")
+
+
+def _list_available_wakeword_keywords() -> list[str]:
+    paths: list[str] = []
+    seen: set[str] = set()
+    abs_root = Path(PROJECT_ROOT) / WAKEWORD_REL_ROOT
+    if not abs_root.exists():
+        return paths
+    for ppn in sorted(abs_root.glob("*.ppn")):
+        filename = ppn.name
+        if filename in seen:
+            continue
+        seen.add(filename)
+        paths.append(filename)
+    return paths
 
 
 def _normalize_source_payload(data: dict) -> dict:
@@ -501,6 +525,12 @@ def save():
     changed_port = False
     for key, value in data.items():
         if key in CONFIG_KEYS:
+            if key == "FOLLOW_UP_RETRY_LIMIT":
+                try:
+                    parsed = int(str(value).strip())
+                except (TypeError, ValueError):
+                    parsed = 1
+                value = str(max(0, min(5, parsed)))
             set_key(ENV_PATH, key, value, quote_mode='never')
             if key == "FLASK_PORT" and str(value) != str(old_port):
                 changed_port = True
@@ -509,6 +539,46 @@ def save():
         response["port_changed"] = True
         threading.Thread(target=delayed_restart).start()
     return jsonify(response)
+
+
+@bp.route("/wakeword/keyword/upload", methods=["POST"])
+def upload_porcupine_keyword():
+    keyword_file = request.files.get("keyword_file")
+    if keyword_file is None:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    filename = secure_filename(keyword_file.filename or "")
+    if not filename:
+        return jsonify({"error": "Invalid filename"}), 400
+    if not filename.lower().endswith(".ppn"):
+        return jsonify({"error": "Only .ppn files are supported"}), 400
+
+    target_rel_dir = WAKEWORD_REL_ROOT
+    target_dir = Path(PROJECT_ROOT) / target_rel_dir
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / filename
+
+    try:
+        keyword_file.save(target_path)
+        set_key(
+            ENV_PATH,
+            "WAKE_WORD_PORCUPINE_KEYWORD_PATH",
+            filename,
+            quote_mode='never',
+        )
+        set_key(ENV_PATH, "WAKE_WORD_BACKEND", "porcupine", quote_mode='never')
+        return jsonify({
+            "status": "uploaded",
+            "keyword_path": filename,
+        })
+    except Exception as e:
+        logger.warning(f"[wakeword] Keyword upload failed: {e}", "⚠️")
+        return jsonify({"error": f"Upload failed: {e}"}), 500
+
+
+@bp.route("/wakeword/keywords", methods=["GET"])
+def list_wakeword_keywords():
+    return jsonify({"keywords": _list_available_wakeword_keywords()})
 
 
 @bp.route("/config")

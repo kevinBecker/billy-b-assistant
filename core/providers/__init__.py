@@ -2,6 +2,7 @@ import os
 
 from ..config import ENV_PATH
 from ..logger import logger
+from ..wakeword_provider import wakeword_provider_registry
 
 
 logger.verbose("Importing core.providers")
@@ -9,6 +10,7 @@ logger.verbose("Importing core.providers")
 from ..config import OPENAI_API_KEY, OPENAI_MODEL, REALTIME_AI_PROVIDER, XAI_API_KEY
 from ..realtime_ai_provider import voice_provider_registry
 from .openai_provider import OpenAIProvider
+from .porcupine_wakeword_provider import PorcupineWakeWordBackend
 from .xai_provider import XAIProvider
 
 
@@ -59,3 +61,6 @@ else:
     )
     # Never hard-fail on missing API keys; log a warning so services still start.
     logger.warning(error_msg)
+
+# Register wake-word providers
+wakeword_provider_registry.register_provider("porcupine", PorcupineWakeWordBackend)

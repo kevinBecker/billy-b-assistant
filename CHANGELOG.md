@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.2.0] — 2026-03-15
+
+### Added
+- **Porcupine Wake-word Support**: Added local wake-word activation using Picovoice Porcupine, including support for bundled and custom `.ppn` keyword files in `wakewords/`.
+- **Wake-word UI Management**: Added Wake-word settings card with backend selection, access key input (with visibility toggle), keyword dropdown, keyword upload flow, and sensitivity control.
+- **Wake-word Provider Architecture**: Introduced a pluggable wake-word provider structure (`wakeword_provider` + providers registry) to make adding future backends (for example openWakeWord) straightforward.
+- **Follow-up Retry Limit Setting**: Added `FOLLOW_UP_RETRY_LIMIT` to Web UI and config save flow with validated range `0..5` (default `1`).
+
+### Changed
+- **Settings Layout**: Moved Pin Layout and Dory/Mode control into Advanced Settings to reduce clutter for default users.
+
+---
+
 ## [2.1.1] — 2026-03-14
 
 ### Added

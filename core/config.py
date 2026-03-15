@@ -164,6 +164,16 @@ PLAYBACK_VOLUME = 1
 MOUTH_ARTICULATION = int(os.getenv("MOUTH_ARTICULATION", "5"))
 TURN_EAGERNESS = os.getenv("TURN_EAGERNESS", "high").strip().lower()
 HEAD_RETRACT_DELAY_SECONDS = float(os.getenv("HEAD_RETRACT_DELAY_SECONDS", "1.5"))
+WAKE_WORD_ENABLED = os.getenv("WAKE_WORD_ENABLED", "false").lower() == "true"
+WAKE_WORD_BACKEND = os.getenv("WAKE_WORD_BACKEND", "porcupine").strip().lower()
+WAKE_WORD_COOLDOWN_SECONDS = float(os.getenv("WAKE_WORD_COOLDOWN_SECONDS", "4.0"))
+PORCUPINE_ACCESS_KEY = os.getenv("PORCUPINE_ACCESS_KEY", "").strip()
+WAKE_WORD_PORCUPINE_KEYWORD_PATH = os.getenv(
+    "WAKE_WORD_PORCUPINE_KEYWORD_PATH", "hey-billy.ppn"
+).strip()
+WAKE_WORD_PORCUPINE_SENSITIVITY = float(
+    os.getenv("WAKE_WORD_PORCUPINE_SENSITIVITY", "0.20")
+)
 if TURN_EAGERNESS not in {"low", "medium", "high"}:
     TURN_EAGERNESS = "medium"
 

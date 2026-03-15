@@ -29,7 +29,9 @@ const SettingsForm = (() => {
             { id: 'TURN_EAGERNESS', key: 'TURN_EAGERNESS' },
             { id: 'BILLY_MODEL', key: 'BILLY_MODEL' },
             { id: 'BILLY_PINS_SELECT', key: 'BILLY_PINS' },
-            { id: 'HA_LANG', key: 'HA_LANG' }
+            { id: 'HA_LANG', key: 'HA_LANG' },
+            { id: 'WAKE_WORD_ENABLED', key: 'WAKE_WORD_ENABLED' },
+            { id: 'WAKE_WORD_BACKEND', key: 'WAKE_WORD_BACKEND' }
         ];
 
         dropdowns.forEach(({ id, key }) => {
@@ -66,7 +68,8 @@ const SettingsForm = (() => {
         // Save dropdown selections to localStorage when they change
         const dropdowns = [
             'OPENAI_MODEL', 'VOICE', 'RUN_MODE', 'TURN_EAGERNESS',
-            'BILLY_MODEL', 'BILLY_PINS_SELECT', 'HA_LANG'
+            'BILLY_MODEL', 'BILLY_PINS_SELECT', 'HA_LANG',
+            'WAKE_WORD_ENABLED', 'WAKE_WORD_BACKEND'
         ];
 
         dropdowns.forEach(id => {
@@ -157,7 +160,8 @@ const SettingsForm = (() => {
                         // Update dropdowns with new values
                         const dropdowns = [
                             'OPENAI_MODEL', 'VOICE', 'RUN_MODE', 'TURN_EAGERNESS',
-                            'BILLY_MODEL', 'BILLY_PINS_SELECT', 'HA_LANG'
+                            'BILLY_MODEL', 'BILLY_PINS_SELECT', 'HA_LANG',
+                            'WAKE_WORD_ENABLED', 'WAKE_WORD_BACKEND'
                         ];
                         dropdowns.forEach(id => {
                             const element = document.getElementById(id);
@@ -430,13 +434,109 @@ const SettingsForm = (() => {
         // Update dropdowns with new configuration values
         const dropdowns = [
             'OPENAI_MODEL', 'VOICE', 'RUN_MODE', 'TURN_EAGERNESS',
-            'BILLY_MODEL', 'BILLY_PINS_SELECT', 'HA_LANG'
+            'BILLY_MODEL', 'BILLY_PINS_SELECT', 'HA_LANG',
+            'WAKE_WORD_ENABLED', 'WAKE_WORD_BACKEND'
         ];
         dropdowns.forEach(id => {
             const element = document.getElementById(id);
             if (element && config[id]) {
                 element.value = config[id];
                 localStorage.setItem(`dropdown_${id}`, config[id]);
+            }
+        });
+    };
+
+    const bindWakeWordKeywordUpload = () => {
+        const uploadBtn = document.getElementById("wakeword-upload-keyword-btn");
+        const fileInput = document.getElementById("wakeword-keyword-file");
+        const status = document.getElementById("wakeword-keyword-status");
+        const keywordPathInput = document.getElementById("WAKE_WORD_PORCUPINE_KEYWORD_PATH");
+        const backendSelect = document.getElementById("WAKE_WORD_BACKEND");
+        if (!uploadBtn || !fileInput || !keywordPathInput) return;
+
+        const normalizeKeywordName = (value) => {
+            const raw = String(value || "").trim();
+            if (!raw) return "";
+            const parts = raw.split(/[\\/]/);
+            return parts[parts.length - 1] || raw;
+        };
+
+        const loadWakeWordKeywordOptions = async (preferredPath = null) => {
+            try {
+                const response = await fetch("/wakeword/keywords");
+                const data = await response.json();
+                const options = Array.isArray(data.keywords)
+                    ? data.keywords.map(normalizeKeywordName).filter(Boolean)
+                    : [];
+                const currentValue = normalizeKeywordName(
+                    preferredPath || keywordPathInput.value || keywordPathInput.dataset.current || ""
+                );
+                const merged = [...new Set([...options, currentValue].filter(Boolean))];
+                keywordPathInput.innerHTML = "";
+                merged.forEach((name) => {
+                    const opt = document.createElement("option");
+                    opt.value = name;
+                    opt.textContent = name;
+                    keywordPathInput.appendChild(opt);
+                });
+                if (currentValue && merged.includes(currentValue)) {
+                    keywordPathInput.value = currentValue;
+                }
+            } catch (error) {
+                console.error("Failed to load wake-word keywords:", error);
+            }
+        };
+
+        loadWakeWordKeywordOptions();
+
+        uploadBtn.addEventListener("click", async () => {
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) {
+                showNotification("Select a .ppn file first", "warning", 3000);
+                return;
+            }
+            if (!file.name.toLowerCase().endsWith(".ppn")) {
+                showNotification("Only .ppn files are supported", "warning", 3000);
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("keyword_file", file);
+
+            uploadBtn.disabled = true;
+            uploadBtn.classList.add("opacity-50", "cursor-not-allowed");
+            if (status) {
+                status.textContent = `Uploading ${file.name}...`;
+            }
+            try {
+                const response = await fetch("/wakeword/keyword/upload", {
+                    method: "POST",
+                    body: formData,
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || "Upload failed");
+                }
+                if (keywordPathInput && data.keyword_path) {
+                    await loadWakeWordKeywordOptions(data.keyword_path);
+                }
+                if (backendSelect) {
+                    backendSelect.value = "porcupine";
+                }
+                if (status) {
+                    status.textContent = `Keyword uploaded: ${data.keyword_path}`;
+                }
+                fileInput.value = "";
+                showNotification("Porcupine keyword uploaded", "success", 3000);
+            } catch (error) {
+                console.error("Wake-word keyword upload failed:", error);
+                if (status) {
+                    status.textContent = `Upload failed: ${error.message}`;
+                }
+                showNotification(`Keyword upload failed: ${error.message}`, "error", 5000);
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.classList.remove("opacity-50", "cursor-not-allowed");
             }
         });
     };
@@ -793,6 +893,7 @@ const SettingsForm = (() => {
         bindFactoryReset,
         bindEnvEditorCard,
         bindNewsSources,
+        bindWakeWordKeywordUpload,
     };
 })();
 

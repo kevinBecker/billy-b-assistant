@@ -40,8 +40,37 @@ function toggleDropdown(btn) {
     if (arrow) arrow.classList.toggle('rotate-180');
 }
 
-function toggleTooltip(el) {
+function findTooltipTrigger(tooltip) {
+    if (!tooltip) return null;
+    if (tooltip.id) {
+        const explicit = document.querySelector(
+            `[data-tooltip-target="${tooltip.id}"]`
+        );
+        if (explicit) return explicit;
+    }
+    return tooltip
+        .closest(".relative")
+        ?.querySelector('.material-icons[onclick*="toggleTooltip"]');
+}
+
+function updateTooltipContainerLayers() {
+    const sections = document.querySelectorAll(".collapsible-section");
+    sections.forEach(section => {
+        const hasVisibleTooltip = !!section.querySelector(
+            '[data-tooltip][data-visible="true"]'
+        );
+        section.style.position = "relative";
+        section.style.zIndex = hasVisibleTooltip ? "60" : "0";
+    });
+}
+
+function toggleTooltip(el, evt) {
     if (!el) return;
+    const clickEvent = evt || window.event;
+    if (clickEvent) {
+        clickEvent.preventDefault();
+        clickEvent.stopPropagation();
+    }
     el.classList.toggle("text-cyan-400");
 
     const explicitTargetId = el.getAttribute("data-tooltip-target");
@@ -50,6 +79,7 @@ function toggleTooltip(el) {
         if (explicitTooltip) {
             const visible = explicitTooltip.getAttribute("data-visible") === "true";
             explicitTooltip.setAttribute("data-visible", visible ? "false" : "true");
+            updateTooltipContainerLayers();
             return;
         }
     }
@@ -74,6 +104,7 @@ function toggleTooltip(el) {
 
     const visible = tooltip.getAttribute("data-visible") === "true";
     tooltip.setAttribute("data-visible", visible ? "false" : "true");
+    updateTooltipContainerLayers();
 }
 
 document.addEventListener('click', (e) => {
@@ -88,23 +119,25 @@ document.addEventListener('click', (e) => {
     
     // Close tooltips when clicking outside
     document.querySelectorAll('[data-tooltip]').forEach(tooltip => {
-        if (tooltip.getAttribute('data-visible') === 'true' && !tooltip.contains(e.target)) {
-            let helpIcon = null;
-            if (tooltip.id) {
-                helpIcon = document.querySelector(
-                    `[data-tooltip-target="${tooltip.id}"]`
-                );
-            }
-            if (!helpIcon) {
-                const container = tooltip.parentElement;
-                helpIcon = container?.querySelector('.material-icons');
-            }
-            if (helpIcon && !helpIcon.contains(e.target)) {
-                tooltip.setAttribute('data-visible', 'false');
-                helpIcon.classList.remove('text-cyan-400');
-            }
+        if (tooltip.getAttribute('data-visible') !== 'true') {
+            return;
+        }
+
+        if (tooltip.contains(e.target)) {
+            return;
+        }
+
+        const helpIcon = findTooltipTrigger(tooltip);
+        if (helpIcon && helpIcon.contains(e.target)) {
+            return;
+        }
+
+        tooltip.setAttribute('data-visible', 'false');
+        if (helpIcon) {
+            helpIcon.classList.remove('text-cyan-400');
         }
     });
+    updateTooltipContainerLayers();
 });
 
 // ===================== LOADING OVERLAY =====================

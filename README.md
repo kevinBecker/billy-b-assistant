@@ -419,6 +419,13 @@ MQTT_PASSWORD=<password>
 ## Optional overwrites
 MIC_TIMEOUT_SECONDS=5
 SILENCE_THRESHOLD=900
+FOLLOW_UP_RETRY_LIMIT=1
+WAKE_WORD_ENABLED=false
+WAKE_WORD_BACKEND=porcupine
+WAKE_WORD_COOLDOWN_SECONDS=4.0
+PORCUPINE_ACCESS_KEY=
+WAKE_WORD_PORCUPINE_KEYWORD_PATH=hey-billy.ppn
+WAKE_WORD_PORCUPINE_SENSITIVITY=0.20
 
 DEBUG_MODE=true
 DEBUG_MODE_INCLUDE_DELTA=false
@@ -432,9 +439,38 @@ ALLOW_UPDATE_PERSONALITY_INI=true
 **NEWS_DEFAULT_LOCATION / NEWS_DEFAULT_COUNTRY / NEWS_DEFAULT_LANGUAGE**: (Optional) defaults for weather and regional headlines  
 **MIC_TIMEOUT_SECONDS**: How long Billy should wait after your last mic activity before ending input  
 **SILENCE_THRESHOLD**: Audio threshold (RMS) for what counts as mic input;lower this value if Billy interrupts you too quickly, set higher if Billy doesn't respond (because he thinks you're still talking)  
+**FOLLOW_UP_RETRY_LIMIT**: Number of auto follow-up retries when Billy expects a follow-up but could not hear it clearly (or heard nothing), before ending the session (`1` default, allowed range `0..5`)  
+**WAKE_WORD_ENABLED**: Enables local wake-word listening while idle (`false` by default)  
+**WAKE_WORD_BACKEND**: Local detector backend (`porcupine`)  
+**WAKE_WORD_COOLDOWN_SECONDS**: Cooldown after a detection to reduce retriggers (default `4.0`)  
+**PORCUPINE_ACCESS_KEY**: Your Porcupine AccessKey (required when `WAKE_WORD_BACKEND=porcupine`)  
+**WAKE_WORD_PORCUPINE_KEYWORD_PATH**: Porcupine keyword filename (for example `hey-billy.ppn`). Billy resolves it from `wakewords/`.  
+**WAKE_WORD_PORCUPINE_SENSITIVITY**: Porcupine sensitivity from `0.0` to `1.0` (higher is more sensitive). Default is `0.20` to reduce near-match false triggers.  
 **DEBUG_MODE**: Print debug information such as OpenAI responses to the output stream  
 **DEBUG_MODE_INCLUDE_DELTA**: Also print voice and speech delta data, which can get very noisy  
 **ALLOW_UPDATE_PERSONALITY_INI**: If true, personality updates asked for by the user will be written and committed to the personality file. If false, changes to personality parameters will only affect the current running process (`true` is default)
+
+### Wake-word setup (Porcupine)
+
+Billy supports fully local wake-word detection using Porcupine.
+The default bundled wake-word is **"Hey Billy"** (`hey-billy.ppn`).
+
+1. Create a Porcupine AccessKey at <https://console.picovoice.ai/>.
+   - Picovoice signup may require linking/signing in with a GitHub account.
+   - If you do not have one yet, create one first at <https://github.com/signup>.
+2. Place a `.ppn` keyword file in `wakewords/` (or upload it via Web UI, which stores it there automatically).
+3. In the Web UI, open **Wake-word Settings** and:
+   - Enable wake-word
+   - Paste your `PORCUPINE_ACCESS_KEY`
+   - Select the keyword file from the dropdown
+   - Save settings
+4. Restart Billy (or restart service) and test the keyword.
+
+Notes:
+- `WAKE_WORD_PORCUPINE_KEYWORD_PATH` stores only the filename (for example `hey-billy.ppn`).
+- Billy resolves that filename automatically from `wakewords/`.
+- A default bundled keyword file is included: `hey-billy.ppn` (Hey Billy).
+- You can create your own custom wake-word in Picovoice and upload/select that `.ppn` instead.
 
 ### Example `persona.ini` File
 

@@ -54,6 +54,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     SettingsForm.bindFactoryReset();
     SettingsForm.bindEnvEditorCard();
     SettingsForm.bindNewsSources();
+    SettingsForm.bindWakeWordKeywordUpload();
     PersonaForm.handlePersonaSave();
     PersonaForm.bindPersonaSelector();
     PersonaForm.populatePersonaSelector();
