@@ -42,6 +42,7 @@ PERSONALITY: Use update_personality when users request changes (e.g., "be funnie
 
 SMART HOME: Only call smart_home_command for DIRECT commands ("turn on lights"). If asked to "ask if" or "check if", just speak the question.
 NEWS: Use get_news_digest for headlines, weather, and sports updates. Team/location are OPTIONAL inputs. If missing, call the tool anyway with available context and configured sources first; only ask a follow-up if the tool response still lacks enough information. IMPORTANT: for headlines, always set a concise `subject` based on user intent (use keyword-style labels like "technology", "sports", "project updates", "weather", "finance") so source keywords are used during source selection. Also set `query` when user asks about a specific topic/person/event. BEFORE calling the news tool, acknowledge VERY briefly (max 2 words), preferably exactly: "Checking."
+VISION: Use describe_scene when user asks you to look/see/watch/check what's in front of you, or asks what the camera can see. Keep descriptions factual and brief.
 
 USER SYSTEM:
 - identify_user: Call when someone introduces themselves ("I am Tom")
@@ -69,6 +70,7 @@ PERSONALITY: Use update_personality when users request changes (e.g., "be funnie
 
 SMART HOME: Only call smart_home_command for DIRECT commands ("turn on lights"). If asked to "ask if" or "check if", just speak the question.
 NEWS: Use get_news_digest for headlines, weather, and sports updates. Team/location are OPTIONAL inputs. If missing, call the tool anyway with available context and configured sources first; only ask a follow-up if the tool response still lacks enough information. IMPORTANT: for headlines, always set a concise `subject` based on user intent (use keyword-style labels like "technology", "sports", "project updates", "weather", "finance") so source keywords are used during source selection. Also set `query` when user asks about a specific topic/person/event. BEFORE calling the news tool, acknowledge VERY briefly (max 2 words), preferably exactly: "Checking."
+VISION: Use describe_scene when user asks you to look/see/watch/check what's in front of you, or asks what the camera can see. Keep descriptions factual and brief.
 
 USER SYSTEM:
 - identify_user: Call when someone introduces themselves ("I am Tom")
@@ -118,6 +120,19 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-realtime-mini")
 CONVERSATION_STATE_ENABLED_MODELS = {"gpt-realtime", "gpt-realtime-1.5"}
 
 
+def _is_camera_vision_enabled() -> bool:
+    hardware = os.getenv("CAMERA_HARDWARE", "none").strip().lower()
+    return hardware in {"rpi_camera", "usb_webcam"}
+
+
+def _filter_vision_instruction_line(text: str) -> str:
+    if _is_camera_vision_enabled():
+        return text
+    lines = text.splitlines()
+    filtered = [line for line in lines if not line.strip().startswith("VISION:")]
+    return "\n".join(filtered)
+
+
 def is_conversation_state_enabled(model: str | None = None) -> bool:
     """Whether conversation_state tool/instructions should be enabled."""
     m = (model or os.getenv("OPENAI_MODEL", OPENAI_MODEL) or "").strip()
@@ -126,11 +141,12 @@ def is_conversation_state_enabled(model: str | None = None) -> bool:
 
 def get_tool_instructions(model: str | None = None) -> str:
     """Return tool instructions appropriate for the selected model."""
-    return (
+    instructions = (
         TOOL_INSTRUCTIONS
         if is_conversation_state_enabled(model)
         else TOOL_INSTRUCTIONS_NO_CONVERSATION_STATE
     )
+    return _filter_vision_instruction_line(instructions)
 
 
 # === XAI Config ===
@@ -227,6 +243,17 @@ MOCKFISH = os.getenv("MOCKFISH", "false").lower() == "true"
 
 # === News Digest Config ===
 NEWS_REQUEST_TIMEOUT_SECONDS = float(os.getenv("NEWS_REQUEST_TIMEOUT_SECONDS", "6"))
+
+# === Camera Vision Config ===
+CAMERA_HARDWARE = os.getenv("CAMERA_HARDWARE", "none").strip().lower()
+if CAMERA_HARDWARE not in {"none", "rpi_camera", "usb_webcam"}:
+    CAMERA_HARDWARE = "none"
+LIBCAMERA_STILL_BIN = os.getenv("LIBCAMERA_STILL_BIN", "libcamera-still").strip()
+FFMPEG_BIN = os.getenv("FFMPEG_BIN", "ffmpeg").strip()
+CAMERA_DEVICE_INDEX = int(os.getenv("CAMERA_DEVICE_INDEX", "0"))
+CAMERA_CAPTURE_WIDTH = int(os.getenv("CAMERA_CAPTURE_WIDTH", "1280"))
+CAMERA_CAPTURE_HEIGHT = int(os.getenv("CAMERA_CAPTURE_HEIGHT", "720"))
+CAMERA_CAPTURE_TIMEOUT_SECONDS = float(os.getenv("CAMERA_CAPTURE_TIMEOUT_SECONDS", "8"))
 
 # === User Profile Config ===
 DEFAULT_USER = os.getenv("DEFAULT_USER", "guest").strip()

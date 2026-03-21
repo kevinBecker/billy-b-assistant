@@ -30,6 +30,45 @@ def logs():
         return jsonify({"logs": "Failed to retrieve logs", "error": str(e)}), 500
 
 
+@bp.route("/logs/clear", methods=["POST"])
+def clear_logs():
+    units = ["billy.service", "billy-webconfig.service"]
+    errors: list[str] = []
+
+    try:
+        rotate_result = subprocess.run(
+            ["sudo", "journalctl", "--rotate"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if rotate_result.returncode != 0:
+            stderr = rotate_result.stderr.strip() or rotate_result.stdout.strip()
+            errors.append(f"journalctl --rotate failed: {stderr}")
+    except FileNotFoundError:
+        return jsonify({"status": "error", "errors": ["journalctl not available"]}), 500
+    except Exception as e:
+        errors.append(f"journalctl --rotate failed: {e}")
+
+    for unit in units:
+        args = ["sudo", "journalctl", "--vacuum-time=1s", "--unit", unit]
+        try:
+            result = subprocess.run(args, check=False, capture_output=True, text=True)
+            if result.returncode != 0:
+                stderr = result.stderr.strip() or result.stdout.strip()
+                errors.append(f"{unit}: {' '.join(args[1:])} failed: {stderr}")
+        except FileNotFoundError:
+            errors.append("journalctl not available")
+            break
+        except Exception as e:
+            errors.append(f"{unit}: {' '.join(args[1:])} failed: {e}")
+
+    if errors:
+        return jsonify({"status": "error", "errors": errors}), 500
+
+    return jsonify({"status": "ok"})
+
+
 @bp.route("/service/<action>")
 def control_service(action):
     if action not in ["start", "stop", "restart"]:

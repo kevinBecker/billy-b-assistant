@@ -43,6 +43,7 @@ class LocalWakeWordListener:
         self._stop_event = threading.Event()
         self._backend_impl: WakeWordBackend | None = None
         self._last_status_log_at = 0.0
+        self._open_error_backoff_seconds = 0.5
 
     def start(self):
         if self._thread and self._thread.is_alive():
@@ -96,9 +97,23 @@ class LocalWakeWordListener:
 
             try:
                 detected = self._listen_until_detected_or_paused()
+                # Successful listen cycle (detected or paused) resets backoff.
+                self._open_error_backoff_seconds = 0.5
             except Exception as e:
-                logger.warning(f"Wake-word listen loop error: {e}", "⚠️")
-                time.sleep(1.0)
+                msg = str(e).lower()
+                if "device unavailable" in msg or "-9985" in msg:
+                    sleep_for = min(self._open_error_backoff_seconds, 8.0)
+                    logger.warning(
+                        f"Wake-word mic unavailable (-9985). Backing off for {sleep_for:.1f}s: {e}",
+                        "⚠️",
+                    )
+                    self._open_error_backoff_seconds = min(
+                        self._open_error_backoff_seconds * 2.0, 8.0
+                    )
+                else:
+                    sleep_for = 1.0
+                    logger.warning(f"Wake-word listen loop error: {e}", "⚠️")
+                time.sleep(sleep_for)
                 continue
 
             if not detected:

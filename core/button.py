@@ -106,6 +106,32 @@ def is_billy_speaking():
     return bool(not audio.playback_queue.empty())
 
 
+def _is_wakeword_paused() -> bool:
+    """Return True whenever wake-word should NOT touch the mic device."""
+    if is_active:
+        return True
+    if _session_start_lock.locked():
+        return True
+
+    si = session_instance
+    if si is None:
+        return False
+
+    try:
+        if si.session_active.is_set():
+            return True
+    except Exception:
+        pass
+
+    try:
+        if getattr(si.mic_manager, "mic_running", False):
+            return True
+    except Exception:
+        pass
+
+    return False
+
+
 def _handle_active_session_button_press():
     global is_active, session_thread, session_instance
 
@@ -357,7 +383,7 @@ def start_loop():
             wakeword_listener = LocalWakeWordListener(
                 backend=config.WAKE_WORD_BACKEND,
                 callback=on_wake_word,
-                is_session_active=lambda: is_active,
+                is_session_active=_is_wakeword_paused,
                 cooldown_seconds=config.WAKE_WORD_COOLDOWN_SECONDS,
                 device_index=audio.MIC_DEVICE_INDEX,
                 capture_rate=audio.MIC_RATE,

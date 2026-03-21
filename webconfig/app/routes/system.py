@@ -7,6 +7,8 @@ import sys
 import threading
 import time
 import uuid
+from base64 import b64decode
+from glob import glob
 from pathlib import Path
 
 from dotenv import find_dotenv, set_key
@@ -15,6 +17,7 @@ from packaging.version import parse as parse_version
 from werkzeug.utils import secure_filename
 
 from core.news_manager import load_news_sources, save_news_sources
+from core.vision import describe_scene
 
 from ..core_imports import core_config, voice_provider_registry
 from ..state import (
@@ -66,6 +69,8 @@ CONFIG_KEYS = [
     "SHOW_RC_VERSIONS",
     "FLAP_ON_BOOT",
     "NEWS_REQUEST_TIMEOUT_SECONDS",
+    "CAMERA_HARDWARE",
+    "CAMERA_DEVICE_INDEX",
     "FOLLOW_UP_RETRY_LIMIT",
     "WAKE_WORD_ENABLED",
     "WAKE_WORD_BACKEND",
@@ -75,6 +80,73 @@ CONFIG_KEYS = [
     "WAKE_WORD_PORCUPINE_SENSITIVITY",
 ]
 WAKEWORD_REL_ROOT = Path("wakewords")
+
+
+def _detect_rpi_camera_available() -> bool:
+    camera_bin = str(getattr(core_config, "LIBCAMERA_STILL_BIN", "libcamera-still"))
+    try:
+        result = subprocess.run(
+            [camera_bin, "--list-cameras"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=3.0,
+        )
+    except FileNotFoundError:
+        return False
+    except Exception:
+        return False
+
+    combined = f"{result.stdout or ''}\n{result.stderr or ''}".lower()
+    if "no cameras available" in combined:
+        return False
+    if "available cameras" in combined:
+        return True
+    # Fallback: some builds may still expose camera lines without the header.
+    return "camera" in combined and "/base/" in combined
+
+
+def _detect_usb_video_nodes() -> list[dict[str, str | int]]:
+    nodes: list[dict[str, str | int]] = []
+    for path in sorted(glob("/dev/video*")):
+        name = os.path.basename(path)
+        suffix = name.removeprefix("video")
+        if not suffix.isdigit():
+            continue
+        index = int(suffix)
+        sys_video_dir = Path("/sys/class/video4linux") / name
+        sys_name_path = sys_video_dir / "name"
+        sys_device_path = sys_video_dir / "device"
+
+        device_name = ""
+        try:
+            if sys_name_path.exists():
+                device_name = sys_name_path.read_text(encoding="utf-8").strip()
+        except Exception:
+            device_name = ""
+
+        # Keep the dropdown focused on real USB webcams only.
+        try:
+            real_device_path = os.path.realpath(str(sys_device_path))
+        except Exception:
+            real_device_path = ""
+        is_usb_backed = "/usb" in real_device_path.lower()
+        if not is_usb_backed:
+            continue
+
+        lower_name = device_name.lower()
+        if "metadata" in lower_name:
+            continue
+
+        label = f"USB Webcam ({path})"
+        if device_name:
+            label = f"USB Webcam ({path}) - {device_name}"
+        nodes.append({
+            "path": path,
+            "index": index,
+            "label": label,
+        })
+    return nodes
 
 
 def _list_available_wakeword_keywords() -> list[str]:
@@ -579,6 +651,75 @@ def upload_porcupine_keyword():
 @bp.route("/wakeword/keywords", methods=["GET"])
 def list_wakeword_keywords():
     return jsonify({"keywords": _list_available_wakeword_keywords()})
+
+
+@bp.route("/camera/devices", methods=["GET"])
+def list_camera_devices():
+    rpi_available = _detect_rpi_camera_available()
+    usb_nodes = _detect_usb_video_nodes()
+
+    options: list[dict[str, str]] = [{"value": "none", "label": "None"}]
+    if rpi_available:
+        options.append({
+            "value": "rpi_camera",
+            "label": "Raspberry Pi Camera Module",
+        })
+    for node in usb_nodes:
+        options.append({
+            "value": f"usb_webcam:{node['index']}",
+            "label": str(node["label"]),
+        })
+
+    return jsonify({
+        "options": options,
+        "detected": {
+            "rpi_camera": rpi_available,
+            "usb_webcams": usb_nodes,
+        },
+    })
+
+
+@bp.route("/camera/preview", methods=["POST"])
+def camera_preview():
+    data = request.get_json(silent=True) or {}
+    selection = str(data.get("selection") or "none").strip().lower()
+
+    camera_hardware = "none"
+    camera_device_index = 0
+    if selection == "rpi_camera":
+        camera_hardware = "rpi_camera"
+    elif selection.startswith("usb_webcam:"):
+        camera_hardware = "usb_webcam"
+        suffix = selection.split(":", 1)[1].strip()
+        if suffix.isdigit():
+            camera_device_index = int(suffix)
+    elif selection == "usb_webcam":
+        camera_hardware = "usb_webcam"
+
+    result = describe_scene({
+        "camera_hardware": camera_hardware,
+        "camera_device_index": camera_device_index,
+        "capture_timeout_seconds": 4,
+        "usb_scan_fallback": False,
+    })
+    if not result.get("ok"):
+        return jsonify({
+            "ok": False,
+            "error": result.get("error") or "Camera preview failed",
+        }), 400
+
+    image_url = str(result.get("image_url") or "")
+    if not image_url.startswith("data:image/jpeg;base64,"):
+        return jsonify({
+            "ok": False,
+            "error": "Camera preview did not return an image",
+        }), 500
+
+    return jsonify({
+        "ok": True,
+        "image_url": image_url,
+        "bytes": len(b64decode(image_url.split(",", 1)[1])),
+    })
 
 
 @bp.route("/config")
