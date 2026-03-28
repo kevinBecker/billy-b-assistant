@@ -4,6 +4,7 @@ import glob
 import json
 import os
 import random
+import re
 import sys
 import threading
 import time
@@ -59,6 +60,50 @@ PROVIDER_MIC_RATE = 24000
 PROVIDER_OUTPUT_RATE = 24000
 
 
+def _normalize_device_preference(value: str) -> str:
+    normalized = (value or "").strip().lower()
+    normalized = re.sub(r"\s*\(hw:\d+,\d+\)\s*", " ", normalized)
+    normalized = re.sub(r"\s*\(#\d+\)\s*", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _parse_hw_card_index(name: str) -> int | None:
+    match = re.search(r"\(hw\s*:\s*(\d+)\s*,\s*\d+\)", name or "", re.IGNORECASE)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except Exception:
+        return None
+
+
+def _usb_path_for_card(card_index: int | None) -> str | None:
+    if card_index is None:
+        return None
+    try:
+        sysfs = f"/sys/class/sound/card{card_index}/device"
+        real = os.path.realpath(sysfs)
+        base = os.path.basename(real).split(":", 1)[0]
+        if re.match(r"^\d+-\d+(?:\.\d+)*$", base):
+            return base
+        return None
+    except Exception:
+        return None
+
+
+def _preference_matches_device(preference: str, device_name: str) -> bool:
+    if not preference:
+        return True
+    if preference.lower().startswith("usbpath:"):
+        wanted = preference.split(":", 1)[1].strip().lower()
+        card_index = _parse_hw_card_index(device_name)
+        actual = (_usb_path_for_card(card_index) or "").lower()
+        return bool(wanted and actual and wanted == actual)
+    pref_norm = _normalize_device_preference(preference)
+    name_norm = _normalize_device_preference(device_name)
+    return pref_norm in name_norm or name_norm in pref_norm
+
+
 def _pick_mic_rate(device_index: int, channels: int, preferred_rate=PROVIDER_MIC_RATE):
     for rate in [preferred_rate, 48000, 44100]:
         try:
@@ -85,11 +130,7 @@ def detect_devices(debug=False):
             )
 
         if MIC_DEVICE_INDEX is None and d['max_input_channels'] > 0:
-            if (
-                MIC_PREFERENCE
-                and MIC_PREFERENCE.lower() in d['name'].lower()
-                or not MIC_PREFERENCE
-            ):
+            if _preference_matches_device(MIC_PREFERENCE, str(d['name'])):
                 MIC_DEVICE_INDEX = i
                 logger.success(f"Input device index {i} selected.")
 
@@ -103,11 +144,7 @@ def detect_devices(debug=False):
             CHUNK_SIZE = int(MIC_RATE * CHUNK_MS / 1000)
 
         if OUTPUT_DEVICE_INDEX is None and d['max_output_channels'] > 0:
-            if (
-                SPEAKER_PREFERENCE
-                and SPEAKER_PREFERENCE.lower() in d['name'].lower()
-                or not SPEAKER_PREFERENCE
-            ):
+            if _preference_matches_device(SPEAKER_PREFERENCE, str(d['name'])):
                 OUTPUT_DEVICE_INDEX = i
                 logger.success(f"Output device index {i} selected.")
 

@@ -79,6 +79,7 @@ def describe_scene(args: dict[str, Any]) -> dict[str, Any]:
         maximum=20,
     )
     usb_scan_fallback = _coerce_bool(args.get("usb_scan_fallback"), default=True)
+    fresh_frame = _coerce_bool(args.get("fresh_frame"), default=False)
 
     if MOCKFISH:
         return SceneDescriptionResult(
@@ -115,6 +116,7 @@ def describe_scene(args: dict[str, Any]) -> dict[str, Any]:
             libcamera_still_bin=str(runtime["libcamera_still_bin"]),
             ffmpeg_bin=str(runtime["ffmpeg_bin"]),
             usb_scan_fallback=usb_scan_fallback,
+            fresh_frame=fresh_frame,
         )
         if capture_error:
             return SceneDescriptionResult(
@@ -150,6 +152,7 @@ def _capture_image(
     libcamera_still_bin: str,
     ffmpeg_bin: str,
     usb_scan_fallback: bool,
+    fresh_frame: bool,
 ) -> str | None:
     if camera_hardware == "usb_webcam":
         return _capture_usb_webcam_image(
@@ -160,6 +163,7 @@ def _capture_image(
             capture_height=capture_height,
             ffmpeg_bin=ffmpeg_bin,
             usb_scan_fallback=usb_scan_fallback,
+            fresh_frame=fresh_frame,
         )
 
     return _capture_rpi_camera_image(
@@ -237,6 +241,7 @@ def _capture_usb_webcam_image(
     capture_height: int,
     ffmpeg_bin: str,
     usb_scan_fallback: bool,
+    fresh_frame: bool,
 ) -> str | None:
     configured_device = f"/dev/video{camera_device_index}"
     device_paths = _build_usb_device_candidates(
@@ -263,6 +268,7 @@ def _capture_usb_webcam_image(
                 capture_width=capture_width,
                 capture_height=capture_height,
                 ffmpeg_bin=ffmpeg_bin,
+                fresh_frame=fresh_frame,
             )
             if error is None:
                 if device_path != configured_device:
@@ -330,6 +336,17 @@ def _list_usb_video_capture_nodes() -> list[str]:
             continue
         if "metadata" in node_name:
             continue
+        # Prefer primary V4L2 nodes (index 0); skip common metadata/helper
+        # sibling nodes (often index 1) that fail capture ioctls.
+        index_path = sys_video_dir / "index"
+        try:
+            if (
+                index_path.exists()
+                and index_path.read_text(encoding="utf-8").strip() != "0"
+            ):
+                continue
+        except Exception:
+            pass
         results.append(path)
     return results
 
@@ -343,7 +360,40 @@ def _try_usb_capture_command(
     capture_width: int,
     capture_height: int,
     ffmpeg_bin: str,
+    fresh_frame: bool,
 ) -> str | None:
+    if fresh_frame:
+        warmup_cmd = [
+            ffmpeg_bin,
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "video4linux2",
+            "-framerate",
+            "15",
+        ]
+        if input_format:
+            warmup_cmd.extend(["-input_format", input_format])
+        warmup_cmd.extend([
+            "-i",
+            device_path,
+            "-frames:v",
+            "1",
+            "-f",
+            "null",
+            "-",
+        ])
+        with contextlib.suppress(Exception):
+            subprocess.run(
+                warmup_cmd,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=max(0.8, min(float(timeout_seconds), 1.5)),
+            )
+
     camera_cmd = [
         ffmpeg_bin,
         "-nostdin",

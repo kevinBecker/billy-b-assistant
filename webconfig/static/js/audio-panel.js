@@ -12,6 +12,8 @@ const AudioPanel = (() => {
     if (speakerCheckBtn) {
         speakerCheckBtn.addEventListener("click", async () => {
         try {
+            const speakerSelect = document.getElementById("SPEAKER_PREFERENCE");
+            const selectedSpeakerPreference = speakerSelect ? String(speakerSelect.value || "") : "";
             const data = await ServiceStatus.fetchStatus();
             if (data.status === "active") {
                 showNotification("Stopping Billy service for speaker test...", "warning");
@@ -19,7 +21,10 @@ const AudioPanel = (() => {
                 // Stop the Billy service
                 const stopResponse = await fetch("/stop-billy", {method: "POST"});
                 if (!stopResponse.ok) {
-                    throw new Error("Failed to stop Billy service");
+                    const reason = `HTTP ${stopResponse.status}`;
+                    console.error("Failed to stop Billy service:", reason);
+                    showNotification(`Failed to stop Billy service: ${reason}`, "error");
+                    return;
                 }
                 
                 // Wait a moment for the service to stop
@@ -28,13 +33,124 @@ const AudioPanel = (() => {
                 showNotification("Billy service stopped. Running speaker test...", "success");
             }
             
-            await fetch("/speaker-test", {method: "POST"});
+            await fetch("/speaker-test", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({speaker_preference: selectedSpeakerPreference}),
+            });
             showNotification("Speaker test triggered");
         } catch (err) {
             console.error("Failed to trigger speaker test:", err);
             showNotification("Failed to trigger speaker test: " + err.message, "error");
         }
         });
+    }
+
+    async function saveAudioPreference(key, value) {
+        try {
+            const saveResponse = await fetch("/save", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({[key]: value}),
+            });
+            if (!saveResponse.ok) {
+                console.error(`Failed saving ${key}: HTTP ${saveResponse.status}`);
+                return false;
+            }
+            const saveData = await saveResponse.json();
+            await fetch("/config/auto-refresh", {method: "POST"});
+            if (saveData && saveData.audio_restart_required) {
+                await fetch("/restart-billy", {method: "POST"});
+                showNotification(`${key === "MIC_PREFERENCE" ? "Microphone" : "Speaker"} updated – Billy restarted`, "success");
+            }
+            return true;
+        } catch (error) {
+            console.error(`Failed to save ${key}:`, error);
+            return false;
+        }
+    }
+
+    async function loadAudioDeviceSelectors() {
+        const micSelect = document.getElementById("MIC_PREFERENCE");
+        const speakerSelect = document.getElementById("SPEAKER_PREFERENCE");
+        if (!micSelect || !speakerSelect) return;
+
+        const populateSelect = (selectEl, devices, selectedValue, storageKey) => {
+            const previous = localStorage.getItem(storageKey) || "";
+            const target = selectedValue || previous || "";
+
+            selectEl.innerHTML = "";
+            const autoOption = document.createElement("option");
+            autoOption.value = "";
+            autoOption.textContent = "Auto detect";
+            selectEl.appendChild(autoOption);
+
+            const values = new Set([""]);
+            (devices || []).forEach((entry) => {
+                const opt = document.createElement("option");
+                opt.value = String(entry.value || "");
+                opt.textContent = String(entry.label || entry.value || "");
+                selectEl.appendChild(opt);
+                values.add(opt.value);
+            });
+
+            if (target && !values.has(target)) {
+                const stale = document.createElement("option");
+                stale.value = target;
+                if (String(target).startsWith("usbpath:")) {
+                    const path = String(target).split(":", 2)[1] || "?";
+                    stale.textContent = `USB device on bus path ${path} (saved; currently unavailable)`;
+                } else {
+                    stale.textContent = `${target} (saved; currently unavailable)`;
+                }
+                selectEl.appendChild(stale);
+            }
+
+            selectEl.value = values.has(target) || target ? target : "";
+            localStorage.setItem(storageKey, selectEl.value);
+        };
+
+        try {
+            const res = await fetch("/audio/devices");
+            const data = await res.json();
+            if (!res.ok) {
+                console.error("Failed to load audio devices:", data.error || `HTTP ${res.status}`);
+                setTimeout(() => updateDeviceLabels(), 2000);
+                return;
+            }
+
+            populateSelect(
+                micSelect,
+                data.input_devices,
+                data.selected_mic,
+                "dropdown_MIC_PREFERENCE",
+            );
+            populateSelect(
+                speakerSelect,
+                data.output_devices,
+                data.selected_speaker,
+                "dropdown_SPEAKER_PREFERENCE",
+            );
+
+            micSelect.addEventListener("change", () => {
+                localStorage.setItem("dropdown_MIC_PREFERENCE", micSelect.value);
+                saveAudioPreference("MIC_PREFERENCE", micSelect.value);
+            });
+            speakerSelect.addEventListener("change", () => {
+                localStorage.setItem(
+                    "dropdown_SPEAKER_PREFERENCE",
+                    speakerSelect.value,
+                );
+                saveAudioPreference("SPEAKER_PREFERENCE", speakerSelect.value);
+            });
+
+            // Re-resolve labels after device selectors are populated.
+            updateDeviceLabels();
+        } catch (error) {
+            console.error("Failed to load audio device selectors:", error);
+            // Retry label refresh even if selectors fail once during boot races.
+            setTimeout(() => updateDeviceLabels(), 2000);
+        }
     }
 
     async function toggleMicCheck() {
@@ -207,7 +323,7 @@ const AudioPanel = (() => {
         });
     }
 
-    async function updateDeviceLabels() {
+    async function updateDeviceLabels(retries = 0) {
         try {
             const res = await fetch("/device-info");
             const data = await res.json();
@@ -220,15 +336,22 @@ const AudioPanel = (() => {
             };
             updateParentClass("mic-label", data.mic);
             updateParentClass("speaker-label", data.speaker);
+
+            const hasUnknown = String(data.mic || "").toLowerCase() === "unknown"
+                || String(data.speaker || "").toLowerCase() === "unknown";
+            if (hasUnknown && retries < 6) {
+                setTimeout(() => updateDeviceLabels(retries + 1), 1500);
+            }
         } catch (error) {
             console.error("Failed to fetch device info:", error);
+            if (retries < 6) {
+                setTimeout(() => updateDeviceLabels(retries + 1), 1500);
+            }
         }
     }
 
-    return {loadMicGain, updateDeviceLabels};
+    return {loadMicGain, updateDeviceLabels, loadAudioDeviceSelectors};
 })();
 
 // Make AudioPanel globally available
 window.AudioPanel = AudioPanel;
-
-

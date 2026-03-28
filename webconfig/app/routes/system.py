@@ -11,7 +11,7 @@ from base64 import b64decode
 from glob import glob
 from pathlib import Path
 
-from dotenv import find_dotenv, set_key
+from dotenv import dotenv_values, find_dotenv, set_key
 from flask import Blueprint, jsonify, render_template, request
 from packaging.version import parse as parse_version
 from werkzeug.utils import secure_filename
@@ -106,6 +106,38 @@ def _detect_rpi_camera_available() -> bool:
     return "camera" in combined and "/base/" in combined
 
 
+def _is_v4l2_capture_capable(sys_video_dir: Path) -> bool:
+    """Return True only for nodes with video-capture capability."""
+    # V4L2 capability bits (videodev2.h)
+    v4l2_cap_video_capture = 0x00000001
+    v4l2_cap_video_capture_mplane = 0x00001000
+    v4l2_cap_meta_capture = 0x00800000
+
+    caps_path = sys_video_dir / "device_caps"
+    try:
+        if not caps_path.exists():
+            # Keep backward-compatible behavior on platforms without device_caps.
+            return True
+        caps = int(caps_path.read_text(encoding="utf-8").strip(), 16)
+    except Exception:
+        return True
+
+    has_capture = bool(caps & (v4l2_cap_video_capture | v4l2_cap_video_capture_mplane))
+    has_only_metadata = bool(caps & v4l2_cap_meta_capture) and not has_capture
+    return has_capture and not has_only_metadata
+
+
+def _is_primary_v4l2_node(sys_video_dir: Path) -> bool:
+    """Prefer primary node index 0 to skip common metadata/helper siblings."""
+    index_path = sys_video_dir / "index"
+    try:
+        if not index_path.exists():
+            return True
+        return index_path.read_text(encoding="utf-8").strip() == "0"
+    except Exception:
+        return True
+
+
 def _detect_usb_video_nodes() -> list[dict[str, str | int]]:
     nodes: list[dict[str, str | int]] = []
     for path in sorted(glob("/dev/video*")):
@@ -137,10 +169,15 @@ def _detect_usb_video_nodes() -> list[dict[str, str | int]]:
         lower_name = device_name.lower()
         if "metadata" in lower_name:
             continue
+        if not _is_v4l2_capture_capable(sys_video_dir):
+            continue
+        if not _is_primary_v4l2_node(sys_video_dir):
+            continue
 
-        label = f"USB Webcam ({path})"
         if device_name:
-            label = f"USB Webcam ({path}) - {device_name}"
+            label = f"{device_name} ({path}) (#{index})"
+        else:
+            label = f"USB Webcam ({path}) (#{index})"
         nodes.append({
             "path": path,
             "index": index,
@@ -593,8 +630,16 @@ def release_note():
 @bp.route("/save", methods=["POST"])
 def save():
     data = request.json
+    existing_env = dotenv_values(ENV_PATH) if os.path.exists(ENV_PATH) else {}
     old_port = os.getenv("FLASK_PORT", "80")
     changed_port = False
+    audio_restart_required = False
+    audio_restart_keys = {
+        "MIC_PREFERENCE",
+        "SPEAKER_PREFERENCE",
+        "MIC_TIMEOUT_SECONDS",
+        "SILENCE_THRESHOLD",
+    }
     for key, value in data.items():
         if key in CONFIG_KEYS:
             if key == "FOLLOW_UP_RETRY_LIMIT":
@@ -603,10 +648,16 @@ def save():
                 except (TypeError, ValueError):
                     parsed = 1
                 value = str(max(0, min(5, parsed)))
+            old_value = str(existing_env.get(key, ""))
+            new_value = str(value)
             set_key(ENV_PATH, key, value, quote_mode='never')
             if key == "FLASK_PORT" and str(value) != str(old_port):
                 changed_port = True
+            if key in audio_restart_keys and new_value != old_value:
+                audio_restart_required = True
     response = {"status": "ok"}
+    if audio_restart_required:
+        response["audio_restart_required"] = True
     if changed_port:
         response["port_changed"] = True
         threading.Thread(target=delayed_restart).start()
@@ -701,6 +752,7 @@ def camera_preview():
         "camera_device_index": camera_device_index,
         "capture_timeout_seconds": 4,
         "usb_scan_fallback": False,
+        "fresh_frame": True,
     })
     if not result.get("ok"):
         return jsonify({

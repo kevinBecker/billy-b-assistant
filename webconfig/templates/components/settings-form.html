@@ -334,10 +334,30 @@
                 </select>
             </div>
 
+            <div class="mb-4">
+                <label for="MIC_PREFERENCE" class="block font-semibold text-sm text-slate-300 mb-1">
+                    Microphone Device
+                </label>
+                <select id="MIC_PREFERENCE" name="MIC_PREFERENCE"
+                        class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                    <option value="">Auto detect</option>
+                </select>
+            </div>
+
+            <div class="mb-4">
+                <label for="SPEAKER_PREFERENCE" class="block font-semibold text-sm text-slate-300 mb-1">
+                    Speaker Device
+                </label>
+                <select id="SPEAKER_PREFERENCE" name="SPEAKER_PREFERENCE"
+                        class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                    <option value="">Auto detect</option>
+                </select>
+            </div>
+
             <div class="mb-4 relative">
                 <label for="CAMERA_HARDWARE"
                        class="flex justify-between items-center font-semibold text-sm text-slate-300">
-                    Camera Hardware
+                    Camera Device
                     <span class="material-icons align-middle hover:text-cyan-400 cursor-pointer ml-1"
                           onclick="toggleTooltip(this)">help_outline</span>
                 </label>
@@ -350,39 +370,37 @@
                         <b>USB Webcam</b>: uses <code>ffmpeg</code> via V4L2 (<code>/dev/videoX</code>).
                     </div>
 
-                    <select id="CAMERA_HARDWARE" name="CAMERA_HARDWARE"
-                            class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                        <option value="none" {% if config.get(
-                        'CAMERA_HARDWARE', 'none') == 'none' %}selected{% endif %}>
-                        None
-                        </option>
-                        <option value="rpi_camera" {% if config.get(
-                        'CAMERA_HARDWARE') == 'rpi_camera' %}selected{% endif %}>
-                        Raspberry Pi Camera Module
-                        </option>
-                        <option value="usb_webcam" {% if config.get(
-                        'CAMERA_HARDWARE') == 'usb_webcam' %}selected{% endif %}>
-                        USB Webcam
-                        </option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="mb-4">
-                <label class="block font-semibold text-sm text-slate-300 mb-1">Camera Preview</label>
-                <div class="flex flex-wrap items-center gap-3">
-                    <button type="button" id="test-camera-btn"
-                            class="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded flex gap-2 items-center cursor-pointer">
-                        <span class="material-icons text-sm">photo_camera</span>
-                        Test Camera
-                    </button>
-                    <span id="camera-preview-status" class="text-xs text-slate-400">No preview yet.</span>
-                </div>
-                <div class="mt-3">
-                    <img id="camera-preview-image"
-                         alt="Camera preview"
-                         class="hidden w-full max-w-xs rounded border border-zinc-700 shadow-lg"
-                    />
+                    <div class="flex flex-wrap md:flex-nowrap items-center gap-3 mt-1">
+                        <select id="CAMERA_HARDWARE" name="CAMERA_HARDWARE"
+                                class="w-full p-3 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                            <option value="none" {% if config.get(
+                            'CAMERA_HARDWARE', 'none') == 'none' %}selected{% endif %}>
+                            None
+                            </option>
+                            <option value="rpi_camera" {% if config.get(
+                            'CAMERA_HARDWARE') == 'rpi_camera' %}selected{% endif %}>
+                            Raspberry Pi Camera Module
+                            </option>
+                            <option value="usb_webcam" {% if config.get(
+                            'CAMERA_HARDWARE') == 'usb_webcam' %}selected{% endif %}>
+                            USB Webcam
+                            </option>
+                        </select>
+                        <button type="button" id="test-camera-btn"
+                                class="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded flex gap-2 items-center cursor-pointer whitespace-nowrap">
+                            <span class="material-icons text-sm">photo_camera</span>
+                            Test Camera
+                        </button>
+                    </div>
+                    <div class="mt-2">
+                        <span id="camera-preview-status" class="text-xs text-slate-400">No preview yet.</span>
+                    </div>
+                    <div class="mt-3">
+                        <img id="camera-preview-image"
+                             alt="Camera preview"
+                             class="hidden w-full rounded border border-zinc-700 shadow-lg"
+                        />
+                    </div>
                 </div>
             </div>
 

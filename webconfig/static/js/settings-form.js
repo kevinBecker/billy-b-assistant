@@ -315,6 +315,11 @@ const SettingsForm = (() => {
                 showNotification("Settings saved – Billy restarted", "success");
             }
 
+            if (saveResult.audio_restart_required) {
+                await fetch("/restart-billy", {method: "POST"});
+                showNotification("Audio settings changed – Billy restarted", "success");
+            }
+
             if (portChanged || hostnameChanged) {
                 const targetHost = hostnameChanged ? `${newHostname}.local` : window.location.hostname;
                 const targetPort = portChanged ? newPort : (window.location.port || 80);
@@ -375,7 +380,7 @@ const SettingsForm = (() => {
         };
 
         if (resetCard) {
-            resetCard.addEventListener("click", (e) => {
+            resetCard.addEventListener("click", () => {
                 const isHidden = resetBtnWrapper.classList.contains("hidden");
                 if (isHidden) {
                     resetBtnWrapper.classList.remove("hidden");
@@ -638,7 +643,13 @@ const SettingsForm = (() => {
                 });
                 const data = await response.json();
                 if (!response.ok) {
-                    throw new Error(data.error || "Upload failed");
+                    const errorMessage = data.error || "Upload failed";
+                    console.error("Wake-word keyword upload failed:", errorMessage);
+                    if (status) {
+                        status.textContent = `Upload failed: ${errorMessage}`;
+                    }
+                    showNotification(`Keyword upload failed: ${errorMessage}`, "error", 5000);
+                    return;
                 }
                 if (keywordPathInput && data.keyword_path) {
                     await loadWakeWordKeywordOptions(data.keyword_path);
@@ -710,8 +721,8 @@ const SettingsForm = (() => {
             .replaceAll("&#123;", "{")
             .replaceAll("&#125;", "}");
 
-        if (/\{\{\s*query\s*\}\}/i.test(candidate)) return true;
-        if (/\{\s*query\s*\}/i.test(candidate)) return true;
+        if (/\{\{\s*query\s*}}/i.test(candidate)) return true;
+        if (/\{\s*query\s*}/i.test(candidate)) return true;
         if (/%7B%7B\s*query\s*%7D%7D/i.test(candidate)) return true;
         if (/%7B\s*query\s*%7D/i.test(candidate)) return true;
 
@@ -721,8 +732,8 @@ const SettingsForm = (() => {
                 const decoded = decodeURIComponent(candidate);
                 if (decoded === candidate) break;
                 candidate = decoded;
-                if (/\{\{\s*query\s*\}\}/i.test(candidate)) return true;
-                if (/\{\s*query\s*\}/i.test(candidate)) return true;
+                if (/\{\{\s*query\s*}}/i.test(candidate)) return true;
+                if (/\{\s*query\s*}/i.test(candidate)) return true;
                 if (/%7B%7B\s*query\s*%7D%7D/i.test(candidate)) return true;
                 if (/%7B\s*query\s*%7D/i.test(candidate)) return true;
             }
