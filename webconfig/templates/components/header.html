@@ -97,16 +97,6 @@
     <section id="log-panel" class="mt-2 relative hidden">
         <!-- Log Level Control -->
         <div class="p-3 bg-zinc-800/50 rounded border border-zinc-600 flex gap-3 justify-between items-center flex-wrap">
-            <div class="text-xs text-gray-400 align-center">
-                <span class="material-icons text-xs text-red-400 align-middle">error</span>
-                <strong>Error:</strong> Only critical failures •
-                <span class="material-icons text-xs text-yellow-400 align-middle">warning</span>
-                <strong>Warning:</strong> + recoverable issues •
-                <span class="material-icons text-xs text-blue-400 align-middle">info</span>
-                <strong>Info:</strong> + normal operations •
-                <span class="material-icons text-xs text-purple-400 align-middle">search</span>
-                <strong>Verbose:</strong> + debug details
-            </div>
             <div class="flex items-center gap-3">
                 <label for="log-level-select" class="text-sm font-medium text-gray-200">
                     Log Level:
@@ -123,6 +113,20 @@
                     Apply
                 </button>
             </div>
+            <div class="text-xs text-gray-400 align-center">
+                <span class="material-icons text-xs text-red-400 align-middle">error</span>
+                <strong>Error:</strong> Only critical failures •
+                <span class="material-icons text-xs text-yellow-400 align-middle">warning</span>
+                <strong>Warning:</strong> + recoverable issues •
+                <span class="material-icons text-xs text-blue-400 align-middle">info</span>
+                <strong>Info:</strong> + normal operations •
+                <span class="material-icons text-xs text-purple-400 align-middle">search</span>
+                <strong>Verbose:</strong> + debug details
+            </div>
+            <button id="clear-logs-btn"
+                    class="bg-rose-500 hover:bg-rose-400 text-white text-sm font-semibold py-1 px-3 rounded shadow">
+                Clear log
+            </button>
         </div>
         <!-- Normal Log View -->
         <div id="log-container"

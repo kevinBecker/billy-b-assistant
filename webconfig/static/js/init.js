@@ -45,6 +45,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (typeof AudioPanel !== 'undefined') {
         AudioPanel.updateDeviceLabels();
         AudioPanel.loadMicGain();
+        AudioPanel.loadAudioDeviceSelectors();
+        // Late refreshes for first-boot device-enumeration races.
+        setTimeout(() => AudioPanel.updateDeviceLabels(), 3000);
+        setTimeout(() => AudioPanel.updateDeviceLabels(), 12000);
     }
     PersonaForm.loadPersona();
     SettingsForm.handleSettingsSave();
@@ -54,6 +58,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     SettingsForm.bindFactoryReset();
     SettingsForm.bindEnvEditorCard();
     SettingsForm.bindNewsSources();
+    SettingsForm.bindWakeWordKeywordUpload();
+    SettingsForm.bindCameraPreview();
     PersonaForm.handlePersonaSave();
     PersonaForm.bindPersonaSelector();
     PersonaForm.populatePersonaSelector();

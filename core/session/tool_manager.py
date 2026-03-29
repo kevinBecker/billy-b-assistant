@@ -2,10 +2,11 @@
 Tool management for filtering and providing tools based on session mode.
 """
 
+import os
 from typing import Any
 
 from ..base_tools import get_base_tools, get_user_tools
-from ..config import is_conversation_state_enabled
+from ..config import CAMERA_HARDWARE, is_conversation_state_enabled
 from ..logger import logger
 
 
@@ -34,6 +35,10 @@ class ToolManager:
 
         if not is_conversation_state_enabled():
             tools = [t for t in tools if t.get("name") != "conversation_state"]
+
+        camera_hardware = os.getenv("CAMERA_HARDWARE", CAMERA_HARDWARE).strip().lower()
+        if camera_hardware not in {"rpi_camera", "usb_webcam"}:
+            tools = [t for t in tools if t.get("name") != "describe_scene"]
 
         return tools
 

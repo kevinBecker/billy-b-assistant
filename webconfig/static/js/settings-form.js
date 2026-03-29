@@ -20,6 +20,104 @@ const SettingsForm = (() => {
         return true;
     };
 
+    const getCameraSelectionFromConfig = (cfg) => {
+        const hardware = String(cfg?.CAMERA_HARDWARE || "none").trim().toLowerCase();
+        const index = String(cfg?.CAMERA_DEVICE_INDEX || "0").trim();
+        if (hardware === "usb_webcam") return `usb_webcam:${index}`;
+        if (hardware === "rpi_camera") return "rpi_camera";
+        return "none";
+    };
+
+    const populateCameraHardwareDropdown = async (cfg = null, preferredValue = null) => {
+        const select = document.getElementById("CAMERA_HARDWARE");
+        if (!select) return;
+
+        try {
+            const response = await fetch("/camera/devices");
+            const data = await response.json();
+            const options = Array.isArray(data.options) ? data.options : [];
+
+            select.innerHTML = "";
+            options.forEach((entry) => {
+                const opt = document.createElement("option");
+                opt.value = String(entry.value || "");
+                opt.textContent = String(entry.label || entry.value || "");
+                select.appendChild(opt);
+            });
+
+            const savedSelection = localStorage.getItem("dropdown_CAMERA_HARDWARE");
+            const configSelection = getCameraSelectionFromConfig(cfg || {});
+            const target = preferredValue || savedSelection || configSelection || "none";
+            if (!setSelectValueSafely(select, target)) {
+                if (!setSelectValueSafely(select, configSelection)) {
+                    setSelectValueSafely(select, "none");
+                }
+            }
+            localStorage.setItem("dropdown_CAMERA_HARDWARE", select.value);
+        } catch (error) {
+            console.error("Failed to load detected camera devices:", error);
+            // Keep existing fallback options if fetch fails.
+        }
+    };
+
+    const bindCameraPreview = () => {
+        const button = document.getElementById("test-camera-btn");
+        const select = document.getElementById("CAMERA_HARDWARE");
+        const image = document.getElementById("camera-preview-image");
+        const status = document.getElementById("camera-preview-status");
+        if (!button || !select || !image || !status) return;
+
+        const setStatus = (text, isError = false) => {
+            status.textContent = text;
+            status.classList.toggle("text-red-300", isError);
+            status.classList.toggle("text-slate-400", !isError);
+        };
+
+        const clearPreview = () => {
+            image.removeAttribute("src");
+            image.classList.add("hidden");
+        };
+
+        select.addEventListener("change", () => {
+            clearPreview();
+            setStatus("Camera selection changed. Run test again.");
+        });
+
+        button.addEventListener("click", async () => {
+            const selection = String(select.value || "none");
+            button.disabled = true;
+            button.classList.add("opacity-60", "cursor-not-allowed");
+            setStatus("Capturing preview...");
+            try {
+                const response = await fetch("/camera/preview", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({selection}),
+                });
+                const data = await response.json();
+                if (!response.ok || !data.ok) {
+                    const error = data.error || "Preview failed";
+                    clearPreview();
+                    setStatus(error, true);
+                    showNotification(`Camera preview failed: ${error}`, "error", 4000);
+                    return;
+                }
+
+                image.src = data.image_url;
+                image.classList.remove("hidden");
+                setStatus(`Preview captured (${data.bytes || 0} bytes).`);
+                showNotification("Camera preview updated", "success", 2000);
+            } catch (error) {
+                clearPreview();
+                setStatus(String(error), true);
+                showNotification(`Camera preview failed: ${error}`, "error", 4000);
+            } finally {
+                button.disabled = false;
+                button.classList.remove("opacity-60", "cursor-not-allowed");
+            }
+        });
+    };
+
     const populateDropdowns = (cfg) => {
         // Populate dropdown values with saved configuration
         const dropdowns = [
@@ -28,13 +126,20 @@ const SettingsForm = (() => {
             { id: 'RUN_MODE', key: 'RUN_MODE' },
             { id: 'TURN_EAGERNESS', key: 'TURN_EAGERNESS' },
             { id: 'BILLY_MODEL', key: 'BILLY_MODEL' },
+            { id: 'CAMERA_HARDWARE', key: 'CAMERA_HARDWARE' },
             { id: 'BILLY_PINS_SELECT', key: 'BILLY_PINS' },
-            { id: 'HA_LANG', key: 'HA_LANG' }
+            { id: 'HA_LANG', key: 'HA_LANG' },
+            { id: 'WAKE_WORD_ENABLED', key: 'WAKE_WORD_ENABLED' },
+            { id: 'WAKE_WORD_BACKEND', key: 'WAKE_WORD_BACKEND' }
         ];
 
         dropdowns.forEach(({ id, key }) => {
             const element = document.getElementById(id);
             if (element) {
+                if (id === 'CAMERA_HARDWARE') {
+                    populateCameraHardwareDropdown(cfg);
+                    return;
+                }
                 // First try to get from localStorage (user's last selection)
                 const savedValue = localStorage.getItem(`dropdown_${id}`);
                 // Then fall back to config value
@@ -66,7 +171,8 @@ const SettingsForm = (() => {
         // Save dropdown selections to localStorage when they change
         const dropdowns = [
             'OPENAI_MODEL', 'VOICE', 'RUN_MODE', 'TURN_EAGERNESS',
-            'BILLY_MODEL', 'BILLY_PINS_SELECT', 'HA_LANG'
+            'BILLY_MODEL', 'CAMERA_HARDWARE', 'BILLY_PINS_SELECT', 'HA_LANG',
+            'WAKE_WORD_ENABLED', 'WAKE_WORD_BACKEND'
         ];
 
         dropdowns.forEach(id => {
@@ -97,6 +203,24 @@ const SettingsForm = (() => {
             const pinSelect = document.getElementById("BILLY_PINS_SELECT");
             if (pinSelect) {
                 payload.BILLY_PINS = pinSelect.value; // "new" | "legacy"
+            }
+
+            const cameraSelect = document.getElementById("CAMERA_HARDWARE");
+            if (cameraSelect) {
+                const selected = String(cameraSelect.value || "none");
+                if (selected.startsWith("usb_webcam:")) {
+                    const idx = selected.split(":")[1] || "0";
+                    payload.CAMERA_HARDWARE = "usb_webcam";
+                    payload.CAMERA_DEVICE_INDEX = idx;
+                } else if (selected === "usb_webcam") {
+                    payload.CAMERA_HARDWARE = "usb_webcam";
+                    payload.CAMERA_DEVICE_INDEX = String(payload.CAMERA_DEVICE_INDEX || "0");
+                } else if (selected === "rpi_camera") {
+                    payload.CAMERA_HARDWARE = "rpi_camera";
+                    payload.CAMERA_DEVICE_INDEX = "0";
+                } else {
+                    payload.CAMERA_HARDWARE = "none";
+                }
             }
 
             // Manually add MOUTH_ARTICULATION value
@@ -157,7 +281,8 @@ const SettingsForm = (() => {
                         // Update dropdowns with new values
                         const dropdowns = [
                             'OPENAI_MODEL', 'VOICE', 'RUN_MODE', 'TURN_EAGERNESS',
-                            'BILLY_MODEL', 'BILLY_PINS_SELECT', 'HA_LANG'
+                            'BILLY_MODEL', 'BILLY_PINS_SELECT', 'HA_LANG',
+                            'WAKE_WORD_ENABLED', 'WAKE_WORD_BACKEND'
                         ];
                         dropdowns.forEach(id => {
                             const element = document.getElementById(id);
@@ -170,6 +295,7 @@ const SettingsForm = (() => {
                                 }
                             }
                         });
+                        await populateCameraHardwareDropdown(refreshData.config);
                         
                         // Refresh user profile panel if it exists
                         if (window.UserProfilePanel && window.UserProfilePanel.refreshUserProfile) {
@@ -187,6 +313,11 @@ const SettingsForm = (() => {
                 // Fallback to restart Billy service if auto-refresh fails
                 await fetch("/restart-billy", {method: "POST"});
                 showNotification("Settings saved – Billy restarted", "success");
+            }
+
+            if (saveResult.audio_restart_required) {
+                await fetch("/restart-billy", {method: "POST"});
+                showNotification("Audio settings changed – Billy restarted", "success");
             }
 
             if (portChanged || hostnameChanged) {
@@ -249,7 +380,7 @@ const SettingsForm = (() => {
         };
 
         if (resetCard) {
-            resetCard.addEventListener("click", (e) => {
+            resetCard.addEventListener("click", () => {
                 const isHidden = resetBtnWrapper.classList.contains("hidden");
                 if (isHidden) {
                     resetBtnWrapper.classList.remove("hidden");
@@ -430,13 +561,116 @@ const SettingsForm = (() => {
         // Update dropdowns with new configuration values
         const dropdowns = [
             'OPENAI_MODEL', 'VOICE', 'RUN_MODE', 'TURN_EAGERNESS',
-            'BILLY_MODEL', 'BILLY_PINS_SELECT', 'HA_LANG'
+            'BILLY_MODEL', 'BILLY_PINS_SELECT', 'HA_LANG',
+            'WAKE_WORD_ENABLED', 'WAKE_WORD_BACKEND'
         ];
         dropdowns.forEach(id => {
             const element = document.getElementById(id);
             if (element && config[id]) {
                 element.value = config[id];
                 localStorage.setItem(`dropdown_${id}`, config[id]);
+            }
+        });
+        populateCameraHardwareDropdown(config);
+    };
+
+    const bindWakeWordKeywordUpload = () => {
+        const uploadBtn = document.getElementById("wakeword-upload-keyword-btn");
+        const fileInput = document.getElementById("wakeword-keyword-file");
+        const status = document.getElementById("wakeword-keyword-status");
+        const keywordPathInput = document.getElementById("WAKE_WORD_PORCUPINE_KEYWORD_PATH");
+        const backendSelect = document.getElementById("WAKE_WORD_BACKEND");
+        if (!uploadBtn || !fileInput || !keywordPathInput) return;
+
+        const normalizeKeywordName = (value) => {
+            const raw = String(value || "").trim();
+            if (!raw) return "";
+            const parts = raw.split(/[\\/]/);
+            return parts[parts.length - 1] || raw;
+        };
+
+        const loadWakeWordKeywordOptions = async (preferredPath = null) => {
+            try {
+                const response = await fetch("/wakeword/keywords");
+                const data = await response.json();
+                const options = Array.isArray(data.keywords)
+                    ? data.keywords.map(normalizeKeywordName).filter(Boolean)
+                    : [];
+                const currentValue = normalizeKeywordName(
+                    preferredPath || keywordPathInput.value || keywordPathInput.dataset.current || ""
+                );
+                const merged = [...new Set([...options, currentValue].filter(Boolean))];
+                keywordPathInput.innerHTML = "";
+                merged.forEach((name) => {
+                    const opt = document.createElement("option");
+                    opt.value = name;
+                    opt.textContent = name;
+                    keywordPathInput.appendChild(opt);
+                });
+                if (currentValue && merged.includes(currentValue)) {
+                    keywordPathInput.value = currentValue;
+                }
+            } catch (error) {
+                console.error("Failed to load wake-word keywords:", error);
+            }
+        };
+
+        loadWakeWordKeywordOptions();
+
+        uploadBtn.addEventListener("click", async () => {
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) {
+                showNotification("Select a .ppn file first", "warning", 3000);
+                return;
+            }
+            if (!file.name.toLowerCase().endsWith(".ppn")) {
+                showNotification("Only .ppn files are supported", "warning", 3000);
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("keyword_file", file);
+
+            uploadBtn.disabled = true;
+            uploadBtn.classList.add("opacity-50", "cursor-not-allowed");
+            if (status) {
+                status.textContent = `Uploading ${file.name}...`;
+            }
+            try {
+                const response = await fetch("/wakeword/keyword/upload", {
+                    method: "POST",
+                    body: formData,
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    const errorMessage = data.error || "Upload failed";
+                    console.error("Wake-word keyword upload failed:", errorMessage);
+                    if (status) {
+                        status.textContent = `Upload failed: ${errorMessage}`;
+                    }
+                    showNotification(`Keyword upload failed: ${errorMessage}`, "error", 5000);
+                    return;
+                }
+                if (keywordPathInput && data.keyword_path) {
+                    await loadWakeWordKeywordOptions(data.keyword_path);
+                }
+                if (backendSelect) {
+                    backendSelect.value = "porcupine";
+                }
+                if (status) {
+                    status.textContent = `Keyword uploaded: ${data.keyword_path}`;
+                }
+                fileInput.value = "";
+                showNotification("Porcupine keyword uploaded", "success", 3000);
+            } catch (error) {
+                console.error("Wake-word keyword upload failed:", error);
+                if (status) {
+                    status.textContent = `Upload failed: ${error.message}`;
+                }
+                showNotification(`Keyword upload failed: ${error.message}`, "error", 5000);
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.classList.remove("opacity-50", "cursor-not-allowed");
             }
         });
     };
@@ -487,8 +721,8 @@ const SettingsForm = (() => {
             .replaceAll("&#123;", "{")
             .replaceAll("&#125;", "}");
 
-        if (/\{\{\s*query\s*\}\}/i.test(candidate)) return true;
-        if (/\{\s*query\s*\}/i.test(candidate)) return true;
+        if (/\{\{\s*query\s*}}/i.test(candidate)) return true;
+        if (/\{\s*query\s*}/i.test(candidate)) return true;
         if (/%7B%7B\s*query\s*%7D%7D/i.test(candidate)) return true;
         if (/%7B\s*query\s*%7D/i.test(candidate)) return true;
 
@@ -498,8 +732,8 @@ const SettingsForm = (() => {
                 const decoded = decodeURIComponent(candidate);
                 if (decoded === candidate) break;
                 candidate = decoded;
-                if (/\{\{\s*query\s*\}\}/i.test(candidate)) return true;
-                if (/\{\s*query\s*\}/i.test(candidate)) return true;
+                if (/\{\{\s*query\s*}}/i.test(candidate)) return true;
+                if (/\{\s*query\s*}/i.test(candidate)) return true;
                 if (/%7B%7B\s*query\s*%7D%7D/i.test(candidate)) return true;
                 if (/%7B\s*query\s*%7D/i.test(candidate)) return true;
             }
@@ -790,9 +1024,12 @@ const SettingsForm = (() => {
         saveDropdownSelections,
         initMouthArticulationSlider,
         refreshFromConfig,
+        populateCameraHardwareDropdown,
+        bindCameraPreview,
         bindFactoryReset,
         bindEnvEditorCard,
         bindNewsSources,
+        bindWakeWordKeywordUpload,
     };
 })();
 

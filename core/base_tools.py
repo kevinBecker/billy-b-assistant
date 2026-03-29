@@ -148,6 +148,33 @@ def get_base_tools() -> list[dict[str, Any]]:
                 "required": ["category"],
             },
         },
+        {
+            "name": "describe_scene",
+            "type": "function",
+            "description": "Capture a fresh image from Billy's camera and describe what is visible. Use this when users ask what Billy can see, to look around, to check what's in front of him, or to describe a scene/object.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "prompt": {
+                        "type": "string",
+                        "description": "Optional focus instruction (e.g., 'What objects are on the table?')",
+                    },
+                    "max_words": {
+                        "type": "integer",
+                        "minimum": 30,
+                        "maximum": 180,
+                        "description": "Upper word-count target for returned description",
+                    },
+                    "capture_timeout_seconds": {
+                        "type": "number",
+                        "minimum": 2,
+                        "maximum": 15,
+                        "description": "Timeout for camera capture command",
+                    },
+                },
+                "additionalProperties": False,
+            },
+        },
     ]
 
 

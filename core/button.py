@@ -66,6 +66,7 @@ is_active = False
 session_thread = None
 interrupt_event = threading.Event()
 session_instance: BillySession | None = None
+wakeword_listener = None
 last_button_time = 0
 button_debounce_delay = 0.5  # seconds debounce
 _session_start_lock = threading.Lock()  # Lock to prevent concurrent session starts
@@ -105,86 +106,110 @@ def is_billy_speaking():
     return bool(not audio.playback_queue.empty())
 
 
-def on_button():
-    global \
-        is_active, \
-        session_thread, \
-        interrupt_event, \
-        session_instance, \
-        last_button_time
+def _is_wakeword_paused() -> bool:
+    """Return True whenever wake-word should NOT touch the mic device."""
+    if is_active:
+        return True
+    if _session_start_lock.locked():
+        return True
 
-    now = time.time()
-    if now - last_button_time < button_debounce_delay:
-        return  # Ignore very quick repeat presses (debounce)
-    last_button_time = now
+    si = session_instance
+    if si is None:
+        return False
 
-    if not button.is_pressed:
-        return
+    try:
+        if si.session_active.is_set():
+            return True
+    except Exception:
+        pass
+
+    try:
+        if getattr(si.mic_manager, "mic_running", False):
+            return True
+    except Exception:
+        pass
+
+    return False
+
+
+def _handle_active_session_button_press():
+    global is_active, session_thread, session_instance
+
+    logger.info("Button pressed during active session.", "🔁")
+    if (
+        session_instance
+        and session_instance.loop
+        and session_instance.is_assistant_turn()
+    ):
+        try:
+            logger.info("Assistant is speaking. Handing turn back to user...", "🎙️")
+            future = asyncio.run_coroutine_threadsafe(
+                session_instance.interrupt_to_user_turn(), session_instance.loop
+            )
+            future.result(timeout=3.0)
+            logger.success("Turn handed back to user (mic open).")
+            return
+        except Exception as e:
+            logger.warning(f"Turn handoff failed, stopping session instead: {e}")
+
+    interrupt_event.set()
+    audio.stop_playback()
+
+    if session_instance:
+        try:
+            logger.info("Stopping active session...", "🛑")
+            # A concurrent.futures.CancelledError is expected here, because the last
+            # thing that BillySession.stop_session does is `await asyncio.sleep`,
+            # and that will raise CancelledError because it's a logical place to
+            # stop.
+            with contextlib.suppress(CancelledError):
+                future = asyncio.run_coroutine_threadsafe(
+                    session_instance.stop_session(), session_instance.loop
+                )
+                # Add timeout to prevent hanging
+                try:
+                    future.result(timeout=5.0)  # Wait up to 5 seconds
+                    logger.success("Session stopped.")
+                except TimeoutError:
+                    logger.warning("Session stop timeout, forcing cleanup")
+                    with contextlib.suppress(Exception):
+                        force_stop_future = asyncio.run_coroutine_threadsafe(
+                            session_instance.request_stop(), session_instance.loop
+                        )
+                        force_stop_future.result(timeout=1.0)
+                    with contextlib.suppress(Exception):
+                        force_close_future = asyncio.run_coroutine_threadsafe(
+                            session_instance._close_ws(timeout=0.5),
+                            session_instance.loop,
+                        )
+                        force_close_future.result(timeout=2.0)
+        except Exception as e:
+            logger.warning(f"Error stopping session ({type(e)}): {e}")
+        finally:
+            # Always ensure cleanup
+            session_instance = None
+            # Wait for session thread to finish to ensure mic is fully closed
+            if session_thread and session_thread.is_alive():
+                logger.info("Waiting for session thread to finish...", "⏳")
+                session_thread.join(timeout=2.0)
+                if session_thread.is_alive():
+                    logger.warning("Session thread did not finish in time", "⚠️")
+                    # Do not keep the start lock blocked forever by a stuck thread.
+                    _force_release_session_start_lock("session thread timeout")
+    is_active = False  # Ensure this is always set after stopping
+
+
+def trigger_session_start(source: str = "button"):
+    global is_active, session_thread, interrupt_event, session_instance
 
     if is_active:
-        logger.info("Button pressed during active session.", "🔁")
-        if (
-            session_instance
-            and session_instance.loop
-            and session_instance.is_assistant_turn()
-        ):
-            try:
-                logger.info("Assistant is speaking. Handing turn back to user...", "🎙️")
-                future = asyncio.run_coroutine_threadsafe(
-                    session_instance.interrupt_to_user_turn(), session_instance.loop
-                )
-                future.result(timeout=3.0)
-                logger.success("Turn handed back to user (mic open).")
-                return
-            except Exception as e:
-                logger.warning(f"Turn handoff failed, stopping session instead: {e}")
-
-        interrupt_event.set()
-        audio.stop_playback()
-
-        if session_instance:
-            try:
-                logger.info("Stopping active session...", "🛑")
-                # A concurrent.futures.CancelledError is expected here, because the last
-                # thing that BillySession.stop_session does is `await asyncio.sleep`,
-                # and that will raise CancelledError because it's a logical place to
-                # stop.
-                with contextlib.suppress(CancelledError):
-                    future = asyncio.run_coroutine_threadsafe(
-                        session_instance.stop_session(), session_instance.loop
-                    )
-                    # Add timeout to prevent hanging
-                    try:
-                        future.result(timeout=5.0)  # Wait up to 5 seconds
-                        logger.success("Session stopped.")
-                    except TimeoutError:
-                        logger.warning("Session stop timeout, forcing cleanup")
-                        with contextlib.suppress(Exception):
-                            force_stop_future = asyncio.run_coroutine_threadsafe(
-                                session_instance.request_stop(), session_instance.loop
-                            )
-                            force_stop_future.result(timeout=1.0)
-                        with contextlib.suppress(Exception):
-                            force_close_future = asyncio.run_coroutine_threadsafe(
-                                session_instance._close_ws(timeout=0.5),
-                                session_instance.loop,
-                            )
-                            force_close_future.result(timeout=2.0)
-            except Exception as e:
-                logger.warning(f"Error stopping session ({type(e)}): {e}")
-            finally:
-                # Always ensure cleanup
-                session_instance = None
-                # Wait for session thread to finish to ensure mic is fully closed
-                if session_thread and session_thread.is_alive():
-                    logger.info("Waiting for session thread to finish...", "⏳")
-                    session_thread.join(timeout=2.0)
-                    if session_thread.is_alive():
-                        logger.warning("Session thread did not finish in time", "⚠️")
-                        # Do not keep the start lock blocked forever by a stuck thread.
-                        _force_release_session_start_lock("session thread timeout")
-        is_active = False  # ✅ Ensure this is always set after stopping
-        return
+        if source == "button":
+            _handle_active_session_button_press()
+        else:
+            logger.info(
+                f"Ignoring {source} trigger while session is already active.", "🔕"
+            )
+        return False
 
     # Use lock to prevent concurrent session starts (but allow interruption above)
     if not _session_start_lock.acquire(blocking=False):
@@ -222,12 +247,12 @@ def on_button():
                 logger.info("Recovered stale session lock; continuing start", "✅")
             else:
                 logger.warning("Could not recover session lock yet, try again", "⚠️")
-                return
+                return False
         else:
             logger.warning(
-                "Session start already in progress, ignoring button press", "⚠️"
+                f"Session start already in progress, ignoring {source} trigger", "⚠️"
             )
-            return
+            return False
 
     try:
         # Ensure previous session thread is fully finished before starting new one
@@ -266,7 +291,7 @@ def on_button():
                             "❌",
                         )
                         _session_start_lock.release()
-                        return
+                        return False
 
         audio.ensure_playback_worker_started(config.CHUNK_MS)
         # Clear the playback done event so session waits for wake-up sound
@@ -275,7 +300,7 @@ def on_button():
         threading.Thread(target=audio.play_random_wake_up_clip, daemon=True).start()
         is_active = True
         interrupt_event = threading.Event()  # Fresh event for each session
-        logger.info("Button pressed. Listening...", "🎤")
+        logger.info(f"{source} trigger received. Listening...", "🎤")
 
         def run_session():
             global session_instance, is_active
@@ -297,14 +322,43 @@ def on_button():
         session_thread = threading.Thread(target=run_session, daemon=True)
         session_thread.start()
         # Lock will be released by the session thread when it finishes
+        return True
     except Exception as e:
         # If anything goes wrong, release the lock
         logger.error(f"Error starting session: {e}")
         with contextlib.suppress(Exception):
             _session_start_lock.release()
+        return False
+
+
+def on_wake_word():
+    trigger_session_start(source="wake-word")
+
+
+def on_button():
+    global last_button_time
+
+    now = time.time()
+    if now - last_button_time < button_debounce_delay:
+        return  # Ignore very quick repeat presses (debounce)
+    last_button_time = now
+
+    if not button.is_pressed:
+        return
+
+    trigger_session_start(source="button")
+
+
+def stop_background_services():
+    global wakeword_listener
+    if wakeword_listener:
+        wakeword_listener.stop()
+        wakeword_listener = None
 
 
 def start_loop():
+    global wakeword_listener
+
     audio.detect_devices(debug=config.DEBUG_MODE)
     _ensure_button_hold_thread()
 
@@ -321,6 +375,27 @@ def start_loop():
         logger.info("Billy startup animation complete", "✅")
 
     button.when_pressed = on_button
+
+    if config.WAKE_WORD_ENABLED:
+        try:
+            from .wakeword_listener import LocalWakeWordListener
+
+            wakeword_listener = LocalWakeWordListener(
+                backend=config.WAKE_WORD_BACKEND,
+                callback=on_wake_word,
+                is_session_active=_is_wakeword_paused,
+                cooldown_seconds=config.WAKE_WORD_COOLDOWN_SECONDS,
+                device_index=audio.MIC_DEVICE_INDEX,
+                capture_rate=audio.MIC_RATE,
+                capture_channels=audio.MIC_CHANNELS,
+                porcupine_access_key=config.PORCUPINE_ACCESS_KEY,
+                porcupine_keyword_path=config.WAKE_WORD_PORCUPINE_KEYWORD_PATH,
+                porcupine_sensitivity=config.WAKE_WORD_PORCUPINE_SENSITIVITY,
+            )
+            wakeword_listener.start()
+        except Exception as e:
+            logger.warning(f"Wake-word listener failed to start: {e}", "⚠️")
+
     logger.info(
         "Ready. Press button to start a voice session. Press Ctrl+C to quit.", "🎦"
     )

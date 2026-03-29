@@ -169,6 +169,26 @@ const LogPanel = (() => {
         }
     };
 
+    const clearServiceLogs = async () => {
+        try {
+            const res = await fetch("/logs/clear", {method: "POST"});
+            const data = await res.json();
+            if (!res.ok || data.status !== "ok") {
+                const errorMsg = Array.isArray(data.errors)
+                    ? data.errors.join(" | ")
+                    : (data.error || "Failed to clear service logs");
+                showNotification(errorMsg, "error");
+                return;
+            }
+            updateLogsUI("");
+            showNotification("Service logs cleared", "success");
+            await fetchLogs();
+        } catch (err) {
+            console.error("Failed to clear service logs:", err);
+            showNotification("Failed to clear service logs", "error");
+        }
+    };
+
     const fetchLogs = async () => {
         try {
             const res = await fetch("/logs");
@@ -481,6 +501,8 @@ const LogPanel = (() => {
         // Log level control
         const applyLogLevelBtn = document.getElementById("apply-log-level-btn");
         if (applyLogLevelBtn) applyLogLevelBtn.addEventListener("click", applyLogLevel);
+        const clearLogsBtn = document.getElementById("clear-logs-btn");
+        if (clearLogsBtn) clearLogsBtn.addEventListener("click", clearServiceLogs);
         
         // Set current log level in dropdown
         const logLevelSelect = document.getElementById("log-level-select");

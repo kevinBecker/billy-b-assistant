@@ -5,6 +5,7 @@ import os
 import queue
 import re
 import subprocess
+import time
 
 import numpy as np
 import paho.mqtt.client as mqtt
@@ -23,19 +24,153 @@ mic_check_running = False
 rms_queue = queue.Queue()
 
 
-def get_usb_pcm_card_index():
-    preference = (core_config.SPEAKER_PREFERENCE or "").lower().strip()
+def _is_usb_audio_device_name(name: str) -> bool:
+    """Heuristic: keep only real USB audio endpoints, skip virtual ALSA PCMs."""
+    lowered = (name or "").strip().lower()
+    if not lowered:
+        return False
+    # Typical virtual/non-hardware ALSA/PipeWire names.
+    virtual_tokens = (
+        "sysdefault",
+        "default",
+        "dmix",
+        "dsnoop",
+        "surround",
+        "iec958",
+        "pulse",
+        "pipewire",
+        "jack",
+    )
+    if any(token in lowered for token in virtual_tokens):
+        return False
+    return "usb" in lowered
+
+
+def _normalize_audio_preference(value: str) -> str:
+    normalized = (value or "").strip().lower()
+    # Hardware indices can change across reboots; ignore them for matching.
+    normalized = re.sub(r"\s*\(hw:\d+,\d+\)\s*", " ", normalized)
+    # Optional UI duplicate suffixes like "(#1)" should not affect matching.
+    normalized = re.sub(r"\s*\(#\d+\)\s*", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _parse_hw_card_index(name: str) -> int | None:
+    match = re.search(r"\(hw\s*:\s*(\d+)\s*,\s*\d+\)", name or "", re.IGNORECASE)
+    if not match:
+        return None
     try:
-        if not preference:
-            return None
+        return int(match.group(1))
+    except Exception:
+        return None
+
+
+def _usb_path_for_card(card_index: int | None) -> str | None:
+    if card_index is None:
+        return None
+    try:
+        sysfs = f"/sys/class/sound/card{card_index}/device"
+        real = os.path.realpath(sysfs)
+        base = os.path.basename(real).split(":", 1)[0]
+        if re.match(r"^\d+-\d+(?:\.\d+)*$", base):
+            return base
+        return None
+    except Exception:
+        return None
+
+
+def _preference_from_device_name(device_name: str) -> str:
+    card_index = _parse_hw_card_index(device_name)
+    usb_path = _usb_path_for_card(card_index)
+    if usb_path:
+        return f"usbpath:{usb_path}"
+    return str(device_name or "").strip()
+
+
+def _preference_matches_device_name(preference: str, device_name: str) -> bool:
+    preference = (preference or "").strip()
+    if not preference:
+        return True
+    if preference.lower().startswith("usbpath:"):
+        wanted = preference.split(":", 1)[1].strip().lower()
+        candidate = _usb_path_for_card(_parse_hw_card_index(device_name))
+        return bool(wanted and candidate and candidate.lower() == wanted)
+    pref_norm = _normalize_audio_preference(preference)
+    name_norm = _normalize_audio_preference(device_name)
+    return pref_norm in name_norm or name_norm in pref_norm
+
+
+def _resolve_selected_preference(
+    saved_preference: str, devices: list[dict[str, str | int]]
+) -> str:
+    if not saved_preference:
+        return ""
+
+    for dev in devices:
+        value = str(dev.get("value", ""))
+        alias = str(dev.get("legacy_value", ""))
+        if saved_preference in (value, alias):
+            return value
+
+    saved_norm = _normalize_audio_preference(saved_preference)
+    for dev in devices:
+        value = str(dev.get("value", ""))
+        alias = str(dev.get("legacy_value", ""))
+        if (
+            _normalize_audio_preference(value) == saved_norm
+            or _normalize_audio_preference(alias) == saved_norm
+        ):
+            return value
+
+    return saved_preference
+
+
+def get_usb_pcm_card_index(preference_override: str | None = None):
+    raw_preference = (
+        preference_override
+        if preference_override is not None
+        else core_config.SPEAKER_PREFERENCE
+    )
+    preference = (raw_preference or "").strip()
+    normalized_preference = _normalize_audio_preference(preference)
+    try:
         out = subprocess.check_output(["aplay", "-l"], text=True)
         cards = re.findall(
             r"card (\d+): ([^\s]+) \[(.*?)\], device (\d+): (.*?) \[", out
         )
+
+        if preference.lower().startswith("usbpath:"):
+            wanted_path = preference.split(":", 1)[1].strip().lower()
+            for card_index, *_ in cards:
+                if (_usb_path_for_card(int(card_index)) or "").lower() == wanted_path:
+                    return int(card_index)
+
+        # If SPEAKER_PREFERENCE includes "(hw:X,Y)", trust that card index first.
+        if preference:
+            hw_match = re.search(r"hw\s*:\s*(\d+)\s*,\s*\d+", preference.lower())
+            if hw_match:
+                card_from_hw = int(hw_match.group(1))
+                if any(int(card_index) == card_from_hw for card_index, *_ in cards):
+                    return card_from_hw
+
+        if not preference:
+            return None
+
         for card_index, shortname, longname, device_index, desc in cards:
-            name = f"{shortname} {longname} {desc}".lower()
-            if preference in name:
+            name = f"{shortname} {longname} {desc}"
+            normalized_name = _normalize_audio_preference(name)
+            if normalized_preference and (
+                normalized_preference in normalized_name
+                or normalized_name in normalized_preference
+            ):
                 return int(card_index)
+
+        # Last fallback: first USB audio card from aplay list.
+        for card_index, shortname, longname, _, desc in cards:
+            combined = f"{shortname} {longname} {desc}".lower()
+            if "usb" in combined:
+                return int(card_index)
+
         return None
     except Exception as e:
         print("Failed to detect speaker card:", e)
@@ -43,15 +178,24 @@ def get_usb_pcm_card_index():
 
 
 def get_usb_capture_card_index():
-    preference = (core_config.MIC_PREFERENCE or "").lower()
+    preference = (core_config.MIC_PREFERENCE or "").strip()
+    normalized_pref = _normalize_audio_preference(preference)
     try:
         output = subprocess.check_output(["arecord", "-l"], text=True)
         cards = re.findall(
             r"card (\d+): ([^\s]+) \[(.*?)\], device (\d+): (.*?) \[", output
         )
+        if preference.lower().startswith("usbpath:"):
+            wanted_path = preference.split(":", 1)[1].strip().lower()
+            for card_index, *_ in cards:
+                if (_usb_path_for_card(int(card_index)) or "").lower() == wanted_path:
+                    return int(card_index)
         for card_index, shortname, longname, device_index, desc in cards:
-            name_combined = f"{shortname} {longname} {desc}".lower()
-            if preference in name_combined:
+            name_combined = f"{shortname} {longname} {desc}"
+            normalized_name = _normalize_audio_preference(name_combined)
+            if normalized_pref and (
+                normalized_pref in normalized_name or normalized_name in normalized_pref
+            ):
                 return int(card_index)
         for card_index, _, longname, _, _ in cards:
             if "usb" in longname.lower():
@@ -84,6 +228,65 @@ def get_mic_gain_numid(card_index):
     except Exception as e:
         print("Failed to get mic gain numid:", e)
         return None
+
+
+@bp.route("/audio/devices")
+def audio_devices():
+    try:
+        devices = sd.query_devices()
+        mic_preference = (core_config.MIC_PREFERENCE or "").strip()
+        speaker_preference = (core_config.SPEAKER_PREFERENCE or "").strip()
+
+        input_devices = []
+        output_devices = []
+        seen_inputs: set[str] = set()
+        seen_outputs: set[str] = set()
+        for idx, dev in enumerate(devices):
+            name = str(dev.get("name", "")).strip()
+            if not name:
+                continue
+            if not _is_usb_audio_device_name(name):
+                continue
+            preference_value = _preference_from_device_name(name)
+            card_index = _parse_hw_card_index(name)
+            usb_path = _usb_path_for_card(card_index)
+            label_suffix = f" (usb:{usb_path})" if usb_path else f" (#{idx})"
+            if int(dev.get("max_input_channels", 0) or 0) > 0:
+                key = preference_value.lower()
+                if key in seen_inputs:
+                    continue
+                seen_inputs.add(key)
+                input_devices.append({
+                    "value": preference_value,
+                    "legacy_value": name,
+                    "label": f"{name}{label_suffix}",
+                    "index": idx,
+                })
+            if int(dev.get("max_output_channels", 0) or 0) > 0:
+                key = preference_value.lower()
+                if key in seen_outputs:
+                    continue
+                seen_outputs.add(key)
+                output_devices.append({
+                    "value": preference_value,
+                    "legacy_value": name,
+                    "label": f"{name}{label_suffix}",
+                    "index": idx,
+                })
+
+        selected_mic = _resolve_selected_preference(mic_preference, input_devices)
+        selected_speaker = _resolve_selected_preference(
+            speaker_preference, output_devices
+        )
+
+        return jsonify({
+            "input_devices": input_devices,
+            "output_devices": output_devices,
+            "selected_mic": selected_mic,
+            "selected_speaker": selected_speaker,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 def audio_callback(indata, frames, time_info, status):
@@ -309,8 +512,10 @@ def remove_wakeup_clip():
 @bp.route("/speaker-test", methods=["POST"])
 def speaker_test():
     try:
+        data = request.get_json(silent=True) or {}
+        speaker_preference = str(data.get("speaker_preference") or "").strip() or None
         sound_path = os.path.join(PROJECT_ROOT, "sounds", "speakertest.wav")
-        card_index = get_usb_pcm_card_index()
+        card_index = get_usb_pcm_card_index(speaker_preference)
         device = alsa_play_device(card_index)
         subprocess.Popen(["aplay", "-q", "-D", device, sound_path])
         return jsonify({"status": f"playing on {device}"})
@@ -422,28 +627,44 @@ def volume():
 @bp.route("/device-info")
 def device_info():
     try:
-        devices = sd.query_devices()
-        mic_name = "Unknown"
-        speaker_name = "Unknown"
-        for dev in devices:
-            if (
-                mic_name == "Unknown"
-                and dev["max_input_channels"] > 0
-                and (
-                    not core_config.MIC_PREFERENCE
-                    or core_config.MIC_PREFERENCE.lower() in dev["name"].lower()
-                )
-            ):
-                mic_name = dev["name"]
-            if (
-                speaker_name == "Unknown"
-                and dev["max_output_channels"] > 0
-                and (
-                    not core_config.SPEAKER_PREFERENCE
-                    or core_config.SPEAKER_PREFERENCE.lower() in dev["name"].lower()
-                )
-            ):
-                speaker_name = dev["name"]
+        max_attempts = 6
+        for attempt in range(max_attempts):
+            mic_name = "Unknown"
+            speaker_name = "Unknown"
+            fallback_mic = None
+            fallback_speaker = None
+            devices = sd.query_devices()
+            for dev in devices:
+                if fallback_mic is None and dev["max_input_channels"] > 0:
+                    fallback_mic = dev["name"]
+                if fallback_speaker is None and dev["max_output_channels"] > 0:
+                    fallback_speaker = dev["name"]
+                if (
+                    mic_name == "Unknown"
+                    and dev["max_input_channels"] > 0
+                    and _preference_matches_device_name(
+                        core_config.MIC_PREFERENCE, str(dev["name"])
+                    )
+                ):
+                    mic_name = dev["name"]
+                if (
+                    speaker_name == "Unknown"
+                    and dev["max_output_channels"] > 0
+                    and _preference_matches_device_name(
+                        core_config.SPEAKER_PREFERENCE, str(dev["name"])
+                    )
+                ):
+                    speaker_name = dev["name"]
+            # If preferred device is not matchable yet, still show first available
+            # device so UI does not remain "Unknown" while audio itself is usable.
+            if mic_name == "Unknown" and fallback_mic:
+                mic_name = fallback_mic
+            if speaker_name == "Unknown" and fallback_speaker:
+                speaker_name = fallback_speaker
+            if mic_name != "Unknown" or speaker_name != "Unknown":
+                return jsonify({"mic": mic_name, "speaker": speaker_name})
+            if attempt < max_attempts - 1:
+                time.sleep(0.4)
         return jsonify({"mic": mic_name, "speaker": speaker_name})
     except Exception as e:
         return jsonify({"mic": "Unknown", "speaker": "Unknown", "error": str(e)}), 500

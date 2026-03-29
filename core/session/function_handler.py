@@ -11,6 +11,7 @@ from ..logger import logger
 from ..news_digest import get_news_digest
 from ..persona import update_persona_ini
 from ..persona_manager import persona_manager
+from ..vision import describe_scene
 
 
 class FunctionHandler:
@@ -33,6 +34,7 @@ class FunctionHandler:
             "manage_profile": self._handle_manage_profile,
             "switch_persona": self._handle_switch_persona,
             "get_news_digest": self._handle_get_news_digest,
+            "describe_scene": self._handle_describe_scene,
         }
 
         handler = handlers.get(function_name)
@@ -366,6 +368,132 @@ class FunctionHandler:
                 "content": [{"type": "input_text", "text": prompt}],
             },
         })
+        self.session.state._triggered_new_response = True
+        await self.session._ws_send_json({"type": "response.create"})
+
+    async def _handle_describe_scene(
+        self, raw_args: str | None, call_id: str | None = None
+    ):
+        """Handle live camera capture and inject image into the active Realtime session."""
+        args = self._parse_json_args(raw_args, "describe_scene")
+        if logger.get_level().name == "VERBOSE":
+            logger.verbose(f"describe_scene:args {args}", "📷")
+
+        provider_name = self.session.realtime_ai_provider.get_provider_name()
+        if provider_name != "openai":
+            result = {
+                "ok": False,
+                "summary": "Camera vision unavailable for this provider.",
+                "error": f"Current provider '{provider_name}' does not support this Realtime image flow.",
+            }
+            if call_id:
+                await self.session._ws_send_json({
+                    "type": "conversation.item.create",
+                    "item": {
+                        "type": "function_call_output",
+                        "call_id": call_id,
+                        "output": json.dumps(result),
+                    },
+                })
+                await asyncio.sleep(0.1)
+
+            await self.session._ws_send_json({
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": "Camera vision is only available with OpenAI Realtime in this build. Apologize briefly and ask the user to switch provider.",
+                        }
+                    ],
+                },
+            })
+            self.session.state._triggered_new_response = True
+            await self.session._ws_send_json({"type": "response.create"})
+            return
+
+        try:
+            result = await asyncio.to_thread(describe_scene, args)
+        except Exception as e:
+            logger.warning(f"describe_scene failed: {e}")
+            result = {
+                "ok": False,
+                "summary": "Camera scene check failed.",
+                "error": str(e),
+            }
+
+        if call_id:
+            await self.session._ws_send_json({
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "function_call_output",
+                    "call_id": call_id,
+                    "output": json.dumps({
+                        "ok": bool(result.get("ok")),
+                        "summary": result.get("summary", ""),
+                        "error": result.get("error"),
+                    }),
+                },
+            })
+            await asyncio.sleep(0.1)
+
+        if result.get("ok"):
+            user_prompt = str(result.get("prompt") or "").strip()
+            max_words = int(result.get("max_words") or 80)
+            image_url = str(result.get("image_url") or "").strip()
+            if not image_url:
+                prompt = (
+                    "Camera capture returned no image bytes. "
+                    "Apologize briefly and ask the user to retry."
+                )
+                await self.session._ws_send_json({
+                    "type": "conversation.item.create",
+                    "item": {
+                        "type": "message",
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": prompt}],
+                    },
+                })
+                self.session.state._triggered_new_response = True
+                await self.session._ws_send_json({"type": "response.create"})
+                return
+
+            await self.session._ws_send_json({
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                f"{user_prompt} Keep the answer under {max_words} words. "
+                                "Be concrete and avoid speculation."
+                            ),
+                        },
+                        {
+                            "type": "input_image",
+                            "image_url": image_url,
+                        },
+                    ],
+                },
+            })
+        else:
+            prompt = (
+                "You could not describe the camera scene. "
+                f"Error details: {result.get('error', 'unknown error')}. "
+                "Apologize briefly and ask the user to retry."
+            )
+            await self.session._ws_send_json({
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": prompt}],
+                },
+            })
         self.session.state._triggered_new_response = True
         await self.session._ws_send_json({"type": "response.create"})
 

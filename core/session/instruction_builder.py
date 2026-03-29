@@ -5,7 +5,11 @@ Instruction builder for generating AI prompts with user/persona context.
 from dataclasses import dataclass
 from typing import Optional
 
-from ..config import INSTRUCTIONS, get_tool_instructions
+from ..config import (
+    INSTRUCTIONS,
+    _filter_vision_instruction_line,
+    get_tool_instructions,
+)
 from ..persona import PersonaProfile
 from ..persona_manager import persona_manager
 
@@ -48,13 +52,14 @@ class InstructionBuilder:
             return "\n---\n".join(filter(None, sections))
 
         # Fallback to default with guest mode modifications
-        return INSTRUCTIONS.replace(
+        fallback_instructions = INSTRUCTIONS.replace(
             "USER RECOGNITION: ALWAYS call `identify_user` at conversation start. Greet users by name when known.",
             "GUEST MODE: You are in guest mode. Only call `identify_user` if someone explicitly introduces themselves with clear name patterns like 'I am [Name]', 'My name is [Name]', 'Hey billy it is [Name]', or 'This is [Name]'. Do NOT call `identify_user` for greetings like 'Hello', 'Hi', or casual conversation. Otherwise treat everyone as a guest visitor.",
         ).replace(
             "USER SYSTEM:\n- IDENTIFICATION: When you recognize a user's voice/name, call `identify_user` with name and confidence (high/medium/low). Respond with personalized greeting after.\n- MEMORY: Call `store_memory` when users share personal info. Categories: preference/fact/event/relationship/interest. Importance: high/medium/low.\n- PERSONA: Use `manage_profile` with action=\"switch_persona\" for different personalities.",
             "USER SYSTEM: Limited in guest mode - only `identify_user` available. After identification, ALWAYS call `store_memory` when users share personal info. Be proactive - don't wait for them to ask.\n\nMEMORY STORAGE TRIGGERS:\nCall `store_memory` for ANY of these patterns:\n- \"I like/love/enjoy/hate/dislike [something]\"\n- \"I have/own/possess [something]\"\n- \"I work as/at [something]\"\n- \"I live in/at [somewhere]\"\n- \"I am [something]\"\n- \"My favorite [something] is [something]\"\n- \"I prefer [something]\"\n- \"I'm interested in [something]\"\n- \"I'm from [somewhere]\"\n- \"I do [activity/hobby]\"\n\nCategories: preference/fact/event/relationship/interest\nImportance: high/medium/low (use \"high\" for explicitly important info)",
         )
+        return _filter_vision_instruction_line(fallback_instructions)
 
     def _build_user_instructions(self, context: InstructionContext) -> str:
         """Build instructions for user mode."""
@@ -79,9 +84,10 @@ class InstructionBuilder:
 
         # Fallback
         user_context = user_profile.get_context_string() if user_profile else ""
-        return INSTRUCTIONS + (
+        fallback = INSTRUCTIONS + (
             f"\n---\n# Current User Context\n{user_context}" if user_context else ""
         )
+        return _filter_vision_instruction_line(fallback)
 
     def _build_personality_section(self, persona_data: dict) -> str:
         """Build personality traits section."""

@@ -84,3 +84,6 @@ personas/
 profiles/
 custom_songs/
 3d_files/
+models/
+wakewords/*.ppn
+!wakewords/hey-billy.ppn

@@ -7,13 +7,17 @@ import sys
 import threading
 import time
 import uuid
+from base64 import b64decode
+from glob import glob
 from pathlib import Path
 
-from dotenv import find_dotenv, set_key
+from dotenv import dotenv_values, find_dotenv, set_key
 from flask import Blueprint, jsonify, render_template, request
 from packaging.version import parse as parse_version
+from werkzeug.utils import secure_filename
 
 from core.news_manager import load_news_sources, save_news_sources
+from core.vision import describe_scene
 
 from ..core_imports import core_config, voice_provider_registry
 from ..state import (
@@ -65,7 +69,136 @@ CONFIG_KEYS = [
     "SHOW_RC_VERSIONS",
     "FLAP_ON_BOOT",
     "NEWS_REQUEST_TIMEOUT_SECONDS",
+    "CAMERA_HARDWARE",
+    "CAMERA_DEVICE_INDEX",
+    "FOLLOW_UP_RETRY_LIMIT",
+    "WAKE_WORD_ENABLED",
+    "WAKE_WORD_BACKEND",
+    "WAKE_WORD_COOLDOWN_SECONDS",
+    "PORCUPINE_ACCESS_KEY",
+    "WAKE_WORD_PORCUPINE_KEYWORD_PATH",
+    "WAKE_WORD_PORCUPINE_SENSITIVITY",
 ]
+WAKEWORD_REL_ROOT = Path("wakewords")
+
+
+def _detect_rpi_camera_available() -> bool:
+    camera_bin = str(getattr(core_config, "LIBCAMERA_STILL_BIN", "libcamera-still"))
+    try:
+        result = subprocess.run(
+            [camera_bin, "--list-cameras"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=3.0,
+        )
+    except FileNotFoundError:
+        return False
+    except Exception:
+        return False
+
+    combined = f"{result.stdout or ''}\n{result.stderr or ''}".lower()
+    if "no cameras available" in combined:
+        return False
+    if "available cameras" in combined:
+        return True
+    # Fallback: some builds may still expose camera lines without the header.
+    return "camera" in combined and "/base/" in combined
+
+
+def _is_v4l2_capture_capable(sys_video_dir: Path) -> bool:
+    """Return True only for nodes with video-capture capability."""
+    # V4L2 capability bits (videodev2.h)
+    v4l2_cap_video_capture = 0x00000001
+    v4l2_cap_video_capture_mplane = 0x00001000
+    v4l2_cap_meta_capture = 0x00800000
+
+    caps_path = sys_video_dir / "device_caps"
+    try:
+        if not caps_path.exists():
+            # Keep backward-compatible behavior on platforms without device_caps.
+            return True
+        caps = int(caps_path.read_text(encoding="utf-8").strip(), 16)
+    except Exception:
+        return True
+
+    has_capture = bool(caps & (v4l2_cap_video_capture | v4l2_cap_video_capture_mplane))
+    has_only_metadata = bool(caps & v4l2_cap_meta_capture) and not has_capture
+    return has_capture and not has_only_metadata
+
+
+def _is_primary_v4l2_node(sys_video_dir: Path) -> bool:
+    """Prefer primary node index 0 to skip common metadata/helper siblings."""
+    index_path = sys_video_dir / "index"
+    try:
+        if not index_path.exists():
+            return True
+        return index_path.read_text(encoding="utf-8").strip() == "0"
+    except Exception:
+        return True
+
+
+def _detect_usb_video_nodes() -> list[dict[str, str | int]]:
+    nodes: list[dict[str, str | int]] = []
+    for path in sorted(glob("/dev/video*")):
+        name = os.path.basename(path)
+        suffix = name.removeprefix("video")
+        if not suffix.isdigit():
+            continue
+        index = int(suffix)
+        sys_video_dir = Path("/sys/class/video4linux") / name
+        sys_name_path = sys_video_dir / "name"
+        sys_device_path = sys_video_dir / "device"
+
+        device_name = ""
+        try:
+            if sys_name_path.exists():
+                device_name = sys_name_path.read_text(encoding="utf-8").strip()
+        except Exception:
+            device_name = ""
+
+        # Keep the dropdown focused on real USB webcams only.
+        try:
+            real_device_path = os.path.realpath(str(sys_device_path))
+        except Exception:
+            real_device_path = ""
+        is_usb_backed = "/usb" in real_device_path.lower()
+        if not is_usb_backed:
+            continue
+
+        lower_name = device_name.lower()
+        if "metadata" in lower_name:
+            continue
+        if not _is_v4l2_capture_capable(sys_video_dir):
+            continue
+        if not _is_primary_v4l2_node(sys_video_dir):
+            continue
+
+        if device_name:
+            label = f"{device_name} ({path}) (#{index})"
+        else:
+            label = f"USB Webcam ({path}) (#{index})"
+        nodes.append({
+            "path": path,
+            "index": index,
+            "label": label,
+        })
+    return nodes
+
+
+def _list_available_wakeword_keywords() -> list[str]:
+    paths: list[str] = []
+    seen: set[str] = set()
+    abs_root = Path(PROJECT_ROOT) / WAKEWORD_REL_ROOT
+    if not abs_root.exists():
+        return paths
+    for ppn in sorted(abs_root.glob("*.ppn")):
+        filename = ppn.name
+        if filename in seen:
+            continue
+        seen.add(filename)
+        paths.append(filename)
+    return paths
 
 
 def _normalize_source_payload(data: dict) -> dict:
@@ -497,18 +630,148 @@ def release_note():
 @bp.route("/save", methods=["POST"])
 def save():
     data = request.json
+    existing_env = dotenv_values(ENV_PATH) if os.path.exists(ENV_PATH) else {}
     old_port = os.getenv("FLASK_PORT", "80")
     changed_port = False
+    audio_restart_required = False
+    audio_restart_keys = {
+        "MIC_PREFERENCE",
+        "SPEAKER_PREFERENCE",
+        "MIC_TIMEOUT_SECONDS",
+        "SILENCE_THRESHOLD",
+    }
     for key, value in data.items():
         if key in CONFIG_KEYS:
+            if key == "FOLLOW_UP_RETRY_LIMIT":
+                try:
+                    parsed = int(str(value).strip())
+                except (TypeError, ValueError):
+                    parsed = 1
+                value = str(max(0, min(5, parsed)))
+            old_value = str(existing_env.get(key, ""))
+            new_value = str(value)
             set_key(ENV_PATH, key, value, quote_mode='never')
             if key == "FLASK_PORT" and str(value) != str(old_port):
                 changed_port = True
+            if key in audio_restart_keys and new_value != old_value:
+                audio_restart_required = True
     response = {"status": "ok"}
+    if audio_restart_required:
+        response["audio_restart_required"] = True
     if changed_port:
         response["port_changed"] = True
         threading.Thread(target=delayed_restart).start()
     return jsonify(response)
+
+
+@bp.route("/wakeword/keyword/upload", methods=["POST"])
+def upload_porcupine_keyword():
+    keyword_file = request.files.get("keyword_file")
+    if keyword_file is None:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    filename = secure_filename(keyword_file.filename or "")
+    if not filename:
+        return jsonify({"error": "Invalid filename"}), 400
+    if not filename.lower().endswith(".ppn"):
+        return jsonify({"error": "Only .ppn files are supported"}), 400
+
+    target_rel_dir = WAKEWORD_REL_ROOT
+    target_dir = Path(PROJECT_ROOT) / target_rel_dir
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target_path = target_dir / filename
+
+    try:
+        keyword_file.save(target_path)
+        set_key(
+            ENV_PATH,
+            "WAKE_WORD_PORCUPINE_KEYWORD_PATH",
+            filename,
+            quote_mode='never',
+        )
+        set_key(ENV_PATH, "WAKE_WORD_BACKEND", "porcupine", quote_mode='never')
+        return jsonify({
+            "status": "uploaded",
+            "keyword_path": filename,
+        })
+    except Exception as e:
+        logger.warning(f"[wakeword] Keyword upload failed: {e}", "⚠️")
+        return jsonify({"error": f"Upload failed: {e}"}), 500
+
+
+@bp.route("/wakeword/keywords", methods=["GET"])
+def list_wakeword_keywords():
+    return jsonify({"keywords": _list_available_wakeword_keywords()})
+
+
+@bp.route("/camera/devices", methods=["GET"])
+def list_camera_devices():
+    rpi_available = _detect_rpi_camera_available()
+    usb_nodes = _detect_usb_video_nodes()
+
+    options: list[dict[str, str]] = [{"value": "none", "label": "None"}]
+    if rpi_available:
+        options.append({
+            "value": "rpi_camera",
+            "label": "Raspberry Pi Camera Module",
+        })
+    for node in usb_nodes:
+        options.append({
+            "value": f"usb_webcam:{node['index']}",
+            "label": str(node["label"]),
+        })
+
+    return jsonify({
+        "options": options,
+        "detected": {
+            "rpi_camera": rpi_available,
+            "usb_webcams": usb_nodes,
+        },
+    })
+
+
+@bp.route("/camera/preview", methods=["POST"])
+def camera_preview():
+    data = request.get_json(silent=True) or {}
+    selection = str(data.get("selection") or "none").strip().lower()
+
+    camera_hardware = "none"
+    camera_device_index = 0
+    if selection == "rpi_camera":
+        camera_hardware = "rpi_camera"
+    elif selection.startswith("usb_webcam:"):
+        camera_hardware = "usb_webcam"
+        suffix = selection.split(":", 1)[1].strip()
+        if suffix.isdigit():
+            camera_device_index = int(suffix)
+    elif selection == "usb_webcam":
+        camera_hardware = "usb_webcam"
+
+    result = describe_scene({
+        "camera_hardware": camera_hardware,
+        "camera_device_index": camera_device_index,
+        "capture_timeout_seconds": 4,
+        "usb_scan_fallback": False,
+        "fresh_frame": True,
+    })
+    if not result.get("ok"):
+        return jsonify({
+            "ok": False,
+            "error": result.get("error") or "Camera preview failed",
+        }), 400
+
+    image_url = str(result.get("image_url") or "")
+    if not image_url.startswith("data:image/jpeg;base64,"):
+        return jsonify({
+            "ok": False,
+            "error": "Camera preview did not return an image",
+        }), 500
+
+    return jsonify({
+        "ok": True,
+        "image_url": image_url,
+        "bytes": len(b64decode(image_url.split(",", 1)[1])),
+    })
 
 
 @bp.route("/config")

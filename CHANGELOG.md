@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.2.0] — 2026-03-29
+
+### Added
+- **Porcupine Wake-word Support**: Added local wake-word activation using Picovoice Porcupine, including support for bundled and custom `.ppn` keyword files in `wakewords/`.
+- **Wake-word UI Management**: Added Wake-word settings card with backend selection, access key input (with visibility toggle), keyword dropdown, keyword upload flow, and sensitivity control.
+- **Wake-word Provider Architecture**: Introduced a pluggable wake-word provider structure (`wakeword_provider` + providers registry) to make adding future backends (for example openWakeWord) straightforward.
+- **Camera Vision Tool**: Added a new `describe_scene` function-call tool so Billy can capture a fresh image from a Raspberry Pi camera (via `libcamera-still`) and describe what he sees by sending captured frames as `input_image` conversation content.
+- **Camera Hardware Selection (Web UI)**: Added a `Camera Hardware` dropdown in Hardware Settings to choose between Raspberry Pi camera modules and USB webcams.
+- **Camera Preview Test (Web UI)**: Added a `Test Camera` button that captures and shows a small inline preview image for the selected camera option.
+- **Follow-up Retry Limit Setting**: Added `FOLLOW_UP_RETRY_LIMIT` to Web UI and config save flow with validated range `0..5` (default `1`).
+- **Service Log Clear Action (Web UI)**: Added a `Clear log` action in the debug log toolbar to clear the current service logs from the UI.
+- **Audio Device UX**: Added mic/speaker dropdown settings supporting stable `usbpath:` while maintaining backward compatibility with legacy name-based `.env` values. 
+
+### Changed
+- **Settings Layout**: Moved Pin Layout and Dory/Mode control into Advanced Settings to reduce clutter for default users.
+- **Tool Instructions**: Updated model tool guidance to explicitly use camera vision when users ask Billy to look or describe the scene.
+- **Hardware Settings Layout**: Moved microphone and speaker device dropdowns into Hardware Settings (above camera controls) for one-place hardware configuration.
+
+---
+
 ## [2.1.1] — 2026-03-14
 
 ### Added

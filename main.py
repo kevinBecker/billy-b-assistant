@@ -51,6 +51,7 @@ print(f"🔧 Log level set to: {current_level.name}")
 
 def signal_handler(sig, frame):
     logger.info("Exiting cleanly (signal received).", "👋")
+    core.button.stop_background_services()
     playback_queue.put(None)
     from core.movements import cleanup_gpio
 
@@ -80,6 +81,7 @@ if __name__ == "__main__":
     except Exception as e:
         print("❌ Unhandled exception occurred:", e)
         traceback.print_exc()
+        core.button.stop_background_services()
         from core.movements import cleanup_gpio
 
         cleanup_gpio()
