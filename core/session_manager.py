@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import inspect
 import json
 import socket
 import time
@@ -9,8 +10,6 @@ import websockets.exceptions
 
 from . import audio
 from .config import (
-    DEBUG_MODE,
-    DEBUG_MODE_INCLUDE_DELTA,
     FOLLOW_UP_RETRY_LIMIT,
     MIC_TIMEOUT_SECONDS,
     REALTIME_AI_PROVIDER,
@@ -69,8 +68,8 @@ def get_tools_for_current_mode():
     load_dotenv(ENV_PATH, override=True)
     current_user_env = os.getenv("CURRENT_USER", "").strip().strip("'\"")
 
-    logger.info(
-        f"🔧 get_tools_for_current_mode: CURRENT_USER='{current_user_env}'", "🔧"
+    logger.verbose(
+        f"get_tools_for_current_mode: CURRENT_USER='{current_user_env}'", "🔧"
     )
 
     if current_user_env and current_user_env.lower() == "guest":
@@ -123,6 +122,7 @@ class BillySession:
 
         # Follow-up
         self.autofollowup = autofollowup
+        self.session_intent = self._resolve_session_intent()
 
         # Tool args buffer (for streamed args)
         self._tool_args_buffer: dict[str, str] = {}
@@ -147,6 +147,17 @@ class BillySession:
         self.persona_handler = PersonaHandler(self)
         self.mic_manager = MicManagerWrapper(self)
         self.error_handler = ErrorHandler(self)
+
+    def _resolve_session_intent(self) -> str:
+        """Classify session behavior for follow-up policy."""
+        # MQTT announce-only sessions should be one-and-done.
+        if (
+            self.autofollowup == "never"
+            and self.kickoff_text
+            and not self.kickoff_to_interactive
+        ):
+            return "announcement"
+        return "interactive"
 
     def is_assistant_turn(self) -> bool:
         return self.state.is_assistant_turn()
@@ -249,13 +260,15 @@ class BillySession:
         """Clear OpenAI's input audio buffer to prevent echo."""
         try:
             await self._ws_send_json({"type": "input_audio_buffer.clear"})
-            if DEBUG_MODE:
-                logger.verbose("Cleared input audio buffer to prevent echo", "🧹")
+            logger.verbose("Cleared input audio buffer to prevent echo", "🧹")
         except Exception as e:
             logger.warning(f"Failed to clear audio buffer: {e}")
 
     def _on_input_speech_started(self):
         self.state.on_input_speech_started()
+
+    def _on_input_speech_stopped(self):
+        self.state.on_input_speech_stopped()
 
     def _on_conversation_item_done(self, data: dict[str, Any]):
         self.state.on_conversation_item_done(data)
@@ -298,17 +311,17 @@ class BillySession:
                 self._logged_user_transcript_item_ids.add(item_id)
             return
 
-        if DEBUG_MODE:
-            logger.verbose(
-                f"User transcription completed but empty (item_id={item_id!r})",
-                "ℹ️",
-            )
-
-    def _on_transcript_done(self, data: dict[str, Any]):
+        logger.verbose(
+            f"User transcription completed but empty (item_id={item_id!r})",
+            "ℹ️",
+        )
         self.state.on_transcript_done(data)
 
     def _on_audio_out(self, data: dict[str, Any]):
         self.audio_handler.on_audio_delta(data)
+
+    def _on_transcript_done(self, data: dict[str, Any]):
+        self.state.on_transcript_done(data)
 
     def _on_transcript_delta(self, t: str, data: dict[str, Any]):
         delta = data.get("delta", "")
@@ -415,58 +428,139 @@ class BillySession:
             logger.warning(
                 "⚠️ conversation_state was NOT called by the model - using heuristic fallback"
             )
-            if DEBUG_MODE:
-                heuristic_result = self.state.wants_follow_up_heuristic()
-                logger.verbose(
-                    f"Using heuristic fallback: follow_up_expected={heuristic_result}",
-                    "🔍",
-                )
+            heuristic_result = self.state.wants_follow_up_heuristic()
+            logger.verbose(
+                f"Using heuristic fallback: follow_up_expected={heuristic_result}",
+                "🔍",
+            )
 
         # Kickoff follow-up switch
         if self.kickoff_text and not self.kickoff_first_turn_done:
             if self.state._turn_had_speech:
                 self.kickoff_first_turn_done = True
                 if self.kickoff_to_interactive:
-                    print("🔁 Kickoff complete — switching to interactive mode.")
+                    logger.info(
+                        "Kickoff complete — switching to interactive mode.", "🔁"
+                    )
                     self.mic_manager.start()
-                elif self.autofollowup == "auto":
+                    self.state._saw_follow_up_call = False
+                    self.state._last_user_turn_meaningful = False
+                    self.state.full_response_text = ""
+                    self.last_activity[0] = time.time()
+                    return
+                if self.autofollowup == "auto":
                     asked_question = self.state.wants_follow_up_heuristic()
-                    wants_follow_up = self.state.follow_up_expected or asked_question
+                    wants_follow_up, kickoff_source = self._decide_follow_up_policy(
+                        asked_question=asked_question,
+                        # Kickoff has no prior user turn in this session; this
+                        # flag is only relevant for retry accounting.
+                        last_user_turn_meaningful=False,
+                    )
+                    logger.info(
+                        f"Kickoff follow-up decision | wants={wants_follow_up} | source={kickoff_source}",
+                        "🧭",
+                    )
                     if wants_follow_up:
-                        print("🔁 Auto follow-up detected — opening mic.")
+                        logger.info("Auto follow-up detected — opening mic.", "🔁")
                         opened = await self.mic_manager.start_after_playback()
                         if not opened:
                             logger.error(
                                 "Failed to reopen mic for kickoff follow-up. Ending session.",
                                 "❌",
                             )
-                            await self.stop_session()
+                            await self.stop_session(
+                                reason="kickoff_followup_open_failed"
+                            )
                             return
                         self.last_activity[0] = time.time()
-                    else:
-                        print(
-                            "🔁 Kickoff complete — no follow-up needed. Closing session."
-                        )
-                        await self.stop_session()
+                        # Kickoff path already handled follow-up reopening.
+                        # Do not also run generic post-response handling.
+                        self.state._saw_follow_up_call = False
+                        self.state._last_user_turn_meaningful = False
+                        self.state.full_response_text = ""
                         return
-            else:
-                if DEBUG_MODE:
                     logger.info(
-                        "Kickoff turn ended with no speech (tool-only). Waiting for next turn.",
-                        "ℹ️",
+                        "Kickoff complete — no follow-up needed. Closing session.",
+                        "🔁",
                     )
+                    await self.stop_session(reason="kickoff_no_followup")
+                    return
+            else:
+                logger.verbose(
+                    "Kickoff turn ended with no speech (tool-only). Waiting for next turn.",
+                    "ℹ️",
+                )
 
         if self.run_mode == "dory":
             logger.info("Dory mode active. Ending session after single response.", "🎣")
-            await self.stop_session()
+            await self.stop_session(reason="run_mode_dory")
             return
 
         # Post-response handling: decide whether to reopen mic or end session
         await self._post_response_handling()
 
+    def _decide_follow_up_policy(
+        self, *, asked_question: bool, last_user_turn_meaningful: bool
+    ) -> tuple[bool, str]:
+        """Centralized follow-up policy decision.
+
+        Returns:
+            (wants_follow_up, source)
+            source is a stable reason label for logging/debugging.
+        """
+        if self.autofollowup == "always":
+            return True, "mode_always"
+        if self.autofollowup == "never":
+            return False, "mode_never"
+
+        # Announcement sessions (MQTT say one-shot) should never reopen mic.
+        if self.session_intent == "announcement":
+            return False, "announcement"
+
+        # Honor explicit conversation_state whenever present.
+        # This is especially important on models that reliably call the tool
+        # (e.g. realtime-1.5), where rhetorical phrasing may contain '?' but
+        # still not require a follow-up turn.
+        if self.state._saw_follow_up_call:
+            if last_user_turn_meaningful:
+                return bool(self.state.follow_up_expected), "conversation_state"
+            if self.state.follow_up_expected:
+                return True, "conversation_state_low_conf"
+            return False, "conversation_state_low_conf"
+
+        # Enforce deterministic UX fallback for interactive sessions: if Billy
+        # asked a question and no tool hint was provided, open follow-up.
+        if self.session_intent == "interactive" and asked_question:
+            return True, "interactive_question"
+
+        # Fallback heuristic for models that skipped conversation_state.
+        return asked_question, "heuristic"
+
     async def _post_response_handling(self):
         """Handle post-response logic: reopen mic or end session."""
         last_user_turn_meaningful = self.state._last_user_turn_meaningful
+        if not last_user_turn_meaningful:
+            total_chunks = int(self.state._last_committed_audio_chunks or 0)
+            loud_chunks = int(self.state._last_committed_loud_audio_chunks or 0)
+            peak_rms = float(self.state._last_committed_peak_rms or 0.0)
+            had_server_speech = bool(self.state._last_committed_had_server_speech)
+            soft_speech_floor = max(120.0, SILENCE_THRESHOLD * 0.15)
+            audio_evidence_meaningful = (
+                peak_rms >= soft_speech_floor
+                or loud_chunks >= 2
+                or (had_server_speech and total_chunks >= 8)
+            )
+            if audio_evidence_meaningful:
+                last_user_turn_meaningful = True
+                self.state._last_user_turn_meaningful = True
+                logger.verbose(
+                    (
+                        "Promoting last user turn to meaningful from audio evidence "
+                        f"(chunks={total_chunks}, loud={loud_chunks}, peak_rms={peak_rms:.1f}, "
+                        f"server_speech={had_server_speech}, floor={soft_speech_floor:.1f})."
+                    ),
+                    "🎤",
+                )
         if self.state.full_response_text.strip():
             print(
                 f"📝 Transcript completed: \"{self.state.full_response_text.strip()}\""
@@ -516,6 +610,7 @@ class BillySession:
         # Always log follow-up decision for debugging
         logger.info(
             f"Follow-up decision | mode={self.autofollowup}"
+            f" | intent={self.session_intent}"
             f" | tool_expects={self.state.follow_up_expected}"
             f" | qmark={asked_question}"
             f" | had_speech={self.state._turn_had_speech}"
@@ -523,35 +618,18 @@ class BillySession:
             "🧪",
         )
 
-        if self.autofollowup == "always":
-            wants_follow_up = True
-        elif self.autofollowup == "never":
-            wants_follow_up = False
-        else:
-            # If conversation_state was called, trust it
-            # Otherwise fall back to heuristic (question mark detection)
-            if self.state._saw_follow_up_call:
-                if last_user_turn_meaningful:
-                    wants_follow_up = self.state.follow_up_expected
-                else:
-                    if (
-                        self.state.follow_up_expected
-                        and self.state.follow_up_retry_count < FOLLOW_UP_RETRY_LIMIT
-                    ):
-                        wants_follow_up = True
-                        logger.info(
-                            "conversation_state requested follow-up on low-confidence user turn; allowing one grace retry.",
-                            "🔁",
-                        )
-                    else:
-                        wants_follow_up = False
-                    if self.state.follow_up_expected and not wants_follow_up:
-                        logger.info(
-                            "Ignoring conversation_state follow-up on empty/noisy user turn.",
-                            "🔇",
-                        )
-            else:
-                wants_follow_up = asked_question
+        wants_follow_up, follow_up_source = self._decide_follow_up_policy(
+            asked_question=asked_question,
+            last_user_turn_meaningful=last_user_turn_meaningful,
+        )
+        logger.info(
+            f"Follow-up policy result | wants={wants_follow_up} | source={follow_up_source}",
+            "🧭",
+        )
+        if follow_up_source == "interactive_question" and wants_follow_up:
+            logger.info(
+                "Interactive question detected; forcing follow-up window.", "🔁"
+            )
 
         if is_conversation_state_enabled() and not self.state._saw_follow_up_call:
             logger.warning(
@@ -561,25 +639,34 @@ class BillySession:
         if wants_follow_up:
             # Retry budget is only for no-content/silence turns.
             if not last_user_turn_meaningful:
-                if self.state.follow_up_retry_count >= FOLLOW_UP_RETRY_LIMIT:
+                had_server_speech = bool(self.state._last_committed_had_server_speech)
+                loud_chunks = int(self.state._last_committed_loud_audio_chunks or 0)
+                credible_server_speech = had_server_speech and loud_chunks >= 2
+                if credible_server_speech:
                     logger.info(
-                        f"Follow-up retry limit reached ({FOLLOW_UP_RETRY_LIMIT}). Ending session.",
-                        "🛑",
+                        "Follow-up detected credible server speech with low-confidence transcript; not consuming retry budget.",
+                        "🔁",
                     )
-                    self.state._saw_follow_up_call = False
-                    self.state.follow_up_retry_count = 0
-                    self.state._last_user_turn_meaningful = False
-                    self._set_idle_state()
-                    stop_all_motors()
-                    await self._close_ws()
-                    return
+                else:
+                    if self.state.follow_up_retry_count >= FOLLOW_UP_RETRY_LIMIT:
+                        logger.info(
+                            f"Follow-up retry limit reached ({FOLLOW_UP_RETRY_LIMIT}). Ending session.",
+                            "🛑",
+                        )
+                        self.state._saw_follow_up_call = False
+                        self.state.follow_up_retry_count = 0
+                        self.state._last_user_turn_meaningful = False
+                        self._set_idle_state()
+                        stop_all_motors()
+                        await self._close_ws()
+                        return
 
-                self.state.increment_follow_up_retry()
-                logger.info(
-                    f"Follow-up expected after empty/noisy turn. Keeping session open "
-                    f"(retry {self.state.follow_up_retry_count}/{FOLLOW_UP_RETRY_LIMIT}).",
-                    "🔁",
-                )
+                    self.state.increment_follow_up_retry()
+                    logger.info(
+                        f"Follow-up expected after empty/noisy turn (source={follow_up_source}). "
+                        f"Keeping session open (retry {self.state.follow_up_retry_count}/{FOLLOW_UP_RETRY_LIMIT}).",
+                        "🔁",
+                    )
             else:
                 self.state.follow_up_retry_count = 0
                 logger.info(
@@ -593,6 +680,36 @@ class BillySession:
             if not opened:
                 logger.error(
                     "Failed to reopen mic for follow-up window. Ending session.",
+                    "❌",
+                )
+                self.state.follow_up_retry_count = 0
+                self._set_idle_state()
+                stop_all_motors()
+                await self._close_ws()
+                return
+            self.state.full_response_text = ""
+            self.last_activity[0] = time.time()
+            return
+
+        # In interactive sessions, provide one final listen window only when the
+        # user hasn't meaningfully engaged yet (e.g. first response without a question).
+        # If the user already spoke and Billy finished without asking a question,
+        # the conversation is naturally over — close the session.
+        if (
+            self.session_intent == "interactive"
+            and self.autofollowup != "never"
+            and not last_user_turn_meaningful
+        ):
+            logger.info(
+                "No follow-up predicted and no prior meaningful user turn; opening one final listen window.",
+                "🔁",
+            )
+            self.state._saw_follow_up_call = False
+            self.state._last_user_turn_meaningful = False
+            opened = await self.mic_manager.start_after_playback()
+            if not opened:
+                logger.error(
+                    "Failed to reopen mic for final listen window. Ending session.",
                     "❌",
                 )
                 self.state.follow_up_retry_count = 0
@@ -674,9 +791,13 @@ class BillySession:
                                 else "After you finish speaking, end naturally. Do not include internal tool-call text."
                             )
                             kickoff_payload = (
-                                "Say the user's message **verbatim**, word for word, with no additions or reinterpretation.\n"
-                                "Maintain personality, but do NOT rephrase or expand.\n\n"
-                                f"Repeat this literal message sent via MQTT: {self.kickoff_text}"
+                                "Speak EXACTLY the literal MQTT text below, verbatim, and nothing else.\n"
+                                "Rules:\n"
+                                "- Do not add commentary, style, jokes, or follow-up questions.\n"
+                                "- Do not paraphrase or expand.\n"
+                                "- Do not prepend or append any words.\n"
+                                "- Only include quote characters if they are part of the literal message itself.\n\n"
+                                f"Literal message: {self.kickoff_text}"
                                 "\n\n"
                                 f"{follow_up_clause}"
                             )
@@ -745,16 +866,28 @@ class BillySession:
                 self.mic_manager.start()
 
             assert self.ws is not None
-            async for message in self.ws:
+            ws = self.ws
+            while True:
                 if not self.session_active.is_set():
-                    print("🚪 Session marked as inactive, stopping stream loop.")
+                    logger.verbose(
+                        "Session marked inactive, stopping stream loop.", "🚪"
+                    )
                     print()  # Add newline to end the mic volume display line
                     break
+
+                try:
+                    message = await asyncio.wait_for(ws.recv(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    # Periodic wake-up so stop/session_active changes are respected
+                    # even if provider websocket is quiet.
+                    continue
+                except websockets.exceptions.ConnectionClosed:
+                    if self.session_active.is_set():
+                        logger.info("Websocket stream closed.", "🔌")
+                    break
+
                 data = json.loads(message)
-                if DEBUG_MODE and (
-                    DEBUG_MODE_INCLUDE_DELTA
-                    or not (data.get("type") or "").endswith("delta")
-                ):
+                if not (data.get("type") or "").endswith("delta"):
                     logger.verbose(f"Raw message: {data}", "🔁")
 
                 if data.get("type") in ("session.updated", "session_updated"):
@@ -770,7 +903,13 @@ class BillySession:
                 await self.handle_message(data)
 
         except Exception as e:
-            logger.error(f"Error opening mic input: {e}")
+            if (
+                isinstance(e, websockets.exceptions.ConnectionClosed)
+                and not self.session_active.is_set()
+            ):
+                logger.info(f"Websocket closed during shutdown: {e}", "🔌")
+            else:
+                logger.error(f"Error opening mic input: {e}")
             self.session_active.clear()
 
         finally:
@@ -802,6 +941,7 @@ class BillySession:
             self._on_input_speech_started()
             return
         if t == "input_audio_buffer.speech_stopped":
+            self._on_input_speech_stopped()
             return
         if t in self.TRANSCRIPT_DONE_TYPES:
             self._on_transcript_done(data)
@@ -852,11 +992,15 @@ class BillySession:
             return
         # else: ignore unrecognized messages silently
 
-    async def stop_session(self):
+    async def stop_session(self, reason: str | None = None):
         if self._stopping:
             return
         self._stopping = True
-        logger.info("Stopping session...", "🛑")
+        if not reason:
+            with contextlib.suppress(Exception):
+                caller = inspect.stack()[1]
+                reason = f"caller={caller.function}"
+        logger.info(f"Stopping session... ({reason or 'unspecified'})", "🛑")
 
         # Increment interaction count for current user at end of session
         if not self._interaction_count_recorded:
@@ -864,7 +1008,16 @@ class BillySession:
             self._interaction_count_recorded = True
 
         self.session_active.clear()
-        self.mic_manager.stop()
+        try:
+            await asyncio.wait_for(
+                asyncio.to_thread(self.mic_manager.stop), timeout=1.0
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Mic stop timed out during session shutdown; continuing teardown.",
+                "⚠️",
+            )
+            self.mic_manager.mic_running = False
         await self._close_ws()
 
         # Give the message loop a moment to exit
@@ -873,6 +1026,8 @@ class BillySession:
     async def request_stop(self):
         logger.info("Stop requested via external signal.", "🛑")
         self.session_active.clear()
+        # Ensure run_stream is not left waiting on recv() keepalive timeouts.
+        await self._close_ws(timeout=0.5)
 
     async def interrupt_to_user_turn(self):
         """Interrupt the assistant response and hand control back to the user mic."""

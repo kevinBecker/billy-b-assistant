@@ -132,6 +132,31 @@ def _is_wakeword_paused() -> bool:
     return False
 
 
+def _pause_wakeword_listener():
+    global wakeword_listener
+    listener = wakeword_listener
+    if not listener:
+        return
+    try:
+        listener.stop()
+        logger.info("Wake-word listener paused for active session.", "⏸️")
+    except Exception as e:
+        logger.warning(f"Failed to pause wake-word listener: {e}", "⚠️")
+
+
+def _resume_wakeword_listener():
+    if not config.WAKE_WORD_ENABLED:
+        return
+    listener = wakeword_listener
+    if not listener:
+        return
+    try:
+        listener.start()
+        logger.info("Wake-word listener resumed.", "▶️")
+    except Exception as e:
+        logger.warning(f"Failed to resume wake-word listener: {e}", "⚠️")
+
+
 def _handle_active_session_button_press():
     global is_active, session_thread, session_instance
 
@@ -255,6 +280,8 @@ def trigger_session_start(source: str = "button"):
             return False
 
     try:
+        _pause_wakeword_listener()
+
         # Ensure previous session thread is fully finished before starting new one
         if session_thread and session_thread.is_alive():
             logger.warning("Previous session thread still running, waiting...", "⏳")
@@ -314,6 +341,9 @@ def trigger_session_start(source: str = "button"):
                 move_head("off")
                 is_active = False
                 session_instance = None  # Clear reference
+                # Give ALSA a short moment to release the capture handle.
+                time.sleep(0.3)
+                _resume_wakeword_listener()
                 logger.info("Waiting for button press...", "🕐")
                 # Release lock when session finishes
                 with contextlib.suppress(Exception):
@@ -359,7 +389,7 @@ def stop_background_services():
 def start_loop():
     global wakeword_listener
 
-    audio.detect_devices(debug=config.DEBUG_MODE)
+    audio.detect_devices(debug=True)
     _ensure_button_hold_thread()
 
     if config.FLAP_ON_BOOT:

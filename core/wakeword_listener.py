@@ -66,7 +66,13 @@ class LocalWakeWordListener:
 
     def stop(self):
         self._stop_event.set()
-        if self._thread and self._thread.is_alive():
+        if (
+            self._thread
+            and self._thread.is_alive()
+            # If stop() is invoked from the wake-word worker itself (e.g. direct
+            # callback path), joining current thread raises RuntimeError.
+            and threading.current_thread() is not self._thread
+        ):
             self._thread.join(timeout=2.0)
         self._thread = None
         if self._backend_impl is not None:

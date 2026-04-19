@@ -338,11 +338,21 @@ def send_mic_audio(ws, samples, loop):
         if len(samples) == 0:
             return
 
+        if np.issubdtype(samples.dtype, np.floating):
+            max_abs = float(np.max(np.abs(samples))) if samples.size else 0.0
+            if max_abs <= 1.5:
+                # Normalized float stream (-1..1) -> int16 PCM scale.
+                samples = np.clip(samples, -1.0, 1.0) * 32767.0
+            samples = np.clip(samples, -32768.0, 32767.0)
+            samples = samples.astype(np.int16)
+        else:
+            samples = samples.astype(np.int16)
+
         if MIC_RATE and MIC_RATE != PROVIDER_MIC_RATE:
             # Normalize mic input to 24KHz for provider expectations.
             target_len = int(len(samples) * PROVIDER_MIC_RATE / MIC_RATE)
             samples = resample(samples.astype(np.float32), target_len).astype(np.int16)
-        pcm = samples.astype(np.int16).tobytes()
+        pcm = samples.tobytes()
 
         asyncio.run_coroutine_threadsafe(
             ws.send(
@@ -401,36 +411,38 @@ def play_random_wake_up_clip():
             if os.path.exists(persona_wakeup_dir):
                 clips = glob.glob(os.path.join(persona_wakeup_dir, "*.wav"))
                 if clips:
-                    print(f"🎭 Using wake-up clips from persona: {current_persona}")
+                    logger.info(
+                        f"Using wake-up clips from persona: {current_persona}", "🎭"
+                    )
         elif current_persona == "default":
             # For default persona, use the custom folder
             clips = glob.glob(os.path.join(WAKE_UP_DIR, "*.wav"))
             if clips:
-                print("🔧 Using custom wake-up clips for default persona")
+                logger.info("Using custom wake-up clips for default persona", "🔧")
     except Exception as e:
-        print(f"⚠️ Failed to get current persona: {e}")
+        logger.warning(f"Failed to get current persona wake-up folder: {e}")
 
     # If no clips found yet, check custom folder as fallback
     if not clips:
         clips = glob.glob(os.path.join(WAKE_UP_DIR, "*.wav"))
         if clips:
-            print("🔧 Using custom wake-up clips (fallback)")
+            logger.info("Using custom wake-up clips (fallback)", "🔧")
 
     # If still no clips, fall back to default
     if not clips:
-        print("🔁 No custom clips found, falling back to default.")
+        logger.info("No custom clips found, falling back to default.", "🔁")
         clips = glob.glob(os.path.join(WAKE_UP_DIR_DEFAULT, "*.wav"))
 
     if not clips:
-        print("⚠️ No wake-up clips found in any directory.")
+        logger.warning("No wake-up clips found in any directory.")
         return None
 
     clip = random.choice(clips)
 
     # Track how many tasks were pending before enqueue
     already_pending = playback_queue.unfinished_tasks
-    logger.info(
-        f"🔧 Enqueuing wake-up clip: {os.path.basename(clip)}, already_pending={already_pending}",
+    logger.verbose(
+        f"Enqueuing wake-up clip: {os.path.basename(clip)}, already_pending={already_pending}",
         "🔧",
     )
 
@@ -441,8 +453,8 @@ def play_random_wake_up_clip():
     time.sleep(0.05)
 
     new_tasks = playback_queue.unfinished_tasks
-    logger.info(
-        f"🔧 After enqueue: unfinished_tasks={new_tasks} (added {new_tasks - already_pending} chunks)",
+    logger.verbose(
+        f"After enqueue: unfinished_tasks={new_tasks} (added {new_tasks - already_pending} chunks)",
         "🔧",
     )
 
@@ -453,11 +465,11 @@ def play_random_wake_up_clip():
         time.sleep(0.01)
 
     elapsed = time.time() - start_time
-    logger.info(f"🔧 Wake-up sound playback completed in {elapsed:.2f}s", "🔧")
+    logger.verbose(f"Wake-up sound playback completed in {elapsed:.2f}s", "🔧")
 
     # Once done, set the event
     playback_done_event.set()
-    logger.info("🔧 playback_done_event SET (wake-up sound finished)", "🔧")
+    logger.verbose("playback_done_event set (wake-up sound finished)", "🔧")
 
     return clip
 

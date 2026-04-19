@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.2.1] — 2026-04-19
+
+### Changed
+- **Follow-up Reliability**: Improved follow-up turn handling for realtime sessions by treating valid audio-only user turns as meaningful even when provider user transcripts are unavailable.
+- **Mic Timeout Behavior**: Made mic-timeout handling more robust for short/soft speech by using a more sensitive local activity pause threshold and better timeout state resets between listen windows.
+- **Debug Log UX**: Updated debug log auto-scroll behavior so logs only auto-scroll when the `scroll-bottom` toggle is active.
+
+### Fixed
+- **Noise/Static Misclassification**: Reduced false “static/noise” classification when server VAD detects speech but local threshold crossings are low, using peak RMS and soft-speech checks.
+- **Retry Budget Accounting**: Fixed follow-up retry-limit logic so meaningful audio turns reset/avoid consuming retry budget correctly instead of being counted as empty turns.
+- **Session Teardown Hang Risk**: Hardened mic shutdown paths (`abort`/timeout guard) to prevent occasional hangs after `mic_timeout` stop.
+- **Timeout Diagnostics**: Added clearer timeout diagnostics (start/progress/pause/end) to make mic-timeout behavior easier to trace in logs.
+
+---
+
 ## [2.2.0] — 2026-03-29
 
 ### Added

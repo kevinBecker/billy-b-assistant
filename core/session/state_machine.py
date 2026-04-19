@@ -4,7 +4,7 @@ import threading
 import time
 from typing import Any
 
-from ..config import DEBUG_MODE, HEAD_RETRACT_DELAY_SECONDS
+from ..config import HEAD_RETRACT_DELAY_SECONDS, SILENCE_THRESHOLD
 from ..logger import logger
 from ..movements import move_head
 from ..mqtt import mqtt_publish
@@ -43,8 +43,11 @@ class SessionState:
         self._last_committed_audio_chunks = 0
         self._pending_loud_audio_chunks = 0
         self._last_committed_loud_audio_chunks = 0
+        self._pending_peak_rms = 0.0
+        self._last_committed_peak_rms = 0.0
         self._current_input_had_server_speech = False
         self._last_committed_had_server_speech = False
+        self._server_input_speaking = False
         self._head_retract_timer: threading.Timer | None = None
 
     def reset_for_new_session(self):
@@ -71,8 +74,11 @@ class SessionState:
         self._last_committed_audio_chunks = 0
         self._pending_loud_audio_chunks = 0
         self._last_committed_loud_audio_chunks = 0
+        self._pending_peak_rms = 0.0
+        self._last_committed_peak_rms = 0.0
         self._current_input_had_server_speech = False
         self._last_committed_had_server_speech = False
+        self._server_input_speaking = False
         self._cancel_head_retract_timer()
 
     def on_response_created(self):
@@ -94,26 +100,34 @@ class SessionState:
     def on_input_speech_started(self):
         """Handle input_audio_buffer.speech_started event."""
         self._current_input_had_server_speech = True
+        self._server_input_speaking = True
         # Server VAD detected actual speech; keep session alive for quiet users.
+        self.update_activity()
+
+    def on_input_speech_stopped(self):
+        """Handle input_audio_buffer.speech_stopped event."""
+        self._server_input_speaking = False
         self.update_activity()
 
     def on_audio_committed(self, chunks: int):
         """Handle input_audio_buffer.committed event."""
         self._last_committed_audio_chunks = self._pending_input_audio_chunks
         self._last_committed_loud_audio_chunks = self._pending_loud_audio_chunks
+        self._last_committed_peak_rms = self._pending_peak_rms
         self._last_committed_had_server_speech = self._current_input_had_server_speech
         self._pending_input_audio_chunks = 0
         self._pending_loud_audio_chunks = 0
+        self._pending_peak_rms = 0.0
         self._current_input_had_server_speech = False
         # A committed user turn should count as recent activity while model processing starts.
         self.update_activity()
-        if DEBUG_MODE:
-            logger.info(
-                f"Committed audio turn with {self._last_committed_audio_chunks} chunks "
-                f"({self._last_committed_loud_audio_chunks} above threshold, "
-                f"server_speech={self._last_committed_had_server_speech}).",
-                "🎚️",
-            )
+        logger.verbose(
+            f"Committed audio turn with {self._last_committed_audio_chunks} chunks "
+            f"({self._last_committed_loud_audio_chunks} above threshold, "
+            f"peak_rms={self._last_committed_peak_rms:.1f}, "
+            f"server_speech={self._last_committed_had_server_speech}).",
+            "🎚️",
+        )
 
     def on_conversation_item_done(self, data: dict[str, Any]):
         """Handle conversation.item.done event."""
@@ -140,13 +154,17 @@ class SessionState:
         # and very short audio blips.
         # Note: transcript can be None when server-side transcription is unavailable,
         # so transcript absence alone is not enough to classify as noise.
+        audio_turn_meaningful = False
         if all(part.get("type") == "input_audio" for part in content):
             has_transcript = any(
                 (part.get("transcript") or "").strip() for part in content
             )
             total_chunks = self._last_committed_audio_chunks
             loud_chunks = self._last_committed_loud_audio_chunks
+            peak_rms = float(self._last_committed_peak_rms or 0.0)
             loud_ratio = (loud_chunks / total_chunks) if total_chunks else 0.0
+            soft_speech_floor = max(120.0, SILENCE_THRESHOLD * 0.15)
+            has_soft_local_speech = peak_rms >= soft_speech_floor
 
             # Heuristic noise gate:
             # - very short turns are usually accidental
@@ -155,18 +173,40 @@ class SessionState:
             low_signal_noise = (
                 total_chunks >= 20 and loud_chunks <= 2 and loud_ratio < 0.12
             )
-            should_ignore = total_chunks < min_chunks_for_real_turn or (
-                low_signal_noise and not self._last_committed_had_server_speech
+            static_only_turn = (
+                not has_transcript
+                and total_chunks >= min_chunks_for_real_turn
+                and loud_chunks == 0
             )
-            # If we didn't get transcript text, but VAD marked speech and the turn
-            # wasn't classified as noise, still treat this as meaningful user input.
+            very_low_conf_server_speech = (
+                self._last_committed_had_server_speech
+                and not has_transcript
+                and total_chunks >= min_chunks_for_real_turn
+                and loud_chunks <= 1
+                and loud_ratio < 0.05
+            )
+            should_ignore = total_chunks < min_chunks_for_real_turn or low_signal_noise
+            if static_only_turn or very_low_conf_server_speech:
+                should_ignore = True
+            # If local RMS indicates soft but real speech, don't classify it as static.
             if (
-                not has_meaningful_user_content
-                and not should_ignore
-                and self._last_committed_had_server_speech
-                and loud_chunks > 0
+                should_ignore
+                and has_soft_local_speech
+                and total_chunks >= min_chunks_for_real_turn
             ):
-                has_meaningful_user_content = True
+                should_ignore = False
+            # Follow-up turns can be clipped at onset; if server VAD positively
+            # detected speech and we captured at least a few chunks, treat it as
+            # meaningful even when the short-turn heuristic would ignore it.
+            if (
+                should_ignore
+                and self._last_committed_had_server_speech
+                and total_chunks >= 3
+                and loud_chunks >= 2
+                and not static_only_turn
+                and not very_low_conf_server_speech
+            ):
+                should_ignore = False
             if should_ignore:
                 self._ignore_next_short_audio_response = True
                 logger.info(
@@ -174,16 +214,36 @@ class SessionState:
                     f"({total_chunks} chunks, "
                     f"{loud_chunks} above threshold, "
                     f"ratio={loud_ratio:.2f}, "
+                    f"peak_rms={peak_rms:.1f}, "
+                    f"soft_speech_floor={soft_speech_floor:.1f}, "
                     f"server_speech={self._last_committed_had_server_speech}, "
                     f"has_transcript={has_transcript}, "
-                    f"low_signal_noise={low_signal_noise}).",
+                    f"low_signal_noise={low_signal_noise}, "
+                    f"static_only_turn={static_only_turn}, "
+                    f"very_low_conf_server_speech={very_low_conf_server_speech}, "
+                    f"has_soft_local_speech={has_soft_local_speech}).",
                     "🔇",
                 )
+            else:
+                # Audio-only turns can still be meaningful even without transcript
+                # (e.g. provider transcription missing, but local/server VAD shows speech).
+                audio_turn_meaningful = bool(
+                    has_transcript
+                    or has_soft_local_speech
+                    or loud_chunks >= 2
+                    or (self._last_committed_had_server_speech and total_chunks >= 8)
+                )
 
-        # Reset follow-up retry only when we actually received meaningful user content.
-        if has_meaningful_user_content:
+        # Only confirmed text/transcript input resets retry budget.
+        # Keep prior `True` if another event already confirmed the turn.
+        confirmed_meaningful_input = (
+            self._last_user_turn_meaningful
+            or has_meaningful_user_content
+            or audio_turn_meaningful
+        )
+        if confirmed_meaningful_input:
             self.follow_up_retry_count = 0
-        self._last_user_turn_meaningful = has_meaningful_user_content
+        self._last_user_turn_meaningful = confirmed_meaningful_input
 
     def on_transcript_delta(self, stream_type: str, delta: str):
         """Handle transcript delta events."""
@@ -219,8 +279,7 @@ class SessionState:
             self.full_response_text += transcript
             self._added_done_text = True
         self.full_response_text += "\n\n"
-        if DEBUG_MODE:
-            logger.info(f"Transcript completed: {transcript!r}", "📝")
+        logger.verbose(f"Transcript completed: {transcript!r}", "📝")
 
     def on_response_done(self):
         """Handle response.done event."""
@@ -243,14 +302,13 @@ class SessionState:
         """
         txt = (self.full_response_text or "").strip()
         has_question = any(ch in txt for ch in ("?", "¿", "？", "؟", "‽"))
-        if DEBUG_MODE:
-            signature = (txt, has_question)
-            if signature != self._last_heuristic_signature:
-                logger.info(
-                    f"Heuristic check: text='{txt}' | has_question={has_question}",
-                    "🔍",
-                )
-                self._last_heuristic_signature = signature
+        signature = (txt, has_question)
+        if signature != self._last_heuristic_signature:
+            logger.verbose(
+                f"Heuristic check: text='{txt}' | has_question={has_question}",
+                "🔍",
+            )
+            self._last_heuristic_signature = signature
         # If Billy asks a question, keep mic open for user to respond
         return has_question
 
@@ -311,6 +369,11 @@ class SessionState:
     def increment_loud_mic_chunks(self):
         """Increment pending audio chunks that are above local silence threshold."""
         self._pending_loud_audio_chunks += 1
+
+    def observe_rms(self, rms: float):
+        """Track peak RMS for the current pending input turn."""
+        if rms > self._pending_peak_rms:
+            self._pending_peak_rms = float(rms)
 
     def update_activity(self):
         """Update last activity timestamp."""

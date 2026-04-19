@@ -1,9 +1,11 @@
 // ===================== Header Secondary Actions (Log Panel) =====================
 const LogPanel = (() => {
-    let autoScrollEnabled = true;  // Start with auto-scroll enabled
+    let autoScrollEnabled = false;
     let isLogHidden = true;
     let isReleaseHidden = true;
     let restoreSettingsPanelAfterEnvClose = false;
+    let lastLogsSnapshot = "";
+    const MAX_LOG_BUFFER_CHARS = 400000;
 
     const rebootBilly = async () => {
         if (!confirm("Are you sure you want to reboot Billy? This will reboot the whole system.")) return;
@@ -180,7 +182,7 @@ const LogPanel = (() => {
                 showNotification(errorMsg, "error");
                 return;
             }
-            updateLogsUI("");
+            setLogsUI("");
             showNotification("Service logs cleared", "success");
             await fetchLogs();
         } catch (err) {
@@ -196,7 +198,7 @@ const LogPanel = (() => {
                 throw new Error(`HTTP ${res.status}`);
             }
             const data = await res.json();
-            updateLogsUI(data.logs || "No logs found.");
+            setLogsUI(data.logs || "No logs found.");
             return data;
         } catch (err) {
             const serviceStatusApi =
@@ -208,7 +210,7 @@ const LogPanel = (() => {
                 serviceStatusApi.isRestartInProgress();
 
             if (restartInProgress) {
-                updateLogsUI("Restart in progress... waiting for logs to reconnect.");
+                setLogsUI("Restart in progress... waiting for logs to reconnect.");
                 return {logs: ""};
             }
 
@@ -217,18 +219,69 @@ const LogPanel = (() => {
         }
     };
 
-    const updateLogsUI = (logs) => {
+    const trimLogBuffer = (text) => {
+        if (text.length <= MAX_LOG_BUFFER_CHARS) return text;
+        return text.slice(text.length - MAX_LOG_BUFFER_CHARS);
+    };
+
+    const isAutoScrollActive = () => {
+        if (elements.scrollBtn) {
+            return elements.scrollBtn.classList.contains("bg-cyan-500");
+        }
+        return autoScrollEnabled;
+    };
+
+    const setLogsUI = (logs) => {
         if (!elements.logOutput || !elements.logContainer) return;
-        elements.logOutput.textContent = logs;
-        if (autoScrollEnabled) {
+        const normalized = String(logs || "");
+        lastLogsSnapshot = normalized;
+        elements.logOutput.textContent = trimLogBuffer(normalized);
+        if (isAutoScrollActive()) {
             requestAnimationFrame(() => {
                 elements.logContainer.scrollTop = elements.logContainer.scrollHeight;
             });
         }
     };
 
-    // Expose for WebSocket
-    window.updateLogs = updateLogsUI;
+    const findOverlap = (existing, incoming) => {
+        const max = Math.min(existing.length, incoming.length);
+        for (let k = max; k > 0; k -= 1) {
+            if (existing.endsWith(incoming.slice(0, k))) {
+                return k;
+            }
+        }
+        return 0;
+    };
+
+    const appendLogsSnapshot = (incomingLogs) => {
+        if (!elements.logOutput || !elements.logContainer) return;
+        const incoming = String(incomingLogs || "");
+        const existing = String(elements.logOutput.textContent || "");
+        if (!incoming) return;
+        if (!existing) {
+            setLogsUI(incoming);
+            return;
+        }
+        if (incoming === lastLogsSnapshot) return;
+        lastLogsSnapshot = incoming;
+
+        // Snapshot reset/reconnect case.
+        if (incoming.includes(existing)) {
+            setLogsUI(incoming);
+            return;
+        }
+        // No new data case.
+        if (existing.includes(incoming)) {
+            return;
+        }
+
+        const overlap = findOverlap(existing, incoming);
+        const merged = overlap > 0 ? `${existing}${incoming.slice(overlap)}` : `${existing}\n${incoming}`;
+        setLogsUI(merged);
+    };
+
+    // Expose for WebSocket (append behavior)
+    window.updateLogs = appendLogsSnapshot;
 
     const toggleLogPanel = () => {
         isLogHidden = !isLogHidden;
@@ -469,6 +522,10 @@ const LogPanel = (() => {
         elements.toggleBtn.addEventListener("click", toggleLogPanel);
         elements.toggleFullscreenBtn.addEventListener("click", toggleFullscreenLog);
         elements.scrollBtn.addEventListener("click", toggleAutoScroll);
+        autoScrollEnabled = isAutoScrollActive();
+        elements.scrollBtn.classList.toggle("bg-cyan-500", autoScrollEnabled);
+        elements.scrollBtn.classList.toggle("bg-zinc-800", !autoScrollEnabled);
+        elements.scrollBtn.title = autoScrollEnabled ? "Auto-scroll ON" : "Auto-scroll OFF";
         elements.toggleMotionBtn.addEventListener("click", toggleMotion);
         if (elements.openEnvEditorBtn) {
             elements.openEnvEditorBtn.addEventListener("click", openEnvEditorModal);
