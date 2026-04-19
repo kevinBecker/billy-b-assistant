@@ -56,6 +56,16 @@ class MicManager:
             )
             self.stream.start()
         except Exception as e:
+            err = str(e)
+            device_unavailable = (
+                "Device unavailable" in err or "PaErrorCode -9985" in err
+            )
+            if device_unavailable:
+                logger.error(
+                    "Mic device unavailable on selected device; skipping default-device fallback.",
+                )
+                raise e
+
             # If device-specific opening fails, try with default device
             if audio.MIC_DEVICE_INDEX is not None:
                 logger.warning(
@@ -88,8 +98,14 @@ class MicManager:
     def stop(self):
         if self.stream:
             try:
-                self.stream.stop()
+                # Prefer abort for teardown robustness: stop() can block on some
+                # ALSA/PortAudio states during timeout-driven shutdown.
+                try:
+                    self.stream.abort()
+                except Exception:
+                    # Fallback to stop if abort is unavailable/fails.
+                    self.stream.stop()
                 self.stream.close()
             except Exception as e:
-                print(f"⚠️ Error closing mic stream: {e}")
+                logger.warning(f"Error closing mic stream: {e}")
             self.stream = None

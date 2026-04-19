@@ -157,11 +157,6 @@ REALTIME_AI_PROVIDER = os.getenv("REALTIME_AI_PROVIDER", None)
 
 # === Modes ===
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-# Legacy DEBUG_MODE for backward compatibility
-DEBUG_MODE = os.getenv("DEBUG_MODE", "true").lower() == "true"
-DEBUG_MODE_INCLUDE_DELTA = (
-    os.getenv("DEBUG_MODE_INCLUDE_DELTA", "false").lower() == "true"
-)
 TEXT_ONLY_MODE = os.getenv("TEXT_ONLY_MODE", "false").lower() == "true"
 RUN_MODE = os.getenv("RUN_MODE", "normal").lower()
 
@@ -175,7 +170,7 @@ MIC_PREFERENCE = os.getenv("MIC_PREFERENCE")
 MIC_TIMEOUT_SECONDS = int(os.getenv("MIC_TIMEOUT_SECONDS", "5"))
 SILENCE_THRESHOLD = float(os.getenv("SILENCE_THRESHOLD", "1000"))
 CHUNK_MS = int(os.getenv("CHUNK_MS", "40"))
-FOLLOW_UP_RETRY_LIMIT = int(os.getenv("FOLLOW_UP_RETRY_LIMIT", "1"))
+FOLLOW_UP_RETRY_LIMIT = int(os.getenv("FOLLOW_UP_RETRY_LIMIT", "2"))
 PLAYBACK_VOLUME = 1
 MOUTH_ARTICULATION = int(os.getenv("MOUTH_ARTICULATION", "5"))
 TURN_EAGERNESS = os.getenv("TURN_EAGERNESS", "high").strip().lower()

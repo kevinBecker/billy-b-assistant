@@ -292,7 +292,12 @@ def audio_devices():
 def audio_callback(indata, frames, time_info, status):
     if not mic_check_running:
         raise sd.CallbackStop()
-    rms = float(np.sqrt(np.mean(np.square(indata))))
+    samples = indata.astype(np.float32, copy=False)
+    rms = float(np.sqrt(np.mean(np.square(samples))))
+    if np.issubdtype(indata.dtype, np.floating):
+        max_abs = float(np.max(np.abs(samples))) if samples.size else 0.0
+        if max_abs <= 1.5:
+            rms *= 32768.0
     rms_queue.put(rms)
 
 
@@ -530,7 +535,16 @@ def mic_check():
         global mic_check_running
         mic_check_running = True
         try:
-            with sd.InputStream(callback=audio_callback):
+            from core import audio as core_audio
+
+            with sd.InputStream(
+                samplerate=core_audio.MIC_RATE,
+                device=core_audio.MIC_DEVICE_INDEX,
+                channels=core_audio.MIC_CHANNELS,
+                dtype="int16",
+                blocksize=core_audio.CHUNK_SIZE,
+                callback=audio_callback,
+            ):
                 while mic_check_running:
                     try:
                         rms = rms_queue.get(timeout=1.0)

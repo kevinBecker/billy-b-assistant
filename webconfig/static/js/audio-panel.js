@@ -214,7 +214,7 @@ const AudioPanel = (() => {
             try { data = JSON.parse(e.data); }
             catch (err) { console.error("Invalid JSON from /mic-check:", e.data); return; }
             if (data.error) { console.error("Mic check error:", data.error); return; }
-            const rms = data.rms * SCALING_FACTOR;
+            const rms = data.rms;
             const threshold = data.threshold;
             maxRms = Math.max(maxRms, rms);
             const percent = Math.min((rms / threshold) * 100, 100);

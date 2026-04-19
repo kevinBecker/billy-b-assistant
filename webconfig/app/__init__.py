@@ -2,7 +2,8 @@ import os
 import sys
 
 from flask import Flask
-from flask_sock import Sock
+
+from .sock_compat import SOCK_AVAILABLE
 
 
 def create_app() -> Flask:
@@ -17,9 +18,6 @@ def create_app() -> Flask:
         template_folder=os.path.join(base_dir, "..", "templates"),
         static_folder=os.path.join(base_dir, "..", "static"),
     )
-
-    # Initialize WebSocket support
-    sock = Sock(app)
 
     # Late imports to avoid circulars
     from . import websocket
@@ -42,8 +40,11 @@ def create_app() -> Flask:
     app.register_blueprint(misc_bp)
     app.register_blueprint(songs_bp)
 
-    # Register WebSocket routes
-    websocket.sock.init_app(app)
-    app.register_blueprint(websocket.bp)
+    # Register WebSocket routes when flask_sock is available.
+    if SOCK_AVAILABLE:
+        websocket.sock.init_app(app)
+        app.register_blueprint(websocket.bp)
+    else:
+        app.logger.warning("flask_sock is unavailable; WebSocket updates are disabled.")
 
     return app

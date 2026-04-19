@@ -6,7 +6,7 @@ import time
 import numpy as np
 
 from .. import audio
-from ..config import DEBUG_MODE, SILENCE_THRESHOLD, TEXT_ONLY_MODE
+from ..config import SILENCE_THRESHOLD, TEXT_ONLY_MODE
 from ..logger import logger
 from ..mic import MicManager
 
@@ -23,6 +23,11 @@ class MicManagerWrapper:
         self._mic_guard_until = 0.0
         self._mic_data_started = False
         self._logged_waiting_for_wakeup = False
+        self._timeout_countdown_active = False
+        self._local_activity_until = 0.0
+        self._last_local_activity_rms = 0.0
+        self._last_timeout_progress_log = 0.0
+        self._timeout_countdown_started_at = 0.0
 
     def start(self, *, retry=True):
         """Try to open the mic with optional retry on failure."""
@@ -38,8 +43,10 @@ class MicManagerWrapper:
             self.mic.start(self.callback)
             self.mic_running = True
             self._mic_guard_until = time.time() + 0.35
-            if DEBUG_MODE:
-                logger.info("Mic started", "🎤")
+            self._timeout_countdown_active = False
+            self._timeout_countdown_started_at = 0.0
+            self._last_timeout_progress_log = 0.0
+            logger.verbose("Mic started", "🎤")
             if not self.mic_timeout_task or self.mic_timeout_task.done():
                 self.mic_timeout_task = asyncio.create_task(self.timeout_checker())
             self.session._set_listening_state()
@@ -55,13 +62,27 @@ class MicManagerWrapper:
         if self.mic_running:
             try:
                 self.mic.stop()
-                time.sleep(0.1)
             except Exception as e:
                 logger.warning(f"Error stopping mic: {e}")
             self.mic_running = False
+        self._timeout_countdown_active = False
 
     async def start_after_playback(self, delay: float = 0.6, retries: int = 3) -> bool:
         """Open mic after playback with retry logic."""
+        # Fast path: in normal interactive sessions the mic stream is already open
+        # and only input gating was disabled while Billy spoke.
+        if self.mic_running:
+            # New listen window; reset timeout countdown state so "started" is
+            # emitted consistently for each follow-up window.
+            self._timeout_countdown_active = False
+            self._timeout_countdown_started_at = 0.0
+            self._last_timeout_progress_log = 0.0
+            if not self.mic_timeout_task or self.mic_timeout_task.done():
+                self.mic_timeout_task = asyncio.create_task(self.timeout_checker())
+            self.session._set_listening_state()
+            logger.info("Mic already open; continuing follow-up listen window.", "🎙️")
+            return True
+
         for attempt in range(1, retries + 1):
             try:
                 if attempt > 1:
@@ -88,12 +109,15 @@ class MicManagerWrapper:
                     )
                     self.mic_running = True
                     self._mic_guard_until = time.time() + 0.35
+                    self._timeout_countdown_active = False
+                    self._timeout_countdown_started_at = 0.0
+                    self._last_timeout_progress_log = 0.0
                     if not self.mic_timeout_task or self.mic_timeout_task.done():
                         self.mic_timeout_task = asyncio.create_task(
                             self.timeout_checker()
                         )
                     self.session._set_listening_state()
-                print(f"🎙️ Mic opened (attempt {attempt}).")
+                logger.info(f"Mic opened (attempt {attempt}).", "🎙️")
                 return True
             except Exception as e:
                 err = str(e)
@@ -101,14 +125,13 @@ class MicManagerWrapper:
                 self.mic_running = False
                 # Ensure we get a fresh stream object on retry.
                 self.mic = MicManager()
-                # Fail fast for ALSA unavailability in follow-up reopen path.
-                # Repeated retries + reset attempts can stall the session loop.
                 if "Device unavailable" in err or "PaErrorCode -9985" in err:
-                    logger.error(
-                        "Mic device unavailable during follow-up reopen; skipping reset/retries.",
-                        "🛑",
+                    logger.warning(
+                        "Mic device unavailable (-9985) during follow-up reopen; retrying with backoff.",
+                        "⚠️",
                     )
-                    return False
+                    # Extra settle time for ALSA handoff races (e.g. wake-word stream).
+                    await asyncio.sleep(0.6)
 
         logger.error("Mic failed to open after retries.")
         return False
@@ -131,25 +154,51 @@ class MicManagerWrapper:
 
         if not TEXT_ONLY_MODE and not audio.playback_done_event.is_set():
             if not self._logged_waiting_for_wakeup:
-                logger.info("🔇 Mic waiting for wake-up sound to finish...", "⏳")
+                logger.info("Mic waiting for wake-up sound to finish...", "⏳")
                 self._logged_waiting_for_wakeup = True
             return
 
         if not self._mic_data_started and not TEXT_ONLY_MODE:
-            logger.info("Mic data now being sent (wake-up sound finished)", "🎤")
+            logger.info("Mic data now being sent", "🎤")
             self._mic_data_started = True
 
         samples = indata[:, 0]
-        rms = np.sqrt(np.mean(np.square(samples.astype(np.float32))))
+        samples_f32 = samples.astype(np.float32, copy=False)
+        rms = float(np.sqrt(np.mean(np.square(samples_f32))))
+        if np.issubdtype(samples.dtype, np.floating):
+            # Keep SILENCE_THRESHOLD semantics in int16-equivalent units (0-32768)
+            # even if backend provides normalized float samples (-1..1).
+            max_abs = float(np.max(np.abs(samples_f32))) if samples_f32.size else 0.0
+            if max_abs <= 1.5:
+                rms *= 32768.0
         self.last_rms = rms
+        self.session.state.observe_rms(rms)
+        now = time.time()
 
-        if DEBUG_MODE:
-            print(f"\r🎙️ Mic Volume: {rms:.1f}", end="", flush=True)
-
-        if time.time() < self._mic_guard_until:
-            return
+        # Pause timeout countdown only when local mic activity reaches the
+        # configured speech threshold.
+        if rms >= SILENCE_THRESHOLD:
+            self._local_activity_until = now + 0.8
+            self._last_local_activity_rms = rms
+            if self._timeout_countdown_active:
+                logger.info(
+                    (
+                        "Mic timeout countdown paused by local mic activity "
+                        f"(rms={rms:.1f}, threshold={SILENCE_THRESHOLD:.1f})."
+                    ),
+                    "🎤",
+                )
+                self._timeout_countdown_active = False
+                self._timeout_countdown_started_at = 0.0
 
         if rms > SILENCE_THRESHOLD:
+            if self._timeout_countdown_active:
+                logger.info(
+                    f"Mic timeout interrupted by speech above threshold (rms={rms:.1f} >= {SILENCE_THRESHOLD:.1f}).",
+                    "🎤",
+                )
+                self._timeout_countdown_active = False
+                self._timeout_countdown_started_at = 0.0
             self.session.state.update_activity()
             self.session.state.increment_loud_mic_chunks()
 
@@ -165,6 +214,7 @@ class MicManagerWrapper:
         last_tail_move = 0
 
         while self.session.session_active.is_set():
+            now = time.time()
             if not self.mic_running:
                 await asyncio.sleep(0.2)
                 continue
@@ -173,15 +223,50 @@ class MicManagerWrapper:
             if self.session.state.response_active:
                 await asyncio.sleep(0.2)
                 continue
+            # Don't timeout while the server is actively detecting user speech.
+            if self.session.state._server_input_speaking:
+                if self._timeout_countdown_active:
+                    logger.info(
+                        "Mic timeout countdown paused while user speech is active.",
+                        "🎤",
+                    )
+                    self._timeout_countdown_active = False
+                    self._timeout_countdown_started_at = 0.0
+                    self._last_timeout_progress_log = 0.0
+                await asyncio.sleep(0.2)
+                continue
+            # Mini model does not always emit speech_started/speech_stopped
+            # reliably. Use local mic activity as an additional pause signal.
+            if now < self._local_activity_until:
+                if self._timeout_countdown_active:
+                    logger.info(
+                        (
+                            "Mic timeout countdown paused while local mic activity is ongoing "
+                            f"(last_rms={self._last_local_activity_rms:.1f})."
+                        ),
+                        "🎤",
+                    )
+                    self._timeout_countdown_active = False
+                    self._timeout_countdown_started_at = 0.0
+                    self._last_timeout_progress_log = 0.0
+                await asyncio.sleep(0.2)
+                continue
 
-            now = time.time()
             idle_seconds = now - max(
                 self.session.last_activity[0], audio.last_played_time
             )
-            timeout_offset = 2
 
-            if idle_seconds - timeout_offset > 0.5:
-                elapsed = idle_seconds - timeout_offset
+            if idle_seconds > 0.5:
+                if not self._timeout_countdown_active:
+                    self._timeout_countdown_active = True
+                    self._timeout_countdown_started_at = now
+                    logger.info(
+                        f"Mic timeout countdown started ({MIC_TIMEOUT_SECONDS}s limit, threshold={SILENCE_THRESHOLD:.1f}).",
+                        "⏳",
+                    )
+                    self._last_timeout_progress_log = 0.0
+
+                elapsed = now - self._timeout_countdown_started_at
                 progress = min(elapsed / MIC_TIMEOUT_SECONDS, 1.0)
                 bar_len = 20
                 filled = int(bar_len * progress)
@@ -192,6 +277,19 @@ class MicManagerWrapper:
                     end="",
                     flush=True,
                 )
+                if (
+                    self._last_timeout_progress_log == 0.0
+                    or now - self._last_timeout_progress_log >= 1.0
+                ):
+                    remaining = max(0.0, MIC_TIMEOUT_SECONDS - elapsed)
+                    logger.info(
+                        (
+                            f"Mic timeout countdown progress: elapsed={elapsed:.1f}s, "
+                            f"remaining={remaining:.1f}s, rms={self.last_rms:.1f}"
+                        ),
+                        "⏳",
+                    )
+                    self._last_timeout_progress_log = now
 
                 if now - last_tail_move > 1.0:
                     move_tail_async(duration=0.2)
@@ -199,18 +297,31 @@ class MicManagerWrapper:
 
                 if elapsed > MIC_TIMEOUT_SECONDS:
                     logger.info(
-                        f"No mic activity for {MIC_TIMEOUT_SECONDS}s. Ending input...",
+                        (
+                            f"Mic timeout reached end ({MIC_TIMEOUT_SECONDS}s). "
+                            f"Ending input... last_rms={self.last_rms:.1f}"
+                        ),
                         "⏱️",
                     )
-                    await self.session.stop_session()
+                    self._timeout_countdown_active = False
+                    self._timeout_countdown_started_at = 0.0
+                    self._last_timeout_progress_log = 0.0
+                    await self.session.stop_session(reason="mic_timeout")
                     break
+            elif self._timeout_countdown_active:
+                logger.info(
+                    "Mic timeout countdown cleared before expiry.",
+                    "✅",
+                )
+                self._timeout_countdown_active = False
+                self._timeout_countdown_started_at = 0.0
+                self._last_timeout_progress_log = 0.0
 
             await asyncio.sleep(0.5)
 
     async def _retry_loop(self):
         """Retry opening mic once with backoff."""
-        if DEBUG_MODE:
-            logger.verbose("Mic retry loop started", "🔁")
+        logger.verbose("Mic retry loop started", "🔁")
 
         if not self.session.session_active.is_set():
             return
@@ -234,7 +345,7 @@ class MicManagerWrapper:
             self.mic_running = False
             logger.warning(f"Mic retry failed: {e}")
             logger.info("Assuming no follow-up needed, ending session.", "🛑")
-            await self.session.stop_session()
+            await self.session.stop_session(reason="mic_retry_failed")
 
     async def _reset_audio_system(self):
         """Reset audio system for device unavailable errors."""

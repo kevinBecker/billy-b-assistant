@@ -3,7 +3,8 @@ import subprocess
 import time
 
 from flask import Blueprint
-from flask_sock import Sock
+
+from .sock_compat import Sock
 
 
 bp = Blueprint("websocket", __name__)

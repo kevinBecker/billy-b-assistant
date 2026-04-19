@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import os
 import subprocess
@@ -14,6 +15,7 @@ from .movements import stop_all_motors
 
 mqtt_client: mqtt.Client | None = None
 mqtt_connected = False
+_say_lock = threading.Lock()
 
 
 def mqtt_available():
@@ -456,25 +458,47 @@ def on_message(client, userdata, msg):
         return
 
     if msg.topic == "billy/say":
-        print(f"📩 Received SAY command: {msg.payload.decode()}")
+        logger.info(f"Received SAY command: {msg.payload.decode()}", "📩")
 
         import asyncio
-        import threading
 
         # 🔁 Lazy import here to avoid circular import with session.py
         from .say import say
 
         try:
-            text = msg.payload.decode().strip()
+            text, interactive = _parse_say_payload(msg.payload.decode())
             if text:
+                # Default behavior:
+                # - literal text => one-shot announce
+                # - prompt text ({{...}}) => auto follow-up behavior
+                if interactive is None:
+                    is_prompt = text.startswith("{{") and text.endswith("}}")
+                    interactive = None if is_prompt else False
+
+                if not _say_lock.acquire(blocking=False):
+                    logger.warning(
+                        "SAY command ignored: another SAY request is still running.",
+                        "⏳",
+                    )
+                    return
 
                 def run_say():
-                    asyncio.run(say(text=text))  # interactive=None -> AUTO follow-up
+                    try:
+                        logger.info(
+                            f"SAY dispatch | interactive={interactive} | text={text!r}",
+                            "🗣️",
+                        )
+                        asyncio.run(say(text=text, interactive=interactive))
+                    finally:
+                        _say_lock.release()
 
                 threading.Thread(target=run_say, daemon=True).start()
             else:
-                print("⚠️ SAY command received, but text was empty")
+                logger.warning("SAY command received, but text was empty")
         except Exception as e:
+            with contextlib.suppress(Exception):
+                if _say_lock.locked():
+                    _say_lock.release()
             logger.error(f"Failed to run say(): {e}")
         return
 
