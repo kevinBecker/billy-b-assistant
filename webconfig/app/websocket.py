@@ -4,7 +4,20 @@ import time
 
 from flask import Blueprint
 
-from .sock_compat import Sock
+
+try:
+    from .sock_compat import Sock
+except ModuleNotFoundError:
+    # Older/stale deployments may not include sock_compat yet.
+    class Sock:  # type: ignore[override]
+        def init_app(self, _app):
+            return None
+
+        def route(self, *_args, **_kwargs):
+            def decorator(func):
+                return func
+
+            return decorator
 
 
 bp = Blueprint("websocket", __name__)
