@@ -3,7 +3,12 @@ import sys
 
 from flask import Flask
 
-from .sock_compat import SOCK_AVAILABLE
+
+try:
+    from .sock_compat import SOCK_AVAILABLE
+except ModuleNotFoundError:
+    # Older/stale deployments may not include sock_compat yet.
+    SOCK_AVAILABLE = False
 
 
 def create_app() -> Flask:
