@@ -177,7 +177,14 @@ FLIP_TAIL_DIRECTION = True
 
 
 def set_throttle(motor, throttle_percent):
-q
+    """Stop MotorKit motor and clear active since timestamp."""
+    if not use_motor_kit or motor is None:
+        return
+    motor.throttle = throttle_percent
+    motor_id = MOUTH if motor == MOUTH_MOTOR else HEAD if motor == HEAD_MOTOR else TAIL if motor == TAIL_MOTOR else None
+    if motor_id is not None:
+        _throttle[motor_id]["throttle"] = throttle_percent
+        _throttle[motor_id]["since"] = time.time()
 
 def clear_throttle(motor):
     """Stop MotorKit motor and clear active since timestamp."""
